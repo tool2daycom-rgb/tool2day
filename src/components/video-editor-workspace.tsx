@@ -8,27 +8,48 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
+  AudioLines,
   Clapperboard,
   Copy,
   FileVideo,
+  FlipHorizontal,
+  FlipVertical,
+  Image as ImageIcon,
   ImagePlus,
   Mic,
+  Music,
   Pause,
   Play,
+  Ratio,
   Scissors,
   SkipBack,
   SkipForward,
+  Sticker,
   Trash2,
   Type,
   Volume2,
   VolumeX,
-  Ratio,
   Download,
   Upload,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
+import { speakText, synthesizeToFile } from "@/lib/processors/tts";
+import {
+  EMOJI_STICKERS,
+  STICKER_PHRASES,
+  TTS_LANGS,
+  VIDEO_FONTS,
+} from "@/lib/video-editor-assets";
 
-type Panel = "files" | "text" | "canvas" | "audio" | "record";
+type Panel =
+  | "files"
+  | "media"
+  | "stickers"
+  | "text"
+  | "canvas"
+  | "record"
+  | "tts"
+  | "audio";
 type PropTab = "video" | "audio";
 type Aspect = "original" | "16:9" | "9:16" | "1:1";
 
@@ -36,6 +57,18 @@ type Overlay =
   | {
       id: string;
       type: "text";
+      text: string;
+      fontSize: number;
+      fontFamily: string;
+      color: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }
+  | {
+      id: string;
+      type: "emoji";
       text: string;
       fontSize: number;
       x: number;
@@ -52,7 +85,18 @@ type Overlay =
       y: number;
       w: number;
       h: number;
+      opacity: number;
     };
+
+type AudioTrack = {
+  id: string;
+  name: string;
+  file: File;
+  url: string;
+  start: number;
+  volume: number;
+  duration: number;
+};
 
 function formatTime(sec: number) {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -77,9 +121,27 @@ function aspectSize(
   return { w: Math.round((max * videoW) / Math.max(1, videoH)), h: max };
 }
 
+function nextId(counterRef: { current: number }, prefix: string) {
+  counterRef.current += 1;
+  return `${prefix}-${counterRef.current}`;
+}
+
+function loadMediaDuration(src: string): Promise<number> {
+  return new Promise((resolve) => {
+    const a = new Audio();
+    a.preload = "metadata";
+    a.onloadedmetadata = () => resolve(a.duration || 0);
+    a.onerror = () => resolve(0);
+    a.src = src;
+  });
+}
+
 export function VideoEditorWorkspace() {
+  const idCounterRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const musicRef = useRef<HTMLInputElement>(null);
+  const videoSwapRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -111,6 +173,9 @@ export function VideoEditorWorkspace() {
   const [fadeOut, setFadeOut] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [rotate, setRotate] = useState<0 | 90 | 180 | 270>(0);
+  const [flipH, setFlipH] = useState(false);
+  const [flipV, setFlipV] = useState(false);
+  const [opacity, setOpacity] = useState(1);
   const [aspect, setAspect] = useState<Aspect>("original");
   const [videoBox, setVideoBox] = useState({
     x: 0.05,
@@ -119,8 +184,17 @@ export function VideoEditorWorkspace() {
     h: 0.9,
   });
   const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [selectedId, setSelectedId] = useState<string | "video">("video");
   const [draftText, setDraftText] = useState("عنوان الفيديو");
+  const [draftFont, setDraftFont] = useState<string>(VIDEO_FONTS[0].id);
+  const [draftColor, setDraftColor] = useState("#ffffff");
+  const [draftFontSize, setDraftFontSize] = useState(42);
+  const [ttsText, setTtsText] = useState("");
+  const [ttsLang, setTtsLang] = useState<string>(TTS_LANGS[0].id);
+  const [ttsRate, setTtsRate] = useState(1);
+  const [ttsPitch, setTtsPitch] = useState(1);
+  const [ttsBusy, setTtsBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -170,7 +244,19 @@ export function VideoEditorWorkspace() {
     const next = URL.createObjectURL(f);
     setFile(f);
     setUrl(next);
-    setOverlays([]);
+    setOverlays((prev) => {
+      prev.forEach((o) => {
+        if (o.type === "image") URL.revokeObjectURL(o.src);
+      });
+      return [];
+    });
+    setAudioTracks((prev) => {
+      prev.forEach((t) => URL.revokeObjectURL(t.url));
+      return [];
+    });
+    setFlipH(false);
+    setFlipV(false);
+    setOpacity(1);
     setSelectedId("video");
     setError(null);
     setStatus(`تم تحميل: ${f.name}`);
@@ -225,14 +311,16 @@ export function VideoEditorWorkspace() {
   }
 
   function addTextOverlay() {
-    const id = `t-${Date.now()}`;
+    const id = nextId(idCounterRef, "t");
     setOverlays((prev) => [
       ...prev,
       {
         id,
         type: "text",
         text: draftText || "نص",
-        fontSize: 42,
+        fontSize: draftFontSize,
+        fontFamily: draftFont,
+        color: draftColor,
         x: 0.15,
         y: 0.35,
         w: 0.7,
@@ -240,8 +328,49 @@ export function VideoEditorWorkspace() {
       },
     ]);
     setSelectedId(id);
-    setPropTab("video");
+    setPanel("text");
     setStatus("اسحب النص على المعاينة لتغيير موقعه");
+  }
+
+  function addEmojiOverlay(emoji: string) {
+    const id = nextId(idCounterRef, "e");
+    setOverlays((prev) => [
+      ...prev,
+      {
+        id,
+        type: "emoji",
+        text: emoji,
+        fontSize: 96,
+        x: 0.38,
+        y: 0.32,
+        w: 0.24,
+        h: 0.24,
+      },
+    ]);
+    setSelectedId(id);
+    setStatus("اسحب الملصق لتغيير موقعه وحجمه");
+  }
+
+  function addPhraseOverlay(phrase: string) {
+    const id = nextId(idCounterRef, "p");
+    setOverlays((prev) => [
+      ...prev,
+      {
+        id,
+        type: "text",
+        text: phrase,
+        fontSize: 56,
+        fontFamily: "Impact, sans-serif",
+        color: "#f5c518",
+        x: 0.12,
+        y: 0.72,
+        w: 0.76,
+        h: 0.16,
+      },
+    ]);
+    setSelectedId(id);
+    setPanel("text");
+    setStatus("اسحب العبارة لتغيير موقعها");
   }
 
   async function addImageOverlay(list: FileList | null) {
@@ -257,7 +386,7 @@ export function VideoEditorWorkspace() {
     const aspectRatio = dims.w / Math.max(1, dims.h);
     const w = 0.28;
     const h = w / aspectRatio / (outSize.w / outSize.h);
-    const id = `i-${Date.now()}`;
+    const id = nextId(idCounterRef, "i");
     setOverlays((prev) => [
       ...prev,
       {
@@ -269,10 +398,93 @@ export function VideoEditorWorkspace() {
         y: 0.3,
         w,
         h: Math.min(0.5, h),
+        opacity: 1,
       },
     ]);
     setSelectedId(id);
     setStatus("اسحب زوايا الصورة لتغيير الحجم");
+  }
+
+  async function uploadMusic(list: FileList | null) {
+    const f = list?.[0];
+    if (!f) return;
+    const trackUrl = URL.createObjectURL(f);
+    const dur = await loadMediaDuration(trackUrl);
+    const id = nextId(idCounterRef, "music");
+    setAudioTracks((prev) => [
+      ...prev,
+      {
+        id,
+        name: f.name,
+        file: f,
+        url: trackUrl,
+        start: Math.max(0, currentTime - trimIn),
+        volume: 1,
+        duration: dur,
+      },
+    ]);
+    setStatus(`تمت إضافة الموسيقى: ${f.name}`);
+  }
+
+  function removeAudioTrack(id: string) {
+    setAudioTracks((prev) => {
+      const victim = prev.find((t) => t.id === id);
+      if (victim) URL.revokeObjectURL(victim.url);
+      return prev.filter((t) => t.id !== id);
+    });
+  }
+
+  async function ttsPreview() {
+    if (!ttsText.trim()) {
+      setError("اكتب نصاً أولاً");
+      return;
+    }
+    setTtsBusy(true);
+    setError(null);
+    try {
+      const langInfo = TTS_LANGS.find((l) => l.id === ttsLang);
+      await speakText(ttsText, {
+        lang: langInfo?.speak || "ar-SA",
+        rate: ttsRate,
+        pitch: ttsPitch,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "فشل تشغيل المعاينة");
+    } finally {
+      setTtsBusy(false);
+    }
+  }
+
+  async function ttsAddToTimeline() {
+    if (!ttsText.trim()) {
+      setError("اكتب نصاً أولاً");
+      return;
+    }
+    setTtsBusy(true);
+    setError(null);
+    try {
+      const audioFile = await synthesizeToFile(ttsText, { lang: ttsLang });
+      const trackUrl = URL.createObjectURL(audioFile);
+      const dur = await loadMediaDuration(trackUrl);
+      const id = nextId(idCounterRef, "tts");
+      setAudioTracks((prev) => [
+        ...prev,
+        {
+          id,
+          name: audioFile.name,
+          file: audioFile,
+          url: trackUrl,
+          start: Math.max(0, currentTime - trimIn),
+          volume: 1,
+          duration: dur,
+        },
+      ]);
+      setStatus("تمت إضافة التعليق الصوتي إلى المخطط الزمني");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "فشل توليد الصوت");
+    } finally {
+      setTtsBusy(false);
+    }
   }
 
   function deleteSelected() {
@@ -288,23 +500,16 @@ export function VideoEditorWorkspace() {
   function duplicateSelected() {
     const src = overlays.find((o) => o.id === selectedId);
     if (!src) return;
-    const id = `${src.type[0]}-${Date.now()}`;
-    if (src.type === "text") {
-      setOverlays((prev) => [
-        ...prev,
-        { ...src, id, x: Math.min(0.8, src.x + 0.04), y: Math.min(0.8, src.y + 0.04) },
-      ]);
-    } else {
-      setOverlays((prev) => [
-        ...prev,
-        {
-          ...src,
-          id,
-          x: Math.min(0.8, src.x + 0.04),
-          y: Math.min(0.8, src.y + 0.04),
-        },
-      ]);
-    }
+    const id = nextId(idCounterRef, src.type[0]);
+    setOverlays((prev) => [
+      ...prev,
+      {
+        ...src,
+        id,
+        x: Math.min(0.8, src.x + 0.04),
+        y: Math.min(0.8, src.y + 0.04),
+      },
+    ]);
     setSelectedId(id);
   }
 
@@ -456,6 +661,9 @@ export function VideoEditorWorkspace() {
           trimOut,
           speed,
           rotate,
+          flipH,
+          flipV,
+          opacity,
           volume,
           muted,
           fadeIn,
@@ -466,25 +674,44 @@ export function VideoEditorWorkspace() {
           videoY: videoBox.y * outSize.h,
           videoW: videoBox.w * outSize.w,
           videoH: videoBox.h * outSize.h,
-          overlays: overlays.map((o) =>
-            o.type === "text"
-              ? {
-                  type: "text" as const,
-                  text: o.text,
-                  fontSize: o.fontSize * (outSize.w / 720),
-                  x: o.x,
-                  y: o.y,
-                  w: o.w,
-                }
-              : {
-                  type: "image" as const,
-                  file: o.file,
-                  x: o.x,
-                  y: o.y,
-                  w: o.w,
-                  h: o.h,
-                },
-          ),
+          overlays: overlays.map((o) => {
+            if (o.type === "text") {
+              return {
+                type: "text" as const,
+                text: o.text,
+                fontSize: o.fontSize * (outSize.w / 720),
+                fontFamily: o.fontFamily,
+                color: o.color,
+                x: o.x,
+                y: o.y,
+                w: o.w,
+              };
+            }
+            if (o.type === "emoji") {
+              return {
+                type: "emoji" as const,
+                text: o.text,
+                fontSize: o.fontSize * (outSize.w / 720),
+                x: o.x,
+                y: o.y,
+                w: o.w,
+              };
+            }
+            return {
+              type: "image" as const,
+              file: o.file,
+              x: o.x,
+              y: o.y,
+              w: o.w,
+              h: o.h,
+              opacity: o.opacity,
+            };
+          }),
+          audioTracks: audioTracks.map((t) => ({
+            file: t.file,
+            start: t.start,
+            volume: t.volume,
+          })),
         },
         (r) => setProgress(Math.round(r * 100)),
       );
@@ -545,8 +772,8 @@ export function VideoEditorWorkspace() {
             />
           </div>
           <p className="max-w-lg text-center text-xs leading-6 text-[#777]">
-            قص، سرعة، تدوير، صوت، قماش، نص وصور مع تايملاين ومعاينة حية — ثم صدّر
-            MP4.
+            قص، سرعة، تدوير، عكس، شفافية، صوت وتعليق صوتي وملصقات ونصوص مع
+            تايملاين ومعاينة حية — ثم صدّر MP4.
           </p>
         </div>
       </div>
@@ -592,14 +819,17 @@ export function VideoEditorWorkspace() {
         {/* Icon rail */}
         <aside className="flex flex-row gap-1 overflow-x-auto border-b border-[#2a2a2e] bg-[#141416] p-1 lg:flex-col lg:border-b-0 lg:border-e">
           {navBtn("files", "ملفاتي", FileVideo)}
+          {navBtn("media", "وسائط", ImageIcon)}
+          {navBtn("stickers", "ملصقات", Sticker)}
           {navBtn("text", "النص", Type)}
           {navBtn("canvas", "قماش", Ratio)}
-          {navBtn("audio", "الصوت", Volume2)}
           {navBtn("record", "تسجيل", Mic)}
+          {navBtn("tts", "تحويل صوتي", AudioLines)}
+          {navBtn("audio", "الصوت", Volume2)}
         </aside>
 
         {/* Property panel */}
-        <aside className="border-b border-[#2a2a2e] bg-[#17171a] p-3 lg:border-b-0 lg:border-e">
+        <aside className="max-h-[640px] overflow-y-auto border-b border-[#2a2a2e] bg-[#17171a] p-3 lg:border-b-0 lg:border-e">
           {panel === "files" && (
             <div className="space-y-3 text-sm">
               <p className="font-semibold text-[#f5c518]">الملف</p>
@@ -607,14 +837,42 @@ export function VideoEditorWorkspace() {
               <p className="text-xs text-[#777]">
                 المدة: {formatTime(duration)} · المقطع: {formatTime(clipDuration)}
               </p>
-              <button
-                type="button"
-                onClick={() => imageRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
-              >
-                <ImagePlus className="h-4 w-4" />
-                إضافة صورة overlay
-              </button>
+              <p className="text-[11px] leading-5 text-[#666]">
+                استخدم تبويب &quot;وسائط&quot; لإضافة صور أو موسيقى أو استبدال
+                الفيديو، و&quot;ملصقات&quot; للإيموجي والعبارات الجاهزة.
+              </p>
+            </div>
+          )}
+
+          {panel === "media" && (
+            <div className="space-y-3 text-sm">
+              <p className="font-semibold text-[#f5c518]">الوسائط</p>
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => imageRef.current?.click()}
+                  className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  رفع صورة (إضافة كطبقة)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => musicRef.current?.click()}
+                  className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
+                >
+                  <Music className="h-4 w-4" />
+                  رفع موسيقى
+                </button>
+                <button
+                  type="button"
+                  onClick={() => videoSwapRef.current?.click()}
+                  className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
+                >
+                  <FileVideo className="h-4 w-4" />
+                  استبدال الفيديو
+                </button>
+              </div>
               <input
                 ref={imageRef}
                 type="file"
@@ -622,6 +880,79 @@ export function VideoEditorWorkspace() {
                 className="hidden"
                 onChange={(e) => void addImageOverlay(e.target.files)}
               />
+              <input
+                ref={musicRef}
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={(e) => void uploadMusic(e.target.files)}
+              />
+              <input
+                ref={videoSwapRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => void onPick(e.target.files)}
+              />
+              <p className="text-[11px] leading-5 text-[#777]">
+                تظهر الموسيقى في المخطط الزمني بالأصفر، والتعليق الصوتي (تحويل
+                النص إلى كلام) بالأخضر.
+              </p>
+              {audioTracks.filter((t) => !t.id.startsWith("tts-")).length >
+                0 && (
+                <div className="space-y-1 border-t border-[#2a2a2e] pt-2">
+                  <p className="text-[11px] text-[#888]">الموسيقى المضافة</p>
+                  {audioTracks
+                    .filter((t) => !t.id.startsWith("tts-"))
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between gap-2 rounded border border-[#333] px-2 py-1 text-[11px]"
+                      >
+                        <span className="truncate">{t.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAudioTrack(t.id)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {panel === "stickers" && (
+            <div className="space-y-3 text-sm">
+              <p className="font-semibold text-[#f5c518]">الملصقات</p>
+              <div className="grid grid-cols-6 gap-1 text-xl">
+                {EMOJI_STICKERS.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => addEmojiOverlay(em)}
+                    className="rounded-md border border-[#333] py-1 hover:bg-[#222]"
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#888]">عبارات جاهزة</p>
+              <div className="flex flex-wrap gap-1">
+                {STICKER_PHRASES.map((phrase) => (
+                  <button
+                    key={phrase}
+                    type="button"
+                    onClick={() => addPhraseOverlay(phrase)}
+                    className="rounded-md border border-[#333] px-2 py-1 text-xs font-bold hover:bg-[#222]"
+                    style={{ fontFamily: "Impact, sans-serif" }}
+                  >
+                    {phrase}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -634,12 +965,46 @@ export function VideoEditorWorkspace() {
                 value={draftText}
                 onChange={(e) => setDraftText(e.target.value)}
               />
+              <label className="block text-[11px] text-[#888]">الخط</label>
+              <select
+                value={draftFont}
+                onChange={(e) => setDraftFont(e.target.value)}
+                className="w-full rounded-md border border-[#333] bg-[#101012] px-2 py-1.5 text-xs"
+              >
+                {VIDEO_FONTS.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2">
+                <label className="whitespace-nowrap text-[11px] text-[#888]">
+                  اللون
+                </label>
+                <input
+                  type="color"
+                  value={draftColor}
+                  onChange={(e) => setDraftColor(e.target.value)}
+                  className="h-7 w-10 rounded border border-[#333] bg-transparent"
+                />
+                <label className="whitespace-nowrap text-[11px] text-[#888]">
+                  الحجم {draftFontSize}
+                </label>
+                <input
+                  type="range"
+                  min={18}
+                  max={96}
+                  value={draftFontSize}
+                  onChange={(e) => setDraftFontSize(Number(e.target.value))}
+                  className="flex-1"
+                />
+              </div>
               <button
                 type="button"
                 onClick={addTextOverlay}
                 className="w-full rounded-md bg-[#2a2a2e] px-3 py-2 text-xs font-semibold hover:bg-[#333]"
               >
-                إضافة نص للمعاينة
+                إضافة نص
               </button>
               {selectedOverlay?.type === "text" && (
                 <div className="space-y-2 rounded-md border border-[#333] p-2">
@@ -658,18 +1023,76 @@ export function VideoEditorWorkspace() {
                       )
                     }
                   />
-                  <label className="text-[11px] text-[#888]">
-                    الحجم {selectedOverlay.fontSize}
-                  </label>
-                  <input
-                    type="range"
-                    min={18}
-                    max={96}
-                    value={selectedOverlay.fontSize}
+                  <select
+                    value={selectedOverlay.fontFamily}
                     onChange={(e) =>
                       setOverlays((prev) =>
                         prev.map((o) =>
                           o.id === selectedOverlay.id && o.type === "text"
+                            ? { ...o, fontFamily: e.target.value }
+                            : o,
+                        ),
+                      )
+                    }
+                    className="w-full rounded border border-[#333] bg-[#101012] px-2 py-1 text-xs"
+                  >
+                    {VIDEO_FONTS.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={selectedOverlay.color}
+                      onChange={(e) =>
+                        setOverlays((prev) =>
+                          prev.map((o) =>
+                            o.id === selectedOverlay.id && o.type === "text"
+                              ? { ...o, color: e.target.value }
+                              : o,
+                          ),
+                        )
+                      }
+                      className="h-7 w-10 rounded border border-[#333] bg-transparent"
+                    />
+                    <label className="text-[11px] text-[#888]">
+                      الحجم {selectedOverlay.fontSize}
+                    </label>
+                    <input
+                      type="range"
+                      min={18}
+                      max={96}
+                      value={selectedOverlay.fontSize}
+                      onChange={(e) =>
+                        setOverlays((prev) =>
+                          prev.map((o) =>
+                            o.id === selectedOverlay.id && o.type === "text"
+                              ? { ...o, fontSize: Number(e.target.value) }
+                              : o,
+                          ),
+                        )
+                      }
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+              )}
+              {selectedOverlay?.type === "emoji" && (
+                <div className="space-y-2 rounded-md border border-[#333] p-2">
+                  <label className="text-[11px] text-[#888]">
+                    حجم الملصق {selectedOverlay.fontSize}
+                  </label>
+                  <input
+                    type="range"
+                    min={24}
+                    max={200}
+                    value={selectedOverlay.fontSize}
+                    onChange={(e) =>
+                      setOverlays((prev) =>
+                        prev.map((o) =>
+                          o.id === selectedOverlay.id && o.type === "emoji"
                             ? { ...o, fontSize: Number(e.target.value) }
                             : o,
                         ),
@@ -715,6 +1138,115 @@ export function VideoEditorWorkspace() {
                 الإخراج: {outSize.w}×{outSize.h} — اسحب إطار الفيديو الأصفر
                 لتغيير الحجم/الموضع
               </p>
+            </div>
+          )}
+
+          {panel === "record" && (
+            <div className="space-y-2 text-sm">
+              <p className="font-semibold text-[#f5c518]">تسجيل</p>
+              <p className="text-xs leading-6 text-[#888]">
+                استخدم أدوات{" "}
+                <a href="/tools/screen-recorder" className="text-[#f5c518] underline">
+                  مسجل الشاشة
+                </a>{" "}
+                أو{" "}
+                <a href="/tools/video-recorder" className="text-[#f5c518] underline">
+                  مسجل الفيديو
+                </a>{" "}
+                ثم ارفع الناتج هنا.
+              </p>
+            </div>
+          )}
+
+          {panel === "tts" && (
+            <div className="space-y-3 text-sm">
+              <p className="font-semibold text-[#f5c518]">تحويل النص إلى كلام</p>
+              <textarea
+                className="w-full rounded-md border border-[#333] bg-[#101012] px-2 py-2 text-sm"
+                rows={4}
+                placeholder="اكتب نصك هنا"
+                value={ttsText}
+                onChange={(e) => setTtsText(e.target.value)}
+              />
+              <label className="block text-[11px] text-[#888]">اللغة</label>
+              <select
+                value={ttsLang}
+                onChange={(e) => setTtsLang(e.target.value)}
+                className="w-full rounded-md border border-[#333] bg-[#101012] px-2 py-1.5 text-xs"
+              >
+                {TTS_LANGS.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+              <label className="block text-[11px] text-[#888]">
+                السرعة {ttsRate.toFixed(2)}×
+              </label>
+              <input
+                type="range"
+                min={50}
+                max={200}
+                value={Math.round(ttsRate * 100)}
+                onChange={(e) => setTtsRate(Number(e.target.value) / 100)}
+                className="w-full"
+              />
+              <label className="block text-[11px] text-[#888]">
+                طبقة الصوت {ttsPitch.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={200}
+                value={Math.round(ttsPitch * 100)}
+                onChange={(e) => setTtsPitch(Number(e.target.value) / 100)}
+                className="w-full"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={ttsBusy}
+                  onClick={() => void ttsPreview()}
+                  className="rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222] disabled:opacity-50"
+                >
+                  معاينة
+                </button>
+                <button
+                  type="button"
+                  disabled={ttsBusy}
+                  onClick={() => void ttsAddToTimeline()}
+                  className="rounded-md bg-[#f5c518] px-3 py-2 text-xs font-bold text-[#111] disabled:opacity-50"
+                >
+                  {ttsBusy ? "..." : "إضافة"}
+                </button>
+              </div>
+              {audioTracks.filter((t) => t.id.startsWith("tts-")).length >
+                0 && (
+                <div className="space-y-1 border-t border-[#2a2a2e] pt-2">
+                  <p className="text-[11px] text-[#888]">
+                    التعليقات الصوتية المضافة
+                  </p>
+                  {audioTracks
+                    .filter((t) => t.id.startsWith("tts-"))
+                    .map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between gap-2 rounded border border-[#333] px-2 py-1 text-[11px]"
+                      >
+                        <span className="truncate">
+                          بدء: {formatTime(t.start)} · {t.duration.toFixed(1)}ث
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeAudioTrack(t.id)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -784,20 +1316,28 @@ export function VideoEditorWorkspace() {
             </div>
           )}
 
-          {panel === "record" && (
-            <div className="space-y-2 text-sm">
-              <p className="font-semibold text-[#f5c518]">تسجيل</p>
-              <p className="text-xs leading-6 text-[#888]">
-                استخدم أدوات{" "}
-                <a href="/tools/screen-recorder" className="text-[#f5c518] underline">
-                  مسجل الشاشة
-                </a>{" "}
-                أو{" "}
-                <a href="/tools/video-recorder" className="text-[#f5c518] underline">
-                  مسجل الفيديو
-                </a>{" "}
-                ثم ارفع الناتج هنا.
-              </p>
+          {selectedOverlay?.type === "image" && (
+            <div className="mt-4 space-y-2 rounded-md border border-[#333] p-2 text-xs">
+              <p className="font-semibold text-[#f5c518]">الصورة المحددة</p>
+              <label className="text-[#888]">
+                الشفافية {Math.round(selectedOverlay.opacity * 100)}%
+              </label>
+              <input
+                type="range"
+                min={10}
+                max={100}
+                value={Math.round(selectedOverlay.opacity * 100)}
+                onChange={(e) =>
+                  setOverlays((prev) =>
+                    prev.map((o) =>
+                      o.id === selectedOverlay.id && o.type === "image"
+                        ? { ...o, opacity: Number(e.target.value) / 100 }
+                        : o,
+                    ),
+                  )
+                }
+                className="w-full"
+              />
             </div>
           )}
 
@@ -835,6 +1375,44 @@ export function VideoEditorWorkspace() {
                   max={200}
                   value={Math.round(speed * 100)}
                   onChange={(e) => setSpeed(Number(e.target.value) / 100)}
+                  className="w-full"
+                />
+                <label className="text-[#888]">عكس</label>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFlipH((v) => !v)}
+                    className={`flex items-center justify-center gap-1 rounded py-1.5 ${
+                      flipH
+                        ? "bg-[#f5c518] font-bold text-[#111]"
+                        : "border border-[#333]"
+                    }`}
+                  >
+                    <FlipHorizontal className="h-3.5 w-3.5" />
+                    أفقي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFlipV((v) => !v)}
+                    className={`flex items-center justify-center gap-1 rounded py-1.5 ${
+                      flipV
+                        ? "bg-[#f5c518] font-bold text-[#111]"
+                        : "border border-[#333]"
+                    }`}
+                  >
+                    <FlipVertical className="h-3.5 w-3.5" />
+                    رأسي
+                  </button>
+                </div>
+                <label className="text-[#888]">
+                  شفافية الفيديو {Math.round(opacity * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min={10}
+                  max={100}
+                  value={Math.round(opacity * 100)}
+                  onChange={(e) => setOpacity(Number(e.target.value) / 100)}
                   className="w-full"
                 />
                 <label className="text-[#888]">تدوير</label>
@@ -882,7 +1460,14 @@ export function VideoEditorWorkspace() {
                   top: `${videoBox.y * 100}%`,
                   width: `${videoBox.w * 100}%`,
                   height: `${videoBox.h * 100}%`,
-                  transform: rotate ? `rotate(${rotate}deg)` : undefined,
+                  opacity,
+                  transform: [
+                    rotate ? `rotate(${rotate}deg)` : "",
+                    flipH ? "scaleX(-1)" : "",
+                    flipV ? "scaleY(-1)" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined,
                 }}
                 onPointerDown={(e) => onVideoHandleDown(e, "video-move")}
               >
@@ -924,8 +1509,19 @@ export function VideoEditorWorkspace() {
                 >
                   {item.type === "text" ? (
                     <div
-                      className="flex h-full w-full items-center justify-center rounded bg-black/50 px-2 text-center font-bold text-white"
-                      style={{ fontSize: Math.max(12, item.fontSize * 0.45) }}
+                      className="flex h-full w-full items-center justify-center rounded bg-black/50 px-2 text-center font-bold"
+                      style={{
+                        fontSize: Math.max(12, item.fontSize * 0.45),
+                        fontFamily: item.fontFamily,
+                        color: item.color,
+                      }}
+                    >
+                      {item.text}
+                    </div>
+                  ) : item.type === "emoji" ? (
+                    <div
+                      className="flex h-full w-full items-center justify-center text-center leading-none"
+                      style={{ fontSize: Math.max(24, item.fontSize * 0.5) }}
                     >
                       {item.text}
                     </div>
@@ -935,6 +1531,7 @@ export function VideoEditorWorkspace() {
                       src={item.src}
                       alt=""
                       className="h-full w-full object-contain"
+                      style={{ opacity: item.opacity }}
                       draggable={false}
                     />
                   )}
@@ -1024,7 +1621,9 @@ export function VideoEditorWorkspace() {
           <div className="border-t border-[#2a2a2e] bg-[#121214] p-3">
             <div
               ref={timelineRef}
-              className="relative h-16 overflow-hidden rounded-md bg-[#1a1a1d]"
+              className={`relative overflow-hidden rounded-md bg-[#1a1a1d] ${
+                audioTracks.length > 0 ? "h-24" : "h-16"
+              }`}
               style={{ transform: `scaleX(${timelineZoom})`, transformOrigin: "right center" }}
               onPointerMove={onTimelineMove}
               onPointerUp={onPointerUp}
@@ -1059,6 +1658,35 @@ export function VideoEditorWorkspace() {
                   onPointerDown={(e) => onTimelinePointerDown(e, "trim-out")}
                 />
               </div>
+
+              {/* Audio tracks row (TTS = green, music = yellow) */}
+              {audioTracks.length > 0 && (
+                <div className="absolute inset-x-0 top-16 h-6">
+                  {audioTracks.map((t) => {
+                    const isTts = t.id.startsWith("tts-");
+                    const left = timelinePct(trimIn + t.start);
+                    const width = duration
+                      ? Math.max(1, (t.duration / duration) * 100)
+                      : 1;
+                    return (
+                      <div
+                        key={t.id}
+                        className={`absolute h-6 overflow-hidden rounded border px-1 text-[9px] font-semibold text-black ${
+                          isTts
+                            ? "border-emerald-600 bg-emerald-400/80"
+                            : "border-amber-500 bg-yellow-400/80"
+                        }`}
+                        style={{ left: `${left}%`, width: `${width}%` }}
+                        title={t.name}
+                      >
+                        <span className="truncate">
+                          {isTts ? "🎙" : "🎵"} {t.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Playhead */}
               <div

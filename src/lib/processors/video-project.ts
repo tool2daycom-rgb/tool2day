@@ -10,9 +10,11 @@ import type { MediaProgress } from "./media";
 
 export type VideoProjectOverlay =
   | {
-      type: "text";
+      type: "text" | "emoji";
       text: string;
       fontSize: number;
+      fontFamily?: string;
+      color?: string;
       x: number;
       y: number;
       w: number;
@@ -24,7 +26,15 @@ export type VideoProjectOverlay =
       y: number;
       w: number;
       h: number;
+      opacity?: number;
     };
+
+export type VideoAudioTrack = {
+  file: File;
+  /** Start time within exported timeline (seconds) */
+  start: number;
+  volume: number;
+};
 
 export type VideoProjectExport = {
   file: File;
@@ -32,6 +42,9 @@ export type VideoProjectExport = {
   trimOut: number;
   speed: number;
   rotate: 0 | 90 | 180 | 270;
+  flipH: boolean;
+  flipV: boolean;
+  opacity: number;
   volume: number;
   muted: boolean;
   fadeIn: number;
@@ -43,6 +56,7 @@ export type VideoProjectExport = {
   videoW: number;
   videoH: number;
   overlays: VideoProjectOverlay[];
+  audioTracks: VideoAudioTrack[];
 };
 
 async function execOrThrow(
@@ -55,31 +69,44 @@ async function execOrThrow(
   }
 }
 
+function parseCssColor(color: string | undefined): string {
+  const c = (color || "#ffffff").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(c)) return c;
+  if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+    return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
+  }
+  return "#ffffff";
+}
+
 async function textToPngFile(
   text: string,
   fontSize: number,
   maxW: number,
+  opts?: { fontFamily?: string; color?: string; emoji?: boolean },
 ): Promise<File> {
-  const pad = 16;
+  const pad = opts?.emoji ? 8 : 16;
   const canvas = document.createElement("canvas");
   const measure = canvas.getContext("2d");
   if (!measure) throw new Error("تعذر رسم النص");
-  measure.font = `bold ${fontSize}px Cairo, Tajawal, sans-serif`;
-  const lines = (text || "نص").split("\n").slice(0, 4);
+  const family = opts?.fontFamily || "Cairo, Tajawal, sans-serif";
+  measure.font = `${opts?.emoji ? "" : "bold "}${fontSize}px ${family}`;
+  const lines = (text || "نص").split("\n").slice(0, 6);
   const measured = Math.min(
     maxW,
     Math.max(...lines.map((l) => measure.measureText(l || " ").width), 40) +
       pad * 2,
   );
-  const lineH = fontSize * 1.35;
-  canvas.width = Math.ceil(measured);
+  const lineH = fontSize * (opts?.emoji ? 1.1 : 1.35);
+  canvas.width = Math.ceil(Math.max(measured, fontSize + pad * 2));
   canvas.height = Math.ceil(lines.length * lineH + pad * 2);
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#fff";
-  ctx.font = `bold ${fontSize}px Cairo, Tajawal, sans-serif`;
+  if (!opts?.emoji) {
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.fillStyle = parseCssColor(opts?.color);
+  ctx.font = `${opts?.emoji ? "" : "bold "}${fontSize}px ${family}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   lines.forEach((line, i) => {
@@ -99,7 +126,7 @@ async function textToPngFile(
   return new File([blob], "text-overlay.png", { type: "image/png" });
 }
 
-/** Export a full video project (trim, speed, rotate, volume, canvas, overlays). */
+/** Export a full video project including TTS/music audio tracks. */
 export async function exportVideoProject(
   project: VideoProjectExport,
   onProgress?: MediaProgress,
@@ -110,6 +137,9 @@ export async function exportVideoProject(
     trimOut,
     speed: rawSpeed,
     rotate,
+    flipH,
+    flipV,
+    opacity,
     volume,
     muted,
     fadeIn,
@@ -121,6 +151,7 @@ export async function exportVideoProject(
     videoW,
     videoH,
     overlays,
+    audioTracks,
   } = project;
 
   if (trimOut <= trimIn + 0.05) {
@@ -141,27 +172,45 @@ export async function exportVideoProject(
     "-i",
     input,
   ];
-  const overlayFiles: string[] = [];
+  const tempFiles: string[] = [input];
 
+  const overlayNames: string[] = [];
   for (let i = 0; i < overlays.length; i++) {
     const ov = overlays[i]!;
-    if (ov.type === "text") {
+    if (ov.type === "image") {
+      const ext = ov.file.type.includes("png") ? "png" : "jpg";
+      const name = `ov${i}.${ext}`;
+      await ffmpeg.writeFile(name, await fetchFile(ov.file));
+      overlayNames.push(name);
+      tempFiles.push(name);
+      args.push("-i", name);
+    } else {
       const png = await textToPngFile(
         ov.text,
         Math.max(18, Math.round(ov.fontSize)),
         Math.round(outW * Math.max(0.05, ov.w)),
+        {
+          fontFamily: ov.fontFamily,
+          color: ov.color,
+          emoji: ov.type === "emoji",
+        },
       );
       const name = `ov${i}.png`;
       await ffmpeg.writeFile(name, await fetchFile(png));
-      overlayFiles.push(name);
-      args.push("-i", name);
-    } else {
-      const ext = ov.file.type.includes("png") ? "png" : "jpg";
-      const name = `ov${i}.${ext}`;
-      await ffmpeg.writeFile(name, await fetchFile(ov.file));
-      overlayFiles.push(name);
+      overlayNames.push(name);
+      tempFiles.push(name);
       args.push("-i", name);
     }
+  }
+
+  const audioStartIndex = 1 + overlays.length;
+  for (let i = 0; i < audioTracks.length; i++) {
+    const track = audioTracks[i]!;
+    const ext = extensionForMime(track.file.type, "mp3");
+    const name = `aud${i}.${ext}`;
+    await ffmpeg.writeFile(name, await fetchFile(track.file));
+    tempFiles.push(name);
+    args.push("-i", name);
   }
 
   const rotateFilter =
@@ -183,11 +232,17 @@ export async function exportVideoProject(
 
   const transforms: string[] = [];
   if (rotateFilter) transforms.push(rotateFilter);
+  if (flipH) transforms.push("hflip");
+  if (flipV) transforms.push("vflip");
   transforms.push(
     `scale=${vw}:${vh}:force_original_aspect_ratio=decrease`,
     `pad=${vw}:${vh}:(ow-iw)/2:(oh-ih)/2`,
     `setpts=${pts}*PTS`,
   );
+  const op = Math.max(0.05, Math.min(1, opacity));
+  if (op < 0.999) {
+    transforms.push(`format=rgba,colorchannelmixer=aa=${op.toFixed(3)}`);
+  }
 
   const fc: string[] = [];
   fc.push(`[0:v]${transforms.join(",")}[scaled]`);
@@ -199,14 +254,21 @@ export async function exportVideoProject(
     const ox = Math.round(ov.x * ow);
     const oy = Math.round(ov.y * oh);
     const next = `v${i + 1}`;
-    if (ov.type === "text") {
-      const tw = Math.max(2, Math.round(ov.w * ow));
-      fc.push(`[${inputIdx}:v]scale=${tw}:-1[img${i}]`);
-      fc.push(`[${vlabel}][img${i}]overlay=${ox}:${oy}[${next}]`);
-    } else {
+    if (ov.type === "image") {
       const iw = Math.max(2, Math.round(ov.w * ow));
       const ih = Math.max(2, Math.round(ov.h * oh));
-      fc.push(`[${inputIdx}:v]scale=${iw}:${ih}[img${i}]`);
+      const a = Math.max(0.05, Math.min(1, ov.opacity ?? 1));
+      if (a < 0.999) {
+        fc.push(
+          `[${inputIdx}:v]scale=${iw}:${ih},format=rgba,colorchannelmixer=aa=${a.toFixed(3)}[img${i}]`,
+        );
+      } else {
+        fc.push(`[${inputIdx}:v]scale=${iw}:${ih}[img${i}]`);
+      }
+      fc.push(`[${vlabel}][img${i}]overlay=${ox}:${oy}[${next}]`);
+    } else {
+      const tw = Math.max(2, Math.round(ov.w * ow));
+      fc.push(`[${inputIdx}:v]scale=${tw}:-1[img${i}]`);
       fc.push(`[${vlabel}][img${i}]overlay=${ox}:${oy}[${next}]`);
     }
     vlabel = next;
@@ -216,7 +278,9 @@ export async function exportVideoProject(
   const duration = (trimOut - trimIn) / speed;
   const afades: string[] = [`atempo=${speed}`, `volume=${vol}`];
   if (fadeIn > 0) {
-    afades.push(`afade=t=in:st=0:d=${Math.min(fadeIn, duration / 2).toFixed(3)}`);
+    afades.push(
+      `afade=t=in:st=0:d=${Math.min(fadeIn, duration / 2).toFixed(3)}`,
+    );
   }
   if (fadeOut > 0) {
     const st = Math.max(0, duration - fadeOut);
@@ -224,39 +288,78 @@ export async function exportVideoProject(
       `afade=t=out:st=${st.toFixed(3)}:d=${Math.min(fadeOut, duration / 2).toFixed(3)}`,
     );
   }
-  fc.push(`[0:a]${afades.join(",")}[aout]`);
+
+  // Mix original audio + TTS/music tracks
+  fc.push(`[0:a]${afades.join(",")}[abase]`);
+  let aOutLabel = "abase";
+  if (audioTracks.length > 0) {
+    const mixInputs = ["[abase]"];
+    audioTracks.forEach((track, i) => {
+      const idx = audioStartIndex + i;
+      const label = `ax${i}`;
+      const delayMs = Math.max(0, Math.round(track.start * 1000));
+      const tvol = Math.max(0, Math.min(2, track.volume));
+      fc.push(
+        `[${idx}:a]volume=${tvol},adelay=${delayMs}|${delayMs}[${label}]`,
+      );
+      mixInputs.push(`[${label}]`);
+    });
+    fc.push(
+      `${mixInputs.join("")}amix=inputs=${mixInputs.length}:duration=first:dropout_transition=2[aout]`,
+    );
+    aOutLabel = "aout";
+  }
 
   const output = "project-out.mp4";
-  const commonTail = [
-    "-filter_complex",
-    fc.join(";"),
-    "-map",
-    `[${vlabel}]`,
-    "-c:v",
-    "libx264",
-    "-preset",
-    "ultrafast",
-    "-movflags",
-    "+faststart",
-  ];
+  tempFiles.push(output);
 
-  try {
+  const runWithAudio = async () => {
     await execOrThrow(ffmpeg, [
       ...args,
-      ...commonTail,
+      "-filter_complex",
+      fc.join(";"),
       "-map",
-      "[aout]",
+      `[${vlabel}]`,
+      "-map",
+      `[${aOutLabel}]`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-movflags",
+      "+faststart",
       "-c:a",
       "aac",
       "-shortest",
       output,
     ]);
-  } catch {
-    const fcVideoOnly = fc.filter((p) => !p.includes("[0:a]"));
+  };
+
+  const runVideoOnly = async () => {
+    const videoOnlyFc = fc.filter(
+      (p) =>
+        !p.includes("[0:a]") &&
+        !p.includes(":a]") &&
+        !p.includes("amix") &&
+        !p.includes("[abase]") &&
+        !p.includes("[aout]") &&
+        !p.includes("adelay"),
+    );
+    const videoArgs = [
+      "-ss",
+      String(trimIn),
+      "-to",
+      String(trimOut),
+      "-i",
+      input,
+    ];
+    for (const name of overlayNames) {
+      videoArgs.push("-i", name);
+    }
     await execOrThrow(ffmpeg, [
-      ...args,
+      ...videoArgs,
       "-filter_complex",
-      fcVideoOnly.join(";"),
+      videoOnlyFc.join(";"),
       "-map",
       `[${vlabel}]`,
       "-an",
@@ -268,16 +371,22 @@ export async function exportVideoProject(
       "+faststart",
       output,
     ]);
+  };
+
+  try {
+    await runWithAudio();
+  } catch {
+    await runVideoOnly();
   }
 
   const data = await ffmpeg.readFile(output);
   downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-edited.mp4`);
 
-  try {
-    await ffmpeg.deleteFile(input);
-    await ffmpeg.deleteFile(output);
-    for (const name of overlayFiles) await ffmpeg.deleteFile(name);
-  } catch {
-    /* ignore */
+  for (const name of tempFiles) {
+    try {
+      await ffmpeg.deleteFile(name);
+    } catch {
+      /* ignore */
+    }
   }
 }
