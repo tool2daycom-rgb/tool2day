@@ -1,19 +1,53 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
-import { basename, downloadBlob } from "@/lib/processors/ffmpeg-client";
+import fontkit from "@pdf-lib/fontkit";
+import { PDFDocument, degrees, rgb } from "pdf-lib";
+import { basename, downloadBlob, toBlob } from "@/lib/processors/ffmpeg-client";
 
 type Props = {
   title: string;
   description: string;
 };
 
+/** Always clone — pdf.js / workers detach ArrayBuffers. */
+function cloneBytes(data: Uint8Array): Uint8Array {
+  const out = new Uint8Array(data.byteLength);
+  out.set(data);
+  return out;
+}
+
+let arabicFontCache: Uint8Array | null = null;
+
+async function loadArabicFontBytes() {
+  if (arabicFontCache) return cloneBytes(arabicFontCache);
+  const urls = [
+    `${typeof window !== "undefined" ? window.location.origin : ""}/fonts/NotoNaskhArabic-Regular.ttf`,
+    "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf",
+  ];
+  for (const url of urls) {
+    if (!url) continue;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.byteLength > 1000) {
+        arabicFontCache = buf;
+        return cloneBytes(buf);
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  throw new Error("تعذر تحميل خط عربي — تحقق من الاتصال");
+}
+
 export function PdfEditorWorkspace({ title, description }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
+  const bytesRef = useRef<Uint8Array | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
+  const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -26,11 +60,19 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   const [posX, setPosX] = useState("50");
   const [posY, setPosY] = useState("50");
 
-  const loadPreview = useCallback(async (data: ArrayBuffer, pageNum: number) => {
+  const updateBytes = useCallback((next: Uint8Array) => {
+    const cloned = cloneBytes(next);
+    bytesRef.current = cloned;
+    setBytes(cloned);
+  }, []);
+
+  const loadPreview = useCallback(async (data: Uint8Array, pageNum: number) => {
     const pdfjs = await import("pdfjs-dist");
     pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-    const pdf = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
-    const p = await pdf.getPage(Math.min(Math.max(1, pageNum), pdf.numPages));
+    // Pass a fresh copy so the worker cannot detach our stored buffer
+    const pdf = await pdfjs.getDocument({ data: cloneBytes(data) }).promise;
+    const safePage = Math.min(Math.max(1, pageNum), pdf.numPages);
+    const p = await pdf.getPage(safePage);
     const viewport = p.getViewport({ scale: 1.25 });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
@@ -38,11 +80,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     await p.render({ canvasContext: ctx, viewport, canvas } as never).promise;
-    const url = canvas.toDataURL("image/png");
-    setPreviewUrl((prev) => {
-      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-      return url;
-    });
+    setPreviewUrl(canvas.toDataURL("image/png"));
     setPageCount(pdf.numPages);
   }, []);
 
@@ -51,11 +89,15 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     if (!f) return;
     setError(null);
     setFile(f);
-    const buf = await f.arrayBuffer();
-    setBytes(buf.slice(0));
+    const raw = new Uint8Array(await f.arrayBuffer());
+    updateBytes(raw);
     setPage(1);
     setStatus("تم تحميل الملف");
-    await loadPreview(buf, 1);
+    try {
+      await loadPreview(raw, 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "فشل المعاينة");
+    }
   }
 
   useEffect(() => {
@@ -66,26 +108,25 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   }, [bytes, page, loadPreview]);
 
   async function withDoc(mutator: (doc: PDFDocument) => Promise<void> | void) {
-    if (!bytes) {
+    const current = bytesRef.current;
+    if (!current) {
       setError("اختر ملف PDF أولاً");
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const doc = await PDFDocument.load(bytes.slice(0));
+      const doc = await PDFDocument.load(cloneBytes(current));
+      doc.registerFontkit(fontkit);
       await mutator(doc);
       const out = await doc.save();
-      const copy = new Uint8Array(out);
-      const next = copy.buffer.slice(
-        copy.byteOffset,
-        copy.byteOffset + copy.byteLength,
-      );
-      setBytes(next);
-      setPageCount(doc.getPageCount());
-      setPage((p) => Math.min(p, doc.getPageCount() || 1));
-      setStatus("تم تطبيق التعديل — يمكنك المتابعة أو التنزيل");
+      updateBytes(out);
+      const count = doc.getPageCount();
+      setPageCount(count);
+      setPage((p) => Math.min(p, count || 1));
+      setStatus("تم تطبيق التعديل — راجع المعاينة ثم نزّل الملف");
     } catch (err) {
+      console.error(err);
       setError(err instanceof Error ? err.message : "فشل التعديل");
     } finally {
       setBusy(false);
@@ -97,11 +138,13 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       const pages = doc.getPages();
       const target = pages[page - 1];
       if (!target) throw new Error("رقم الصفحة غير صالح");
-      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const fontBytes = await loadArabicFontBytes();
+      const font = await doc.embedFont(fontBytes, { subset: true });
       const { height } = target.getSize();
-      target.drawText(text || " ", {
+      const value = (text || " ").trim() || " ";
+      target.drawText(value, {
         x: Number(posX) || 50,
-        y: height - (Number(posY) || 50),
+        y: Math.max(20, height - (Number(posY) || 50)),
         size: Number(fontSize) || 18,
         font,
         color: rgb(0.05, 0.05, 0.05),
@@ -116,15 +159,16 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       const pages = doc.getPages();
       const target = pages[page - 1];
       if (!target) throw new Error("رقم الصفحة غير صالح");
-      const bytesImg = await imgFile.arrayBuffer();
+      const bytesImg = cloneBytes(new Uint8Array(await imgFile.arrayBuffer()));
       const image = imgFile.type.includes("png")
         ? await doc.embedPng(bytesImg)
         : await doc.embedJpg(bytesImg);
       const maxW = 180;
       const scale = Math.min(1, maxW / image.width);
+      const { height } = target.getSize();
       target.drawImage(image, {
         x: Number(posX) || 50,
-        y: target.getSize().height - (Number(posY) || 50) - image.height * scale,
+        y: height - (Number(posY) || 50) - image.height * scale,
         width: image.width * scale,
         height: image.height * scale,
       });
@@ -157,12 +201,13 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   }
 
   function download() {
-    if (!bytes || !file) {
+    const current = bytesRef.current;
+    if (!current || !file) {
       setError("لا يوجد ملف للتنزيل");
       return;
     }
     downloadBlob(
-      new Blob([bytes], { type: "application/pdf" }),
+      toBlob(cloneBytes(current), "application/pdf"),
       `${basename(file.name)}-edited.pdf`,
     );
     setStatus("تم التنزيل");
@@ -286,7 +331,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                 onClick={() => void addText()}
                 className="mt-3 w-full rounded-md bg-[#111] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
               >
-                إضافة النص للصفحة الحالية
+                {busy ? "جارٍ…" : "إضافة النص للصفحة الحالية"}
               </button>
             </div>
 
