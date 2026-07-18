@@ -43,6 +43,16 @@ type SelectedWord = {
   pdfY: number;
   pdfW: number;
   pdfH: number;
+  /** Exact PDF font size from text layer metrics */
+  fontSize: number;
+  /** Baseline Y in PDF space */
+  pdfBaseline: number;
+  color: { r: number; g: number; b: number };
+  bg: { r: number; g: number; b: number };
+  underlined: boolean;
+  fontKind: "helvetica" | "times" | "courier" | "arabic";
+  bold: boolean;
+  italic: boolean;
 };
 
 function cloneBytes(data: Uint8Array): Uint8Array {
@@ -53,6 +63,136 @@ function cloneBytes(data: Uint8Array): Uint8Array {
 
 function hasArabic(s: string) {
   return /[\u0600-\u06FF]/.test(s);
+}
+
+function inferFontKind(fontFamily: string, sampleText: string): SelectedWord["fontKind"] {
+  if (hasArabic(sampleText)) return "arabic";
+  const f = fontFamily.toLowerCase();
+  if (f.includes("courier") || f.includes("mono")) return "courier";
+  if (f.includes("times") || f.includes("serif") || f.includes("georgia")) return "times";
+  return "helvetica";
+}
+
+function pickStandardFont(
+  kind: SelectedWord["fontKind"],
+  bold: boolean,
+  italic: boolean,
+): StandardFonts {
+  if (kind === "courier") {
+    if (bold && italic) return StandardFonts.CourierBoldOblique;
+    if (bold) return StandardFonts.CourierBold;
+    if (italic) return StandardFonts.CourierOblique;
+    return StandardFonts.Courier;
+  }
+  if (kind === "times") {
+    if (bold && italic) return StandardFonts.TimesRomanBoldItalic;
+    if (bold) return StandardFonts.TimesRomanBold;
+    if (italic) return StandardFonts.TimesRomanItalic;
+    return StandardFonts.TimesRoman;
+  }
+  if (bold && italic) return StandardFonts.HelveticaBoldOblique;
+  if (bold) return StandardFonts.HelveticaBold;
+  if (italic) return StandardFonts.HelveticaOblique;
+  return StandardFonts.Helvetica;
+}
+
+/** Sample text/background color and underline from the rendered page canvas. */
+function sampleWordStyle(
+  canvas: HTMLCanvasElement,
+  box: { x: number; y: number; w: number; h: number },
+): Pick<SelectedWord, "color" | "bg" | "underlined"> {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const fallback = {
+    color: { r: 0, g: 0, b: 0 },
+    bg: { r: 1, g: 1, b: 1 },
+    underlined: false,
+  };
+  if (!ctx) return fallback;
+
+  const x0 = Math.max(0, Math.floor(box.x));
+  const y0 = Math.max(0, Math.floor(box.y));
+  const x1 = Math.min(canvas.width, Math.ceil(box.x + box.w));
+  const y1 = Math.min(canvas.height, Math.ceil(box.y + box.h));
+  const w = Math.max(1, x1 - x0);
+  const h = Math.max(1, y1 - y0);
+
+  let data: ImageData;
+  try {
+    data = ctx.getImageData(x0, y0, w, h);
+  } catch {
+    return fallback;
+  }
+
+  type Bucket = { r: number; g: number; b: number; n: number; lum: number };
+  const dark: Bucket[] = [];
+  const light: Bucket[] = [];
+
+  const push = (list: Bucket[], r: number, g: number, b: number) => {
+    for (const bkt of list) {
+      if (
+        Math.abs(bkt.r - r) < 18 &&
+        Math.abs(bkt.g - g) < 18 &&
+        Math.abs(bkt.b - b) < 18
+      ) {
+        bkt.r = (bkt.r * bkt.n + r) / (bkt.n + 1);
+        bkt.g = (bkt.g * bkt.n + g) / (bkt.n + 1);
+        bkt.b = (bkt.b * bkt.n + b) / (bkt.n + 1);
+        bkt.n += 1;
+        return;
+      }
+    }
+    list.push({ r, g, b, n: 1, lum: 0.299 * r + 0.587 * g + 0.114 * b });
+  };
+
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3]! < 128) continue;
+    const r = px[i]!;
+    const g = px[i + 1]!;
+    const b = px[i + 2]!;
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (lum < 140) push(dark, r, g, b);
+    else push(light, r, g, b);
+  }
+
+  dark.sort((a, b) => b.n - a.n);
+  light.sort((a, b) => b.n - a.n);
+  const ink = dark[0];
+  const paper = light[0];
+
+  // Underline: look at a thin strip just under the glyph box
+  let underlined = false;
+  const uy0 = Math.min(canvas.height - 1, y1);
+  const uy1 = Math.min(canvas.height, y1 + Math.max(3, Math.round(h * 0.22)));
+  const uw = w;
+  const uh = Math.max(1, uy1 - uy0);
+  if (uh > 0 && ink) {
+    try {
+      const under = ctx.getImageData(x0, uy0, uw, uh).data;
+      let darkCount = 0;
+      let total = 0;
+      for (let i = 0; i < under.length; i += 4) {
+        if (under[i + 3]! < 128) continue;
+        total += 1;
+        const lum = 0.299 * under[i]! + 0.587 * under[i + 1]! + 0.114 * under[i + 2]!;
+        if (lum < 150) darkCount += 1;
+      }
+      // A real underline paints a dense horizontal band; random noise won't.
+      underlined = total > 8 && darkCount / total > 0.28;
+    } catch {
+      underlined = false;
+    }
+  }
+
+  return {
+    color: ink
+      ? { r: ink.r / 255, g: ink.g / 255, b: ink.b / 255 }
+      : fallback.color,
+    bg: paper
+      ? { r: paper.r / 255, g: paper.g / 255, b: paper.b / 255 }
+      : fallback.bg,
+    underlined,
+  };
 }
 
 let arabicFontCache: Uint8Array | null = null;
@@ -76,6 +216,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   const bytesRef = useRef<Uint8Array | null>(null);
   const pageSizeRef = useRef({ w: 595, h: 842 });
   const displaySizeRef = useRef({ w: 1, h: 1 });
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const loadIdRef = useRef(0);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(
     null,
@@ -128,6 +269,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
 
   const selectSpan = useCallback((el: HTMLElement, all: HTMLElement[]) => {
     const stage = stageRef.current;
+    const canvas = previewCanvasRef.current;
     if (!stage) return;
     const stageRect = stage.getBoundingClientRect();
     const r = el.getBoundingClientRect();
@@ -140,16 +282,67 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     const str = (el.textContent || "").trim();
     if (!str) return;
 
+    // pdf.js TextLayer stores unscaled font height on the span
+    const fontHeightRaw = parseFloat(
+      el.style.getPropertyValue("--font-height") || "0",
+    );
+    const fontSize =
+      fontHeightRaw > 0
+        ? fontHeightRaw
+        : Math.max(7, h * sy * 0.92);
+
+    const fontFamily =
+      el.dataset.pdfFont ||
+      el.dataset.pdfFontName ||
+      el.style.fontFamily ||
+      window.getComputedStyle(el).fontFamily ||
+      "";
+    const familyLower = fontFamily.toLowerCase();
+    const bold =
+      familyLower.includes("bold") ||
+      (el.dataset.pdfFontName || "").toLowerCase().includes("bold") ||
+      parseInt(window.getComputedStyle(el).fontWeight, 10) >= 600;
+    const italic =
+      familyLower.includes("italic") ||
+      familyLower.includes("oblique") ||
+      (el.dataset.pdfFontName || "").toLowerCase().includes("italic") ||
+      (el.dataset.pdfFontName || "").toLowerCase().includes("oblique") ||
+      window.getComputedStyle(el).fontStyle === "italic";
+
+    const style = canvas
+      ? sampleWordStyle(canvas, { x, y, w, h })
+      : {
+          color: { r: 0, g: 0, b: 0 },
+          bg: { r: 1, g: 1, b: 1 },
+          underlined: false,
+        };
+
+    // Baseline ≈ bottom of box minus a small descent fraction
+    const pdfY = pageSizeRef.current.h - (y + h) * sy;
+    const pdfBaseline = pdfY + Math.max(0.5, fontSize * 0.12);
+
     const word: SelectedWord = {
       str,
       pdfX: x * sx,
-      pdfY: pageSizeRef.current.h - (y + h) * sy,
+      pdfY,
       pdfW: w * sx,
       pdfH: h * sy,
+      fontSize,
+      pdfBaseline,
+      color: style.color,
+      bg: style.bg,
+      underlined: style.underlined,
+      fontKind: inferFontKind(fontFamily, str),
+      bold,
+      italic,
     };
     setSelectedWord(word);
     setReplaceWith(str);
-    setStatus(`تم تحديد: «${str}» — اكتب البديل ثم اضغط استبدال أو حذف`);
+    setStatus(
+      `تم تحديد: «${str}» — الحجم ${fontSize.toFixed(1)}` +
+        (style.underlined ? " · مسطّر" : "") +
+        " — اكتب البديل ثم استبدال",
+    );
     all.forEach((s) => s.classList.remove("pdf-word-selected"));
     el.classList.add("pdf-word-selected");
   }, []);
@@ -183,6 +376,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       if (!ctx) return;
       await pdfPage.render({ canvasContext: ctx, viewport, canvas } as never).promise;
       if (loadId !== loadIdRef.current) return;
+      previewCanvasRef.current = canvas;
       setPreviewUrl(canvas.toDataURL("image/png"));
       setSelectedWord(null);
 
@@ -213,6 +407,17 @@ export function PdfEditorWorkspace({ title, description }: Props) {
         includeMarkedContent: true,
         disableNormalization: false,
       });
+      const textItems = textContent.items.flatMap((it) => {
+        if (
+          typeof it === "object" &&
+          it !== null &&
+          "str" in it &&
+          typeof (it as { str?: unknown }).str === "string"
+        ) {
+          return [it as { str: string; fontName: string; transform: number[] }];
+        }
+        return [];
+      });
       const textLayer = new pdfjs.TextLayer({
         textContentSource: textContent,
         container: layerEl,
@@ -221,18 +426,40 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       await textLayer.render();
       if (loadId !== loadIdRef.current) return;
 
-      const spans = textLayer.textDivs.filter((d) => (d.textContent || "").trim());
-      spans.forEach((span) => {
+      const spans = textLayer.textDivs;
+      const strings = textLayer.textContentItemsStr;
+      const clickable: HTMLElement[] = [];
+      spans.forEach((span, idx) => {
+        const str = (strings[idx] || span.textContent || "").trim();
+        if (!str) return;
+        clickable.push(span);
+        const item = textItems[idx];
+        const styleMeta = item?.fontName
+          ? textContent.styles?.[item.fontName]
+          : undefined;
         span.style.cursor = "pointer";
         span.onclick = (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
           if (!selectModeRef.current) return;
-          selectSpan(span, spans);
+          // Prefer transform font size from the PDF item when available
+          if (item?.transform) {
+            const fontFromItem = Math.hypot(item.transform[2]!, item.transform[3]!);
+            if (fontFromItem > 0) {
+              span.style.setProperty("--font-height", `${fontFromItem}px`);
+            }
+          }
+          if (styleMeta?.fontFamily) {
+            span.dataset.pdfFont = styleMeta.fontFamily;
+          }
+          if (item?.fontName) {
+            span.dataset.pdfFontName = item.fontName;
+          }
+          selectSpan(span, clickable);
         };
       });
 
-      if (!spans.length) {
+      if (!clickable.length) {
         setStatus("هذه الصفحة بلا نص قابل للتحديد — جرّب إضافة نص جديد");
       }
     },
@@ -357,11 +584,18 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     dragRef.current = null;
   }
 
-  async function embedFontFor(doc: PDFDocument, text: string) {
-    if (hasArabic(text)) {
+  async function embedFontFor(
+    doc: PDFDocument,
+    text: string,
+    style?: Pick<SelectedWord, "fontKind" | "bold" | "italic">,
+  ) {
+    if (hasArabic(text) || style?.fontKind === "arabic") {
       return doc.embedFont(await loadArabicFontBytes(), { subset: true });
     }
-    return doc.embedFont(StandardFonts.Helvetica);
+    const kind = style?.fontKind ?? "helvetica";
+    return doc.embedFont(
+      pickStandardFont(kind, !!style?.bold, !!style?.italic),
+    );
   }
 
   async function paintWordCover(
@@ -374,31 +608,64 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     const { width, height } = target.getSize();
     const sx = width / pageSizeRef.current.w;
     const sy = height / pageSizeRef.current.h;
-    const pad = 3;
-    const x = word.pdfX * sx - pad;
-    const y = word.pdfY * sy - pad;
-    const w = word.pdfW * sx + pad * 2;
-    const h = word.pdfH * sy + pad * 2;
 
+    const fontSize = Math.max(5, word.fontSize * sy);
+    const font = nextText
+      ? await embedFontFor(doc, nextText, word)
+      : null;
+
+    const padX = 2;
+    const padY = 2;
+    const underlineExtra = word.underlined ? Math.max(3, fontSize * 0.3) : 0;
+
+    // Cover the original glyph box fully (prevents leftover overlapping text)
+    let coverX = word.pdfX * sx - padX;
+    let coverY = word.pdfY * sy - padY - underlineExtra;
+    let coverW = word.pdfW * sx + padX * 2;
+    let coverH = word.pdfH * sy + padY * 2 + underlineExtra;
+
+    if (nextText && font) {
+      const measured = font.widthOfTextAtSize(nextText, fontSize);
+      coverW = Math.max(coverW, measured + padX * 2);
+      // Ensure cover also fits ascent above baseline
+      const baseline = word.pdfBaseline * sy;
+      const topNeeded = baseline + fontSize * 0.85;
+      const bottomNeeded = baseline - fontSize * 0.25 - underlineExtra;
+      coverY = Math.min(coverY, bottomNeeded - padY);
+      coverH = Math.max(coverH, topNeeded - coverY + padY);
+    }
+
+    const bg = rgb(word.bg.r, word.bg.g, word.bg.b);
     target.drawRectangle({
-      x,
-      y,
-      width: w,
-      height: h,
-      color: rgb(1, 1, 1),
+      x: coverX,
+      y: coverY,
+      width: coverW,
+      height: coverH,
+      color: bg,
       borderWidth: 0,
     });
 
-    if (nextText) {
-      const font = await embedFontFor(doc, nextText);
-      const size = Math.max(8, Math.min(h * 0.85, 36));
+    if (nextText && font) {
+      const ink = rgb(word.color.r, word.color.g, word.color.b);
+      const baseline = word.pdfBaseline * sy;
       target.drawText(nextText, {
-        x: x + 1,
-        y: y + Math.max(1, (h - size) * 0.25),
-        size,
+        x: word.pdfX * sx,
+        y: baseline,
+        size: fontSize,
         font,
-        color: rgb(0, 0, 0),
+        color: ink,
       });
+
+      if (word.underlined) {
+        const textW = font.widthOfTextAtSize(nextText, fontSize);
+        const ulY = baseline - Math.max(1, fontSize * 0.12);
+        target.drawLine({
+          start: { x: word.pdfX * sx, y: ulY },
+          end: { x: word.pdfX * sx + textW, y: ulY },
+          thickness: Math.max(0.6, fontSize * 0.06),
+          color: ink,
+        });
+      }
     }
   }
 
@@ -693,6 +960,24 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                     <span className="rounded bg-white px-2 py-0.5 font-bold">
                       {selectedWord.str}
                     </span>
+                  </p>
+                  <p className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[#1e40af]">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm border border-black/20"
+                      style={{
+                        background: `rgb(${Math.round(selectedWord.color.r * 255)},${Math.round(selectedWord.color.g * 255)},${Math.round(selectedWord.color.b * 255)})`,
+                      }}
+                      title="لون النص"
+                    />
+                    <span>حجم {selectedWord.fontSize.toFixed(1)}</span>
+                    <span>
+                      {selectedWord.fontKind === "arabic"
+                        ? "عربي"
+                        : selectedWord.fontKind}
+                      {selectedWord.bold ? " · عريض" : ""}
+                      {selectedWord.italic ? " · مائل" : ""}
+                    </span>
+                    {selectedWord.underlined ? <span>· مسطّر</span> : null}
                   </p>
                   <input
                     className="mb-3 w-full rounded-md border border-[#93c5fd] px-3 py-2 text-sm"
