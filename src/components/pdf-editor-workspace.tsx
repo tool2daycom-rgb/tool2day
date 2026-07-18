@@ -3,12 +3,13 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, degrees, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { basename, downloadBlob, toBlob } from "@/lib/processors/ffmpeg-client";
 
 type Props = {
@@ -36,15 +37,8 @@ type Overlay =
       height: number;
     };
 
-type PdfWord = {
-  id: string;
+type SelectedWord = {
   str: string;
-  /** viewport CSS pixels (top-left origin) */
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** PDF user space (bottom-left origin) */
   pdfX: number;
   pdfY: number;
   pdfW: number;
@@ -57,37 +51,32 @@ function cloneBytes(data: Uint8Array): Uint8Array {
   return out;
 }
 
+function hasArabic(s: string) {
+  return /[\u0600-\u06FF]/.test(s);
+}
+
 let arabicFontCache: Uint8Array | null = null;
 
 async function loadArabicFontBytes() {
   if (arabicFontCache) return cloneBytes(arabicFontCache);
-  const urls = [
-    `${typeof window !== "undefined" ? window.location.origin : ""}/fonts/NotoNaskhArabic-Regular.ttf`,
-    "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoNaskhArabic/NotoNaskhArabic-Regular.ttf",
-  ];
-  for (const url of urls) {
-    if (!url) continue;
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const buf = new Uint8Array(await res.arrayBuffer());
-      if (buf.byteLength > 1000) {
-        arabicFontCache = buf;
-        return cloneBytes(buf);
-      }
-    } catch {
-      /* next */
-    }
-  }
-  throw new Error("تعذر تحميل خط عربي");
+  const url = `${window.location.origin}/fonts/NotoNaskhArabic-Regular.ttf`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("تعذر تحميل الخط العربي");
+  const buf = new Uint8Array(await res.arrayBuffer());
+  arabicFontCache = buf;
+  return cloneBytes(buf);
 }
 
 export function PdfEditorWorkspace({ title, description }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const bytesRef = useRef<Uint8Array | null>(null);
+  const pageSizeRef = useRef({ w: 595, h: 842 });
+  const displaySizeRef = useRef({ w: 1, h: 1 });
+  const loadIdRef = useRef(0);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(
     null,
   );
@@ -97,10 +86,9 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   const [pageCount, setPageCount] = useState(0);
   const [page, setPage] = useState(1);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [pageSize, setPageSize] = useState({ w: 595, h: 842 });
   const [displaySize, setDisplaySize] = useState({ w: 1, h: 1 });
-  const [words, setWords] = useState<PdfWord[]>([]);
-  const [selectedWord, setSelectedWord] = useState<PdfWord | null>(null);
+  const [pageSize, setPageSize] = useState({ w: 595, h: 842 });
+  const [selectedWord, setSelectedWord] = useState<SelectedWord | null>(null);
   const [replaceWith, setReplaceWith] = useState("");
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,76 +98,146 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   const [draftText, setDraftText] = useState("نص جديد");
   const [draftSize, setDraftSize] = useState("22");
   const [selectMode, setSelectMode] = useState(true);
+  const selectModeRef = useRef(true);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    selectModeRef.current = selectMode;
+    const layer = textLayerRef.current;
+    if (layer) {
+      layer.style.opacity = selectMode ? "1" : "0";
+      layer.style.pointerEvents = selectMode ? "auto" : "none";
+    }
+  }, [selectMode]);
+
+  // If React removes the imperatively mounted text layer, put it back.
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const layer = textLayerRef.current;
+    if (stage && layer && !stage.contains(layer)) {
+      stage.appendChild(layer);
+    }
+  });
 
   const updateBytes = useCallback((next: Uint8Array) => {
     const cloned = cloneBytes(next);
     bytesRef.current = cloned;
     setBytes(cloned);
+    setRevision((r) => r + 1);
   }, []);
 
-  const loadPreview = useCallback(async (data: Uint8Array, pageNum: number) => {
-    const pdfjs = await import("pdfjs-dist");
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-    const pdf = await pdfjs.getDocument({ data: cloneBytes(data) }).promise;
-    const safePage = Math.min(Math.max(1, pageNum), pdf.numPages);
-    const p = await pdf.getPage(safePage);
-    const base = p.getViewport({ scale: 1 });
-    setPageSize({ w: base.width, h: base.height });
+  const selectSpan = useCallback((el: HTMLElement, all: HTMLElement[]) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const stageRect = stage.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const x = r.left - stageRect.left;
+    const y = r.top - stageRect.top;
+    const w = Math.max(r.width, 4);
+    const h = Math.max(r.height, 4);
+    const sx = pageSizeRef.current.w / displaySizeRef.current.w;
+    const sy = pageSizeRef.current.h / displaySizeRef.current.h;
+    const str = (el.textContent || "").trim();
+    if (!str) return;
 
-    const containerW = containerRef.current?.clientWidth ?? 900;
-    const scale = Math.min(2.2, Math.max(1.2, (containerW - 24) / base.width));
-    const viewport = p.getViewport({ scale });
+    const word: SelectedWord = {
+      str,
+      pdfX: x * sx,
+      pdfY: pageSizeRef.current.h - (y + h) * sy,
+      pdfW: w * sx,
+      pdfH: h * sy,
+    };
+    setSelectedWord(word);
+    setReplaceWith(str);
+    setStatus(`تم تحديد: «${str}» — اكتب البديل ثم اضغط استبدال أو حذف`);
+    all.forEach((s) => s.classList.remove("pdf-word-selected"));
+    el.classList.add("pdf-word-selected");
+  }, []);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    await p.render({ canvasContext: ctx, viewport, canvas } as never).promise;
-    setPreviewUrl(canvas.toDataURL("image/png"));
-    setDisplaySize({ w: viewport.width, h: viewport.height });
-    setPageCount(pdf.numPages);
+  const loadPreview = useCallback(
+    async (data: Uint8Array, pageNum: number) => {
+      const loadId = ++loadIdRef.current;
+      const pdfjs = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-    const content = await p.getTextContent();
-    const Util = pdfjs.Util;
-    const nextWords: PdfWord[] = [];
-    let i = 0;
-    for (const item of content.items) {
-      if (!("str" in item) || !item.str?.trim()) continue;
-      const m = Util.transform(viewport.transform, item.transform);
-      const fontHeight = Math.hypot(m[2], m[3]);
-      const width = (item.width || 0) * Math.hypot(m[0], m[1]) || fontHeight * item.str.length * 0.5;
-      const height = fontHeight || 12;
-      // viewport y is from top after transform in pdf.js default
-      const x = m[4];
-      const y = m[5] - height;
+      const pdf = await pdfjs.getDocument({ data: cloneBytes(data) }).promise;
+      if (loadId !== loadIdRef.current) return;
 
-      // PDF space from unscaled viewport
-      const pdfViewport = p.getViewport({ scale: 1 });
-      const pm = Util.transform(pdfViewport.transform, item.transform);
-      const pdfFontH = Math.hypot(pm[2], pm[3]) || 10;
-      const pdfW =
-        (item.width || 0) * Math.hypot(pm[0], pm[1]) || pdfFontH * item.str.length * 0.45;
-      const pdfH = pdfFontH;
-      const pdfX = pm[4];
-      const pdfY = pm[5] - pdfH;
+      const safePage = Math.min(Math.max(1, pageNum), pdf.numPages);
+      const pdfPage = await pdf.getPage(safePage);
+      const base = pdfPage.getViewport({ scale: 1 });
+      pageSizeRef.current = { w: base.width, h: base.height };
+      setPageSize({ w: base.width, h: base.height });
 
-      nextWords.push({
-        id: `w-${safePage}-${i++}`,
-        str: item.str,
-        x,
-        y,
-        w: Math.max(width, 8),
-        h: Math.max(height, 8),
-        pdfX,
-        pdfY,
-        pdfW: Math.max(pdfW, 6),
-        pdfH: Math.max(pdfH, 6),
+      const containerW = containerRef.current?.clientWidth ?? 1000;
+      const scale = Math.min(2.4, Math.max(1.35, (containerW - 32) / base.width));
+      const viewport = pdfPage.getViewport({ scale });
+      displaySizeRef.current = { w: viewport.width, h: viewport.height };
+      setDisplaySize({ w: viewport.width, h: viewport.height });
+      setPageCount(pdf.numPages);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      await pdfPage.render({ canvasContext: ctx, viewport, canvas } as never).promise;
+      if (loadId !== loadIdRef.current) return;
+      setPreviewUrl(canvas.toDataURL("image/png"));
+      setSelectedWord(null);
+
+      // Mount text layer as a real DOM node under the stage (not via React children)
+      // so later setState re-renders don't wipe the clickable spans.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const stage = stageRef.current;
+      if (!stage || loadId !== loadIdRef.current) return;
+
+      let layerEl = textLayerRef.current;
+      if (!layerEl || !stage.contains(layerEl)) {
+        layerEl = document.createElement("div");
+        layerEl.className = "textLayer";
+        stage.appendChild(layerEl);
+        textLayerRef.current = layerEl;
+      }
+
+      layerEl.replaceChildren();
+      layerEl.style.width = `${viewport.width}px`;
+      layerEl.style.height = `${viewport.height}px`;
+      layerEl.style.opacity = selectModeRef.current ? "1" : "0";
+      layerEl.style.pointerEvents = selectModeRef.current ? "auto" : "none";
+      layerEl.style.setProperty("--total-scale-factor", String(scale));
+      layerEl.style.setProperty("--scale-round-x", "1px");
+      layerEl.style.setProperty("--scale-round-y", "1px");
+
+      const textContent = await pdfPage.getTextContent({
+        includeMarkedContent: true,
+        disableNormalization: false,
       });
-    }
-    setWords(nextWords);
-    setSelectedWord(null);
-  }, []);
+      const textLayer = new pdfjs.TextLayer({
+        textContentSource: textContent,
+        container: layerEl,
+        viewport,
+      });
+      await textLayer.render();
+      if (loadId !== loadIdRef.current) return;
+
+      const spans = textLayer.textDivs.filter((d) => (d.textContent || "").trim());
+      spans.forEach((span) => {
+        span.style.cursor = "pointer";
+        span.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (!selectModeRef.current) return;
+          selectSpan(span, spans);
+        };
+      });
+
+      if (!spans.length) {
+        setStatus("هذه الصفحة بلا نص قابل للتحديد — جرّب إضافة نص جديد");
+      }
+    },
+    [selectSpan],
+  );
 
   async function onPick(list: FileList | null) {
     const f = list?.[0];
@@ -192,22 +250,17 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     const raw = new Uint8Array(await f.arrayBuffer());
     updateBytes(raw);
     setPage(1);
-    setStatus("اضغط على كلمة في الصفحة لتحديدها واستبدالها");
-    try {
-      await loadPreview(raw, 1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "فشل المعاينة");
-    }
+    setStatus("اضغط مباشرة على كلمة في الصفحة لتحديدها");
   }
 
   useEffect(() => {
     if (!bytes) return;
     setOverlays([]);
-    setSelectedWord(null);
     void loadPreview(bytes, page).catch((err) => {
+      console.error(err);
       setError(err instanceof Error ? err.message : "فشل المعاينة");
     });
-  }, [bytes, page, loadPreview]);
+  }, [bytes, page, revision, loadPreview]);
 
   function addTextOverlay() {
     if (!previewUrl) return;
@@ -219,13 +272,13 @@ export function PdfEditorWorkspace({ title, description }: Props) {
         type: "text",
         text: draftText || "نص",
         fontSize: Number(draftSize) || 22,
-        x: displaySize.w * 0.2,
+        x: displaySize.w * 0.15,
         y: displaySize.h * 0.12,
       },
     ]);
     setSelectedId(id);
     setSelectMode(false);
-    setStatus("اسحب النص ثم اضغط تثبيت");
+    setStatus("اسحب النص ثم اضغط تثبيت العناصر");
   }
 
   async function addImageOverlay(list: FileList | null) {
@@ -238,7 +291,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       img.onerror = () => reject(new Error("فشل قراءة الصورة"));
       img.src = src;
     });
-    const maxW = Math.min(260, displaySize.w * 0.35);
+    const maxW = Math.min(280, displaySize.w * 0.35);
     const scale = Math.min(1, maxW / dims.w);
     const id = `i-${Date.now()}`;
     setOverlays((prev) => [
@@ -256,7 +309,6 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     ]);
     setSelectedId(id);
     setSelectMode(false);
-    setStatus("اسحب الصورة ثم اضغط تثبيت");
   }
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>, id: string) {
@@ -305,10 +357,55 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     dragRef.current = null;
   }
 
+  async function embedFontFor(doc: PDFDocument, text: string) {
+    if (hasArabic(text)) {
+      return doc.embedFont(await loadArabicFontBytes(), { subset: true });
+    }
+    return doc.embedFont(StandardFonts.Helvetica);
+  }
+
+  async function paintWordCover(
+    doc: PDFDocument,
+    word: SelectedWord,
+    nextText: string | null,
+  ) {
+    doc.registerFontkit(fontkit);
+    const target = doc.getPage(page - 1);
+    const { width, height } = target.getSize();
+    const sx = width / pageSizeRef.current.w;
+    const sy = height / pageSizeRef.current.h;
+    const pad = 3;
+    const x = word.pdfX * sx - pad;
+    const y = word.pdfY * sy - pad;
+    const w = word.pdfW * sx + pad * 2;
+    const h = word.pdfH * sy + pad * 2;
+
+    target.drawRectangle({
+      x,
+      y,
+      width: w,
+      height: h,
+      color: rgb(1, 1, 1),
+      borderWidth: 0,
+    });
+
+    if (nextText) {
+      const font = await embedFontFor(doc, nextText);
+      const size = Math.max(8, Math.min(h * 0.85, 36));
+      target.drawText(nextText, {
+        x: x + 1,
+        y: y + Math.max(1, (h - size) * 0.25),
+        size,
+        font,
+        color: rgb(0, 0, 0),
+      });
+    }
+  }
+
   async function replaceSelectedWord() {
     const current = bytesRef.current;
     if (!current || !selectedWord) {
-      setError("حدّد كلمة من الصفحة أولاً");
+      setError("اضغط أولاً على كلمة داخل الصفحة");
       return;
     }
     const nextText = replaceWith.trim();
@@ -321,32 +418,11 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     setError(null);
     try {
       const doc = await PDFDocument.load(cloneBytes(current));
-      doc.registerFontkit(fontkit);
-      const target = doc.getPage(page - 1);
-      const pad = 1.5;
-      // Cover old word
-      target.drawRectangle({
-        x: selectedWord.pdfX - pad,
-        y: selectedWord.pdfY - pad,
-        width: selectedWord.pdfW + pad * 2,
-        height: selectedWord.pdfH + pad * 2,
-        color: rgb(1, 1, 1),
-        borderWidth: 0,
-      });
-      const fontBytes = await loadArabicFontBytes();
-      const font = await doc.embedFont(fontBytes, { subset: true });
-      const size = Math.max(8, selectedWord.pdfH * 0.9);
-      target.drawText(nextText, {
-        x: selectedWord.pdfX,
-        y: selectedWord.pdfY + selectedWord.pdfH * 0.15,
-        size,
-        font,
-        color: rgb(0, 0, 0),
-      });
+      await paintWordCover(doc, selectedWord, nextText);
       updateBytes(await doc.save());
+      setStatus(`تم الاستبدال: «${selectedWord.str}» ← «${nextText}»`);
       setSelectedWord(null);
       setReplaceWith("");
-      setStatus(`تم استبدال «${selectedWord.str}» بـ «${nextText}»`);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "فشل الاستبدال");
@@ -357,23 +433,17 @@ export function PdfEditorWorkspace({ title, description }: Props) {
 
   async function deleteSelectedWord() {
     const current = bytesRef.current;
-    if (!current || !selectedWord) return;
+    if (!current || !selectedWord) {
+      setError("اضغط أولاً على كلمة داخل الصفحة");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const doc = await PDFDocument.load(cloneBytes(current));
-      const target = doc.getPage(page - 1);
-      const pad = 1.5;
-      target.drawRectangle({
-        x: selectedWord.pdfX - pad,
-        y: selectedWord.pdfY - pad,
-        width: selectedWord.pdfW + pad * 2,
-        height: selectedWord.pdfH + pad * 2,
-        color: rgb(1, 1, 1),
-        borderWidth: 0,
-      });
+      await paintWordCover(doc, selectedWord, null);
       updateBytes(await doc.save());
-      setStatus(`تم حذف «${selectedWord.str}»`);
+      setStatus(`تم حذف: «${selectedWord.str}»`);
       setSelectedWord(null);
       setReplaceWith("");
     } catch (err) {
@@ -385,9 +455,8 @@ export function PdfEditorWorkspace({ title, description }: Props) {
 
   async function bakeOverlays() {
     const current = bytesRef.current;
-    if (!current) return;
-    if (!overlays.length) {
-      setError("لا توجد عناصر للتثبيت");
+    if (!current || !overlays.length) {
+      setError("أضف نصاً أو صورة أولاً");
       return;
     }
     setBusy(true);
@@ -399,11 +468,10 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       doc.registerFontkit(fontkit);
       const target = doc.getPage(page - 1);
       const { height } = target.getSize();
-      const fontBytes = await loadArabicFontBytes();
-      const font = await doc.embedFont(fontBytes, { subset: true });
 
       for (const item of overlays) {
         if (item.type === "text") {
+          const font = await embedFontFor(doc, item.text);
           target.drawText(item.text, {
             x: item.x * scaleX,
             y: Math.max(8, height - item.y * scaleY - item.fontSize * scaleY),
@@ -430,7 +498,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       updateBytes(await doc.save());
       setOverlays([]);
       setSelectedId(null);
-      setStatus("تم تثبيت العناصر");
+      setStatus("تم تثبيت العناصر على الصفحة");
     } catch (err) {
       setError(err instanceof Error ? err.message : "فشل التثبيت");
     } finally {
@@ -478,24 +546,23 @@ export function PdfEditorWorkspace({ title, description }: Props) {
       <div className="mb-4">
         <p className="text-lg font-semibold text-[#111]">{title}</p>
         <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
-        <p className="mt-1 text-xs text-[#888]">
-          اضغط على أي كلمة في الصفحة لتحديدها، ثم احذفها أو استبدلها. للنص/الصورة
-          الجديدة: ضعها واسحبها ثم ثبّت.
+        <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          <strong>مهم:</strong> مرّر على الكلمة (تصير صفراء) ثم اضغطها (تصير زرقاء).
+          بعدها استبدال/حذف من اللوحة الجانبية — راقب المعاينة ثم نزّل PDF.
         </p>
       </div>
 
       {!file ? (
-        <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed border-[#d4d4d4] bg-[#fafafa] px-4 text-center">
-          <p className="font-semibold text-[#111]">اختر ملف PDF للتعديل</p>
+        <div className="flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed border-[#d4d4d4] bg-[#fafafa]">
           <button
             type="button"
-            onClick={() => inputRef.current?.click()}
-            className="mt-4 rounded-md bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white"
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded-md bg-[#2563eb] px-6 py-3 text-sm font-semibold text-white"
           >
             اختيار PDF
           </button>
           <input
-            ref={inputRef}
+            ref={fileInputRef}
             type="file"
             accept="application/pdf"
             className="hidden"
@@ -503,7 +570,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
           />
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div ref={containerRef} className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
               <button
@@ -528,23 +595,25 @@ export function PdfEditorWorkspace({ title, description }: Props) {
               <button
                 type="button"
                 onClick={() => setSelectMode((v) => !v)}
-                className={`rounded px-3 py-1 text-sm font-semibold ${
+                className={`ms-2 rounded px-3 py-1 font-semibold ${
                   selectMode
                     ? "bg-[#2563eb] text-white"
-                    : "border border-[#ddd] text-[#444]"
+                    : "border border-[#ddd] text-[#555]"
                 }`}
               >
-                {selectMode ? "وضع تحديد الكلمات: تشغيل" : "وضع تحديد الكلمات: إيقاف"}
+                {selectMode
+                  ? "وضع تحديد الكلمات: تشغيل"
+                  : "وضع تحديد الكلمات: إيقاف"}
               </button>
               <button
                 type="button"
-                onClick={() => inputRef.current?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 className="ms-auto text-[#2563eb] hover:underline"
               >
                 ملف آخر
               </button>
               <input
-                ref={inputRef}
+                ref={fileInputRef}
                 type="file"
                 accept="application/pdf"
                 className="hidden"
@@ -552,47 +621,22 @@ export function PdfEditorWorkspace({ title, description }: Props) {
               />
             </div>
 
-            <div className="max-h-[78vh] overflow-auto rounded-lg border border-[#e5e5e5] bg-[#ececec] p-3">
+            <div className="max-h-[80vh] overflow-auto rounded-lg border border-[#ddd] bg-[#e8e8e8] p-4">
               {previewUrl ? (
                 <div
                   ref={stageRef}
-                  className="relative mx-auto touch-none"
+                  className="relative mx-auto bg-white shadow-xl"
                   style={{ width: displaySize.w, height: displaySize.h }}
                   onPointerMove={onPointerMove}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewUrl}
-                    alt={`معاينة صفحة ${page}`}
-                    className="pointer-events-none absolute inset-0 h-full w-full shadow-lg"
+                    alt=""
+                    className="pointer-events-none absolute inset-0 h-full w-full"
                     draggable={false}
                   />
-
-                  {selectMode &&
-                    words.map((word) => (
-                      <button
-                        key={word.id}
-                        type="button"
-                        title={word.str}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedWord(word);
-                          setReplaceWith(word.str);
-                          setStatus(`محددة: «${word.str}»`);
-                        }}
-                        className={`absolute cursor-text rounded-[2px] transition ${
-                          selectedWord?.id === word.id
-                            ? "bg-[#2563eb]/35 ring-2 ring-[#2563eb]"
-                            : "hover:bg-[#f59e0b]/35"
-                        }`}
-                        style={{
-                          left: word.x,
-                          top: word.y,
-                          width: word.w,
-                          height: word.h,
-                        }}
-                      />
-                    ))}
+                  {/* Text layer is mounted imperatively so React re-renders don't wipe spans */}
 
                   {overlays.map((item) => (
                     <div
@@ -600,10 +644,10 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                       onPointerDown={(e) => onPointerDown(e, item.id)}
                       onPointerUp={onPointerUp}
                       onPointerCancel={onPointerUp}
-                      className={`absolute cursor-move ${
+                      className={`absolute z-10 cursor-move ${
                         selectedId === item.id
                           ? "ring-2 ring-[#2563eb]"
-                          : "ring-1 ring-black/25"
+                          : "ring-1 ring-black/30"
                       }`}
                       style={{
                         left: item.x,
@@ -614,7 +658,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                     >
                       {item.type === "text" ? (
                         <div
-                          className="whitespace-pre rounded bg-white/80 px-1 py-0.5 font-semibold text-black"
+                          className="rounded bg-yellow-200/90 px-1 font-semibold text-black"
                           style={{ fontSize: item.fontSize }}
                         >
                           {item.text}
@@ -632,34 +676,36 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                   ))}
                 </div>
               ) : (
-                <p className="py-24 text-center text-sm text-[#888]">جاري المعاينة…</p>
+                <p className="py-28 text-center text-sm text-[#777]">جاري تحميل الصفحة…</p>
               )}
             </div>
           </div>
 
-          <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-            <div className="rounded-lg border border-[#dbeafe] bg-[#eff6ff] p-4">
-              <p className="mb-2 text-sm font-semibold text-[#1e3a8a]">
-                استبدال كلمة من الصفحة
+          <aside className="space-y-4 xl:sticky xl:top-16 xl:self-start">
+            <div className="rounded-lg border-2 border-[#2563eb] bg-[#eff6ff] p-4">
+              <p className="mb-2 text-base font-bold text-[#1e3a8a]">
+                حذف / استبدال كلمة
               </p>
               {selectedWord ? (
                 <>
-                  <p className="mb-2 text-sm text-[#334155]">
+                  <p className="mb-2 text-sm">
                     المحددة:{" "}
-                    <span className="font-bold text-[#0f172a]">{selectedWord.str}</span>
+                    <span className="rounded bg-white px-2 py-0.5 font-bold">
+                      {selectedWord.str}
+                    </span>
                   </p>
                   <input
-                    className="mb-2 w-full rounded-md border border-[#bfdbfe] px-3 py-2 text-sm"
+                    className="mb-3 w-full rounded-md border border-[#93c5fd] px-3 py-2 text-sm"
                     value={replaceWith}
                     onChange={(e) => setReplaceWith(e.target.value)}
-                    placeholder="الكلمة الجديدة"
+                    placeholder="اكتب البديل هنا"
                   />
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => void replaceSelectedWord()}
-                      className="rounded-md bg-[#2563eb] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      className="rounded-md bg-[#2563eb] px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                     >
                       استبدال
                     </button>
@@ -667,36 +713,41 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                       type="button"
                       disabled={busy}
                       onClick={() => void deleteSelectedWord()}
-                      className="rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+                      className="rounded-md bg-red-600 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                     >
                       حذف
                     </button>
                   </div>
                 </>
               ) : (
-                <p className="text-sm leading-7 text-[#475569]">
-                  فعّل «وضع تحديد الكلمات» ثم اضغط على كلمة داخل الصفحة.
+                <p className="text-sm leading-7 text-[#1e40af]">
+                  1) تأكد أن «تحديد الكلمات» مفعّل (أزرق)
+                  <br />
+                  2) مرّر فوق الكلمة ثم اضغطها
+                  <br />
+                  3) ستظهر هنا للاستبدال أو الحذف
                 </p>
               )}
             </div>
 
             <div className="rounded-lg border border-[#eee] p-4">
-              <p className="mb-2 text-sm font-semibold">نص جديد (قابل للسحب)</p>
+              <p className="mb-2 text-sm font-semibold">إضافة نص للسحب</p>
               <textarea
-                className="mb-2 w-full rounded-md border border-[#ddd] px-3 py-2 text-sm"
+                className="mb-2 w-full rounded border border-[#ddd] px-3 py-2 text-sm"
                 rows={2}
                 value={draftText}
                 onChange={(e) => setDraftText(e.target.value)}
               />
-              <input
-                className="mb-2 w-full rounded border border-[#ddd] px-2 py-1 text-sm"
-                value={draftSize}
-                onChange={(e) => setDraftSize(e.target.value)}
-                placeholder="الحجم"
-              />
+              <div className="mb-2 flex items-center gap-2">
+                <label className="text-xs text-[#666]">حجم</label>
+                <input
+                  className="w-16 rounded border border-[#ddd] px-2 py-1 text-sm"
+                  value={draftSize}
+                  onChange={(e) => setDraftSize(e.target.value)}
+                />
+              </div>
               <button
                 type="button"
-                disabled={busy}
                 onClick={addTextOverlay}
                 className="w-full rounded-md bg-[#111] px-3 py-2 text-sm font-semibold text-white"
               >
@@ -705,14 +756,12 @@ export function PdfEditorWorkspace({ title, description }: Props) {
             </div>
 
             <div className="rounded-lg border border-[#eee] p-4">
-              <p className="mb-2 text-sm font-semibold">صورة قابلة للسحب</p>
               <button
                 type="button"
-                disabled={busy}
                 onClick={() => imageRef.current?.click()}
                 className="w-full rounded-md border border-[#ddd] px-3 py-2 text-sm font-semibold"
               >
-                اختيار صورة
+                إضافة صورة للسحب
               </button>
               <input
                 ref={imageRef}
@@ -726,9 +775,9 @@ export function PdfEditorWorkspace({ title, description }: Props) {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={busy || !overlays.length}
+                disabled={!overlays.length || busy}
                 onClick={() => void bakeOverlays()}
-                className="col-span-2 rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                className="col-span-2 rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-40"
               >
                 تثبيت العناصر المضافة
               </button>
@@ -743,28 +792,26 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                 }
                 className="rounded-md border border-[#ddd] px-3 py-2 text-sm"
               >
-                تدوير 90°
+                تدوير
               </button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={() =>
                   void withDoc(async (doc) => {
-                    if (doc.getPageCount() <= 1) {
-                      throw new Error("لا يمكن حذف الصفحة الوحيدة");
-                    }
+                    if (doc.getPageCount() <= 1) throw new Error("صفحة واحدة فقط");
                     doc.removePage(page - 1);
                   })
                 }
                 className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-700"
               >
-                حذف الصفحة
+                حذف صفحة
               </button>
               <button
                 type="button"
                 disabled={busy || !bytes}
                 onClick={download}
-                className="col-span-2 rounded-md bg-[#2563eb] px-3 py-2.5 text-sm font-semibold text-white"
+                className="col-span-2 rounded-md bg-[#2563eb] px-3 py-2.5 text-sm font-bold text-white"
               >
                 تنزيل PDF
               </button>
@@ -773,9 +820,13 @@ export function PdfEditorWorkspace({ title, description }: Props) {
         </div>
       )}
 
-      {status && <p className="mt-4 text-sm text-emerald-700">{status}</p>}
+      {status && (
+        <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+          {status}
+        </p>
+      )}
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
