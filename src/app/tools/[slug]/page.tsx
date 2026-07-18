@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ToolWorkspace } from "@/components/tool-workspace";
-import { categoryLabels, getTool, tools } from "@/lib/tools";
+import { categoryMeta, getTool, tools } from "@/lib/tools";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -27,23 +27,28 @@ export default async function ToolPage({ params }: Props) {
   const tool = getTool(slug);
   if (!tool) notFound();
 
+  const Icon = tool.icon;
+  const category = categoryMeta[tool.category];
+
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 pb-20 pt-28 sm:px-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
       <Link
-        href="/#tools"
-        className="text-sm font-semibold text-brand transition hover:text-brand-deep"
+        href={`/#${category.anchor}`}
+        className="text-sm font-semibold text-[#2563eb] transition hover:underline"
       >
-        ← كل الأدوات
+        ← {category.sectionTitle}
       </Link>
-      <p className="mt-6 text-xs font-semibold tracking-wide text-accent">
-        {categoryLabels[tool.category]}
-      </p>
-      <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold text-ink sm:text-4xl">
-        {tool.title}
-      </h1>
-      <p className="mt-3 text-base leading-8 text-ink-soft">{tool.description}</p>
+      <div className="mt-6 flex items-center gap-3">
+        <Icon className="h-7 w-7 stroke-[1.5] text-[#222]" />
+        <h1 className="text-3xl font-bold text-[#111] sm:text-4xl">{tool.title}</h1>
+      </div>
+      <p className="mt-3 text-base leading-8 text-[#555]">{tool.description}</p>
       <div className="mt-8">
-        <ToolWorkspace tool={tool} />
+        <ToolWorkspace
+          title={tool.title}
+          description={tool.description}
+          accept={tool.accept}
+        />
       </div>
     </div>
   );

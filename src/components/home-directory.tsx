@@ -1,0 +1,57 @@
+import Link from "next/link";
+import {
+  categoryMeta,
+  categoryOrder,
+  getToolsByCategory,
+  type ToolCategory,
+} from "@/lib/tools";
+
+function CategorySection({ category }: { category: ToolCategory }) {
+  const tools = getToolsByCategory(category);
+  const meta = categoryMeta[category];
+
+  return (
+    <section id={meta.anchor} className="scroll-mt-24 py-10 sm:py-12">
+      <h2 className="mb-6 text-2xl font-bold text-[#1a1a1a] sm:text-[1.75rem]">
+        {meta.sectionTitle}
+      </h2>
+      <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+        {tools.map((tool) => {
+          const Icon = tool.icon;
+          return (
+            <li key={tool.slug}>
+              <Link
+                href={`/tools/${tool.slug}`}
+                className="group flex items-center gap-3 text-[#222] transition hover:text-[#2563eb]"
+              >
+                <Icon className="h-5 w-5 shrink-0 stroke-[1.5] text-[#333] transition group-hover:text-[#2563eb]" />
+                <span className="text-[15px] leading-6">{tool.title}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+export function HomeDirectory() {
+  return (
+    <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+      <div className="mb-12 text-center sm:mb-16">
+        <p className="font-[family-name:var(--font-display)] text-4xl font-extrabold tracking-tight text-[#111] sm:text-5xl">
+          Tool2Day
+        </p>
+        <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
+          الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
+        </h1>
+      </div>
+
+      <div className="rounded-2xl border border-[#e8e8e8] bg-white px-5 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:px-10">
+        {categoryOrder.map((category) => (
+          <CategorySection key={category} category={category} />
+        ))}
+      </div>
+    </div>
+  );
+}

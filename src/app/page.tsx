@@ -1,15 +1,5 @@
-import { ConvertSection } from "@/components/convert-section";
-import { EditSection } from "@/components/edit-section";
-import { Hero } from "@/components/hero";
-import { ToolsSection } from "@/components/tools-section";
+import { HomeDirectory } from "@/components/home-directory";
 
 export default function Home() {
-  return (
-    <>
-      <Hero />
-      <ConvertSection />
-      <EditSection />
-      <ToolsSection />
-    </>
-  );
+  return <HomeDirectory />;
 }

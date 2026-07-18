@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     template: "%s | Tool2Day",
   },
   description:
-    "حوّل الفيديو والصوت وPDF والملفات، وحرّر فيديوهات ترويجية جاهزة للنشر.",
+    "الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات — مثل أدوات التحرير والتحويل أونلاين.",
   metadataBase: new URL("https://tool2day.com"),
 };
 
