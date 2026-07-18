@@ -40,6 +40,7 @@ import {
   TTS_LANGS,
   VIDEO_FONTS,
 } from "@/lib/video-editor-assets";
+import { RecordStudio } from "@/components/record-studio";
 
 type Panel =
   | "files"
@@ -200,6 +201,8 @@ export function VideoEditorWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const [showRecordStudio, setShowRecordStudio] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
 
   const outSize = useMemo(
     () => aspectSize(aspect, videoNatural.w, videoNatural.h),
@@ -240,6 +243,10 @@ export function VideoEditorWorkspace() {
   async function onPick(list: FileList | null) {
     const f = list?.[0];
     if (!f) return;
+    await loadVideoFile(f);
+  }
+
+  async function loadVideoFile(f: File) {
     if (url) URL.revokeObjectURL(url);
     const next = URL.createObjectURL(f);
     setFile(f);
@@ -261,6 +268,7 @@ export function VideoEditorWorkspace() {
     setError(null);
     setStatus(`تم تحميل: ${f.name}`);
     setPanel("files");
+    setShowRecordStudio(false);
   }
 
   function onLoadedMeta() {
@@ -744,39 +752,58 @@ export function VideoEditorWorkspace() {
 
   if (!file || !url) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#121214] text-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-[#2a2a2e] px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Clapperboard className="h-5 w-5 text-[#f5c518]" />
-            محرر الفيديو
+      <>
+        <div className="overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#121214] text-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-[#2a2a2e] px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Clapperboard className="h-5 w-5 text-[#f5c518]" />
+              محرر الفيديو
+            </div>
+            <span className="text-xs text-[#888]">مثل 123apps — داخل المتصفح</span>
           </div>
-          <span className="text-xs text-[#888]">مثل 123apps — داخل المتصفح</span>
-        </div>
-        <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 p-8">
-          <div className="rounded-2xl border border-dashed border-[#3a3a40] bg-[#1a1a1d] px-10 py-14 text-center">
-            <Upload className="mx-auto mb-4 h-10 w-10 text-[#f5c518]" />
-            <p className="mb-4 text-sm text-[#ccc]">اسحب فيديو أو اختر من جهازك للبدء</p>
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="rounded-md bg-[#f5c518] px-6 py-2.5 text-sm font-bold text-[#111]"
-            >
-              اختيار فيديو
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="video/*"
-              className="hidden"
-              onChange={(e) => void onPick(e.target.files)}
-            />
+          <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 p-8">
+            <div className="rounded-2xl border border-dashed border-[#3a3a40] bg-[#1a1a1d] px-10 py-14 text-center">
+              <Upload className="mx-auto mb-4 h-10 w-10 text-[#f5c518]" />
+              <p className="mb-4 text-sm text-[#ccc]">
+                اسحب فيديو أو اختر من جهازك أو سجّل مباشرة
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="rounded-md bg-[#f5c518] px-6 py-2.5 text-sm font-bold text-[#111]"
+                >
+                  اختيار فيديو
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRecordStudio(true)}
+                  className="rounded-md bg-[#f97316] px-6 py-2.5 text-sm font-bold text-white"
+                >
+                  استوديو التسجيل
+                </button>
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => void onPick(e.target.files)}
+              />
+            </div>
+            <p className="max-w-lg text-center text-xs leading-6 text-[#777]">
+              قص، سرعة، تدوير، عكس، شفافية، صوت وتعليق صوتي وملصقات ونصوص مع
+              تايملاين ومعاينة حية — ثم صدّر MP4.
+            </p>
           </div>
-          <p className="max-w-lg text-center text-xs leading-6 text-[#777]">
-            قص، سرعة، تدوير، عكس، شفافية، صوت وتعليق صوتي وملصقات ونصوص مع
-            تايملاين ومعاينة حية — ثم صدّر MP4.
-          </p>
         </div>
-      </div>
+        {showRecordStudio && (
+          <RecordStudio
+            onClose={() => setShowRecordStudio(false)}
+            onRecorded={(f) => void loadVideoFile(f)}
+          />
+        )}
+      </>
     );
   }
 
@@ -1142,18 +1169,38 @@ export function VideoEditorWorkspace() {
           )}
 
           {panel === "record" && (
-            <div className="space-y-2 text-sm">
-              <p className="font-semibold text-[#f5c518]">تسجيل</p>
-              <p className="text-xs leading-6 text-[#888]">
-                استخدم أدوات{" "}
-                <a href="/tools/screen-recorder" className="text-[#f5c518] underline">
-                  مسجل الشاشة
-                </a>{" "}
-                أو{" "}
-                <a href="/tools/video-recorder" className="text-[#f5c518] underline">
-                  مسجل الفيديو
-                </a>{" "}
-                ثم ارفع الناتج هنا.
+            <div className="space-y-3 text-sm">
+              <p className="font-semibold text-[#f5c518]">تسجيل جديد</p>
+              <div className="space-y-2 rounded-lg border border-[#333] bg-[#101012] p-3">
+                <label className="flex items-center justify-between text-xs text-[#ccc]">
+                  الميكروفون
+                  <span className="rounded bg-[#f5c518]/20 px-2 py-0.5 text-[#f5c518]">
+                    جاهز
+                  </span>
+                </label>
+                <label className="flex items-center justify-between text-xs text-[#ccc]">
+                  الكاميرا
+                  <span className="rounded bg-[#f5c518]/20 px-2 py-0.5 text-[#f5c518]">
+                    جاهز
+                  </span>
+                </label>
+                <label className="flex items-center justify-between text-xs text-[#ccc]">
+                  الشاشة
+                  <span className="rounded bg-[#333] px-2 py-0.5 text-[#888]">
+                    اختياري
+                  </span>
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRecordStudio(true)}
+                className="w-full rounded-xl bg-[#f97316] px-3 py-3 text-sm font-bold text-white"
+              >
+                فتح استوديو التسجيل
+              </button>
+              <p className="text-[11px] leading-5 text-[#777]">
+                واجهة كاملة مثل 123apps: كاميرا قابلة للتحجيم + شاشة + ميكروفون ثم
+                إدراج التسجيل في المحرر.
               </p>
             </div>
           )}
@@ -1253,66 +1300,113 @@ export function VideoEditorWorkspace() {
           {panel === "audio" && (
             <div className="space-y-3 text-sm">
               <p className="font-semibold text-[#f5c518]">الصوت</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-[#aaa]">مستوى الصوت</span>
-                <button
-                  type="button"
-                  onClick={() => setMuted((m) => !m)}
-                  className="rounded border border-[#333] p-1"
-                >
-                  {muted ? (
-                    <VolumeX className="h-4 w-4 text-red-400" />
-                  ) : (
-                    <Volume2 className="h-4 w-4" />
-                  )}
-                </button>
+              <div className="space-y-1">
+                {(
+                  [
+                    {
+                      label: "الحجم",
+                      action: () => setStatus("عدّل مستوى الصوت من الشريط أدناه"),
+                    },
+                    {
+                      label: "التنشيطات / تلاشي",
+                      action: () => setStatus("استخدم الظهور/الاختفاء التدريجي"),
+                    },
+                    {
+                      label: "السرعة",
+                      action: () => {
+                        setPropTab("video");
+                        setStatus("عدّل سرعة الفيديو من تبويب فيديو");
+                      },
+                    },
+                    {
+                      label: "مزيل الصوت",
+                      action: () => {
+                        setMuted(true);
+                        setVolume(0);
+                        setStatus("تم كتم صوت المقطع");
+                      },
+                    },
+                    {
+                      label: "تقليل الضوضاء",
+                      action: () =>
+                        setStatus("تقليل الضوضاء يُطبَّق عند التصدير قريباً"),
+                    },
+                    {
+                      label: "الصوت العكسي",
+                      action: () => setStatus("عكس الصوت قريباً"),
+                    },
+                    {
+                      label: "الزاوية / الطبقة",
+                      action: () => setPanel("tts"),
+                    },
+                    {
+                      label: "المعادل",
+                      action: () => setStatus("المعادل الصوتي قريباً"),
+                    },
+                  ] as const
+                ).map((tool) => (
+                  <button
+                    key={tool.label}
+                    type="button"
+                    onClick={tool.action}
+                    className="flex w-full items-center justify-between rounded-md border border-[#2a2a2e] bg-[#101012] px-3 py-2.5 text-xs text-[#ddd] hover:border-[#f5c518]/40 hover:bg-[#1a1a1d]"
+                  >
+                    {tool.label}
+                    <span className="text-[#555]">‹</span>
+                  </button>
+                ))}
               </div>
-              <input
-                type="range"
-                min={0}
-                max={200}
-                value={Math.round(volume * 100)}
-                onChange={(e) => {
-                  setVolume(Number(e.target.value) / 100);
-                  setMuted(false);
-                }}
-                className="w-full"
-              />
-              <label className="block text-[11px] text-[#888]">
-                ظهور تدريجي (ث) {fadeIn.toFixed(1)}
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={5}
-                step={0.1}
-                value={fadeIn}
-                onChange={(e) => setFadeIn(Number(e.target.value))}
-                className="w-full"
-              />
-              <label className="block text-[11px] text-[#888]">
-                اختفاء تدريجي (ث) {fadeOut.toFixed(1)}
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={5}
-                step={0.1}
-                value={fadeOut}
-                onChange={(e) => setFadeOut(Number(e.target.value))}
-                className="w-full"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setMuted(true);
-                  setVolume(0);
-                  setStatus("تم كتم صوت المقطع (يُطبّق عند التصدير)");
-                }}
-                className="w-full rounded-md border border-[#333] px-2 py-2 text-xs"
-              >
-                فصل / كتم الصوت
-              </button>
+              <div className="border-t border-[#2a2a2e] pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs text-[#aaa]">مستوى الصوت</span>
+                  <button
+                    type="button"
+                    onClick={() => setMuted((m) => !m)}
+                    className="rounded border border-[#333] p-1"
+                  >
+                    {muted ? (
+                      <VolumeX className="h-4 w-4 text-red-400" />
+                    ) : (
+                      <Volume2 className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={200}
+                  value={Math.round(volume * 100)}
+                  onChange={(e) => {
+                    setVolume(Number(e.target.value) / 100);
+                    setMuted(false);
+                  }}
+                  className="mb-3 w-full"
+                />
+                <label className="block text-[11px] text-[#888]">
+                  ظهور تدريجي (ث) {fadeIn.toFixed(1)}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={5}
+                  step={0.1}
+                  value={fadeIn}
+                  onChange={(e) => setFadeIn(Number(e.target.value))}
+                  className="mb-2 w-full"
+                />
+                <label className="block text-[11px] text-[#888]">
+                  اختفاء تدريجي (ث) {fadeOut.toFixed(1)}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={5}
+                  step={0.1}
+                  value={fadeOut}
+                  onChange={(e) => setFadeOut(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
             </div>
           )}
 
@@ -1629,6 +1723,10 @@ export function VideoEditorWorkspace() {
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
               onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtxMenu({ x: e.clientX, y: e.clientY });
+              }}
             >
               {/* Ruler ticks */}
               <div className="pointer-events-none absolute inset-x-0 top-0 flex h-4 justify-between px-1 text-[9px] text-[#666]">
@@ -1713,6 +1811,78 @@ export function VideoEditorWorkspace() {
         >
           {error || status}
         </div>
+      )}
+
+      {ctxMenu && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[60] cursor-default"
+            aria-label="إغلاق القائمة"
+            onClick={() => setCtxMenu(null)}
+          />
+          <div
+            className="fixed z-[70] min-w-48 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1d] py-1 text-sm shadow-2xl"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          >
+            {(
+              [
+                { label: "تقسيم", shortcut: "S", fn: () => splitAtPlayhead() },
+                { label: "تكرار", shortcut: "D", fn: () => duplicateSelected() },
+                {
+                  label: "نسخ",
+                  shortcut: "C",
+                  fn: () => setStatus("تم نسخ العنصر المحدد"),
+                },
+                {
+                  label: "صامت",
+                  shortcut: "M",
+                  fn: () => {
+                    setMuted(true);
+                    setVolume(0);
+                  },
+                },
+                {
+                  label: "فصل الصوت",
+                  shortcut: "A",
+                  fn: () => {
+                    setMuted(true);
+                    setVolume(0);
+                    setStatus("تم فصل/كتم صوت المقطع");
+                  },
+                },
+                {
+                  label: "حذف",
+                  shortcut: "Del",
+                  fn: () => deleteSelected(),
+                  danger: true,
+                },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`flex w-full items-center justify-between px-3 py-2 text-right hover:bg-[#2a2a2e] ${
+                  "danger" in item && item.danger ? "text-red-400" : "text-[#ddd]"
+                }`}
+                onClick={() => {
+                  item.fn();
+                  setCtxMenu(null);
+                }}
+              >
+                <span>{item.label}</span>
+                <span className="text-[10px] text-[#666]">{item.shortcut}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {showRecordStudio && (
+        <RecordStudio
+          onClose={() => setShowRecordStudio(false)}
+          onRecorded={(f) => void loadVideoFile(f)}
+        />
       )}
     </div>
   );
