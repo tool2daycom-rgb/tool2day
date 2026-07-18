@@ -33,6 +33,7 @@ import {
   Upload,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
+import { extractAudioTrack } from "@/lib/processors/media";
 import { speakText, synthesizeToFile } from "@/lib/processors/tts";
 import {
   EMOJI_STICKERS,
@@ -137,7 +138,11 @@ function loadMediaDuration(src: string): Promise<number> {
   });
 }
 
-export function VideoEditorWorkspace() {
+export function VideoEditorWorkspace({
+  fullscreen = false,
+}: {
+  fullscreen?: boolean;
+}) {
   const idCounterRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
@@ -203,6 +208,17 @@ export function VideoEditorWorkspace() {
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [detachBusy, setDetachBusy] = useState(false);
+  const [cropEnabled, setCropEnabled] = useState(false);
+  const [crop, setCrop] = useState({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+  const [chromaEnabled, setChromaEnabled] = useState(false);
+  const [chromaColor, setChromaColor] = useState("#00ff00");
+  const [chromaSensitivity, setChromaSensitivity] = useState(30);
+  const [logoEnabled, setLogoEnabled] = useState(false);
+  const [logoBox, setLogoBox] = useState({ x: 20, y: 20, w: 120, h: 60 });
+  const [videoTool, setVideoTool] = useState<
+    "none" | "crop" | "chroma" | "logo" | "speed"
+  >("none");
 
   const outSize = useMemo(
     () => aspectSize(aspect, videoNatural.w, videoNatural.h),
@@ -306,6 +322,50 @@ export function VideoEditorWorkspace() {
     const clamped = Math.min(trimOut, Math.max(trimIn, t));
     if (v) v.currentTime = clamped;
     setCurrentTime(clamped);
+  }
+
+  async function detachAudio() {
+    if (!file) return;
+    if (audioTracks.some((t) => t.id.startsWith("detached-"))) {
+      setStatus("الصوت مفصول مسبقاً على مسار مستقل");
+      setMuted(true);
+      setVolume(0);
+      return;
+    }
+    setDetachBusy(true);
+    setError(null);
+    setStatus("جاري فصل الصوت عن الفيديو…");
+    try {
+      const audioFile = await extractAudioTrack(file, (r) =>
+        setProgress(Math.round(r * 100)),
+      );
+      const audioUrl = URL.createObjectURL(audioFile);
+      const dur = (await loadMediaDuration(audioUrl)) || clipDuration;
+      const id = nextId(idCounterRef, "detached");
+      setAudioTracks((prev) => [
+        ...prev.filter((t) => !t.id.startsWith("detached-")),
+        {
+          id,
+          name: "صوت مفصول",
+          file: audioFile,
+          url: audioUrl,
+          start: 0,
+          volume: 1,
+          duration: dur,
+        },
+      ]);
+      setMuted(true);
+      setVolume(0);
+      setStatus("تم فصل الصوت — يظهر كمسار أزرق تحت الفيديو");
+      setPanel("audio");
+      setPropTab("audio");
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "فشل فصل الصوت");
+    } finally {
+      setDetachBusy(false);
+      setProgress(0);
+    }
   }
 
   function splitAtPlayhead() {
@@ -720,6 +780,22 @@ export function VideoEditorWorkspace() {
             start: t.start,
             volume: t.volume,
           })),
+          crop: cropEnabled ? crop : null,
+          chromaKey: chromaEnabled
+            ? {
+                enabled: true,
+                color: chromaColor,
+                similarity: chromaSensitivity,
+              }
+            : null,
+          removeLogo: logoEnabled
+            ? {
+                x: logoBox.x,
+                y: logoBox.y,
+                w: logoBox.w,
+                h: logoBox.h,
+              }
+            : null,
         },
         (r) => setProgress(Math.round(r * 100)),
       );
@@ -753,15 +829,37 @@ export function VideoEditorWorkspace() {
   if (!file || !url) {
     return (
       <>
-        <div className="overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#121214] text-white shadow-xl">
+        <div
+          className={
+            fullscreen
+              ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#0e0e10] text-white"
+              : "overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#121214] text-white shadow-xl"
+          }
+        >
           <div className="flex items-center justify-between border-b border-[#2a2a2e] px-4 py-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Clapperboard className="h-5 w-5 text-[#f5c518]" />
               محرر الفيديو
             </div>
-            <span className="text-xs text-[#888]">مثل 123apps — داخل المتصفح</span>
+            <div className="flex items-center gap-3">
+              {fullscreen && (
+                <a
+                  href="/"
+                  className="text-xs text-[#888] hover:text-[#f5c518]"
+                >
+                  الرئيسية
+                </a>
+              )}
+              <span className="text-xs text-[#888]">
+                مثل 123apps — داخل المتصفح
+              </span>
+            </div>
           </div>
-          <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 p-8">
+          <div
+            className={`flex flex-col items-center justify-center gap-4 p-8 ${
+              fullscreen ? "min-h-0 flex-1" : "min-h-[420px]"
+            }`}
+          >
             <div className="rounded-2xl border border-dashed border-[#3a3a40] bg-[#1a1a1d] px-10 py-14 text-center">
               <Upload className="mx-auto mb-4 h-10 w-10 text-[#f5c518]" />
               <p className="mb-4 text-sm text-[#ccc]">
@@ -808,11 +906,22 @@ export function VideoEditorWorkspace() {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#0e0e10] text-white shadow-xl">
+    <div
+      className={
+        fullscreen
+          ? "flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#0e0e10] text-white"
+          : "overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#0e0e10] text-white shadow-xl"
+      }
+    >
       {/* Top bar */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#2a2a2e] bg-[#161618] px-3 py-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[#2a2a2e] bg-[#161618] px-3 py-2">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Clapperboard className="h-4 w-4 text-[#f5c518]" />
+          {fullscreen && (
+            <a href="/" className="text-[#f5c518] hover:underline">
+              Tool2Day
+            </a>
+          )}
           <span className="max-w-[180px] truncate text-[#ddd]">{file.name}</span>
         </div>
         <div className="ms-auto flex items-center gap-2">
@@ -842,9 +951,13 @@ export function VideoEditorWorkspace() {
         </div>
       </div>
 
-      <div className="grid min-h-[640px] lg:grid-cols-[72px_240px_minmax(0,1fr)]">
+      <div
+        className={`grid min-h-0 flex-1 lg:grid-cols-[72px_260px_minmax(0,1fr)] ${
+          fullscreen ? "h-full" : "min-h-[640px]"
+        }`}
+      >
         {/* Icon rail */}
-        <aside className="flex flex-row gap-1 overflow-x-auto border-b border-[#2a2a2e] bg-[#141416] p-1 lg:flex-col lg:border-b-0 lg:border-e">
+        <aside className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-[#2a2a2e] bg-[#141416] p-1 lg:flex-col lg:border-b-0 lg:border-e">
           {navBtn("files", "ملفاتي", FileVideo)}
           {navBtn("media", "وسائط", ImageIcon)}
           {navBtn("stickers", "ملصقات", Sticker)}
@@ -856,7 +969,11 @@ export function VideoEditorWorkspace() {
         </aside>
 
         {/* Property panel */}
-        <aside className="max-h-[640px] overflow-y-auto border-b border-[#2a2a2e] bg-[#17171a] p-3 lg:border-b-0 lg:border-e">
+        <aside
+          className={`overflow-y-auto border-b border-[#2a2a2e] bg-[#17171a] p-3 lg:border-b-0 lg:border-e ${
+            fullscreen ? "max-h-none lg:h-full" : "max-h-[640px]"
+          }`}
+        >
           {panel === "files" && (
             <div className="space-y-3 text-sm">
               <p className="font-semibold text-[#f5c518]">الملف</p>
@@ -1462,6 +1579,145 @@ export function VideoEditorWorkspace() {
             </div>
             {propTab === "video" && (
               <div className="space-y-2 text-xs">
+                <div className="grid grid-cols-2 gap-1">
+                  {(
+                    [
+                      ["crop", "المحصول"],
+                      ["chroma", "إزالة اللون"],
+                      ["logo", "إزالة الشعار"],
+                      ["speed", "السرعة"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() =>
+                        setVideoTool((t) => (t === id ? "none" : id))
+                      }
+                      className={`rounded px-2 py-2 ${
+                        videoTool === id
+                          ? "bg-[#f5c518] font-bold text-[#111]"
+                          : "border border-[#333] text-[#ccc]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {videoTool === "crop" && (
+                  <div className="space-y-2 rounded border border-[#333] p-2">
+                    <label className="flex items-center justify-between">
+                      تفعيل المحصول
+                      <input
+                        type="checkbox"
+                        checked={cropEnabled}
+                        onChange={(e) => setCropEnabled(e.target.checked)}
+                      />
+                    </label>
+                    {(
+                      [
+                        ["x", "X"],
+                        ["y", "Y"],
+                        ["w", "عرض"],
+                        ["h", "ارتفاع"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <div key={key}>
+                        <label className="text-[#888]">
+                          {label} {Math.round(crop[key] * 100)}%
+                        </label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={Math.round(crop[key] * 100)}
+                          onChange={(e) =>
+                            setCrop((c) => ({
+                              ...c,
+                              [key]: Number(e.target.value) / 100,
+                            }))
+                          }
+                          className="w-full"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {videoTool === "chroma" && (
+                  <div className="space-y-2 rounded border border-[#333] p-2">
+                    <label className="flex items-center justify-between">
+                      تفعيل إزالة اللون
+                      <input
+                        type="checkbox"
+                        checked={chromaEnabled}
+                        onChange={(e) => setChromaEnabled(e.target.checked)}
+                      />
+                    </label>
+                    <label className="text-[#888]">اللون</label>
+                    <input
+                      type="color"
+                      value={chromaColor}
+                      onChange={(e) => setChromaColor(e.target.value)}
+                      className="h-8 w-full cursor-pointer rounded border border-[#333] bg-transparent"
+                    />
+                    <label className="text-[#888]">
+                      الحساسية {chromaSensitivity}%
+                    </label>
+                    <input
+                      type="range"
+                      min={5}
+                      max={80}
+                      value={chromaSensitivity}
+                      onChange={(e) =>
+                        setChromaSensitivity(Number(e.target.value))
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                )}
+
+                {videoTool === "logo" && (
+                  <div className="space-y-2 rounded border border-[#333] p-2">
+                    <label className="flex items-center justify-between">
+                      تفعيل إزالة الشعار
+                      <input
+                        type="checkbox"
+                        checked={logoEnabled}
+                        onChange={(e) => setLogoEnabled(e.target.checked)}
+                      />
+                    </label>
+                    {(
+                      [
+                        ["x", "X"],
+                        ["y", "Y"],
+                        ["w", "عرض"],
+                        ["h", "ارتفاع"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <div key={key}>
+                        <label className="text-[#888]">
+                          {label} {logoBox[key]}px
+                        </label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={key === "x" || key === "w" ? 1280 : 720}
+                          value={logoBox[key]}
+                          onChange={(e) =>
+                            setLogoBox((b) => ({
+                              ...b,
+                              [key]: Number(e.target.value),
+                            }))
+                          }
+                          className="w-full"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <label className="text-[#888]">السرعة {speed.toFixed(2)}×</label>
                 <input
                   type="range"
@@ -1526,17 +1782,31 @@ export function VideoEditorWorkspace() {
                     </button>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  disabled={detachBusy || !file}
+                  onClick={() => void detachAudio()}
+                  className="mt-1 w-full rounded-md border border-[#3b82f6] bg-[#1e3a5f]/40 px-2 py-2 text-xs font-semibold text-[#93c5fd] disabled:opacity-50"
+                >
+                  {detachBusy ? "جاري فصل الصوت…" : "فصل الصوت → مسار مستقل"}
+                </button>
               </div>
             )}
           </div>
         </aside>
 
         {/* Preview + timeline */}
-        <div className="flex min-w-0 flex-col bg-[#0a0a0b]">
-          <div className="flex flex-1 items-center justify-center p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0a0a0b]">
+          <div
+            className={`flex flex-1 items-center justify-center p-4 ${
+              fullscreen ? "min-h-0" : ""
+            }`}
+          >
             <div
               ref={stageRef}
-              className="relative max-h-[48vh] w-full max-w-4xl bg-black shadow-2xl"
+              className={`relative w-full max-w-4xl bg-black shadow-2xl ${
+                fullscreen ? "max-h-full" : "max-h-[48vh]"
+              }`}
               style={{
                 aspectRatio: `${outSize.w} / ${outSize.h}`,
               }}
@@ -1712,11 +1982,11 @@ export function VideoEditorWorkspace() {
           </div>
 
           {/* Timeline */}
-          <div className="border-t border-[#2a2a2e] bg-[#121214] p-3">
+          <div className="shrink-0 border-t border-[#2a2a2e] bg-[#121214] p-3">
             <div
               ref={timelineRef}
               className={`relative overflow-hidden rounded-md bg-[#1a1a1d] ${
-                audioTracks.length > 0 ? "h-24" : "h-16"
+                audioTracks.length > 0 ? "h-28" : "h-16"
               }`}
               style={{ transform: `scaleX(${timelineZoom})`, transformOrigin: "right center" }}
               onPointerMove={onTimelineMove}
@@ -1757,10 +2027,11 @@ export function VideoEditorWorkspace() {
                 />
               </div>
 
-              {/* Audio tracks row (TTS = green, music = yellow) */}
+              {/* Audio tracks: detached = blue waveform, TTS = green, music = yellow */}
               {audioTracks.length > 0 && (
-                <div className="absolute inset-x-0 top-16 h-6">
+                <div className="absolute inset-x-0 top-[3.75rem] h-8">
                   {audioTracks.map((t) => {
+                    const isDetached = t.id.startsWith("detached-");
                     const isTts = t.id.startsWith("tts-");
                     const left = timelinePct(trimIn + t.start);
                     const width = duration
@@ -1769,17 +2040,34 @@ export function VideoEditorWorkspace() {
                     return (
                       <div
                         key={t.id}
-                        className={`absolute h-6 overflow-hidden rounded border px-1 text-[9px] font-semibold text-black ${
-                          isTts
-                            ? "border-emerald-600 bg-emerald-400/80"
-                            : "border-amber-500 bg-yellow-400/80"
+                        className={`absolute h-8 overflow-hidden rounded border px-1 text-[9px] font-semibold ${
+                          isDetached
+                            ? "border-sky-500 bg-[#0c4a6e] text-sky-100"
+                            : isTts
+                              ? "border-emerald-600 bg-emerald-400/80 text-black"
+                              : "border-amber-500 bg-yellow-400/80 text-black"
                         }`}
                         style={{ left: `${left}%`, width: `${width}%` }}
                         title={t.name}
                       >
-                        <span className="truncate">
-                          {isTts ? "🎙" : "🎵"} {t.name}
-                        </span>
+                        {isDetached ? (
+                          <div className="flex h-full items-end gap-px px-0.5 pb-0.5">
+                            {Array.from({ length: 48 }).map((_, i) => (
+                              <span
+                                key={i}
+                                className="min-w-[2px] flex-1 rounded-sm bg-sky-400"
+                                style={{
+                                  height: `${20 + ((i * 17) % 70)}%`,
+                                  opacity: 0.55 + ((i * 13) % 45) / 100,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="truncate leading-8">
+                            {isTts ? "🎙" : "🎵"} {t.name}
+                          </span>
+                        )}
                       </div>
                     );
                   })}
@@ -1795,7 +2083,7 @@ export function VideoEditorWorkspace() {
               </div>
             </div>
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              ضع الملفات هنا أو اضغط للاختيار · اسحب حواف المقطع للقص
+              كليك يمين على المقطع ← فصل الصوت · اسحب حواف المقطع للقص
             </p>
           </div>
         </div>
@@ -1846,9 +2134,7 @@ export function VideoEditorWorkspace() {
                   label: "فصل الصوت",
                   shortcut: "A",
                   fn: () => {
-                    setMuted(true);
-                    setVolume(0);
-                    setStatus("تم فصل/كتم صوت المقطع");
+                    void detachAudio();
                   },
                 },
                 {

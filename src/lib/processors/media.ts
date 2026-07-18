@@ -691,6 +691,58 @@ export async function stabilizeVideo(file: File, onProgress?: MediaProgress) {
   );
 }
 
+export async function extractAudioTrack(
+  file: File,
+  onProgress?: MediaProgress,
+): Promise<File> {
+  const ffmpeg = await getFFmpeg(onProgress);
+  const vExt = extensionForMime(file.type, "mp4");
+  const input = `detach-in.${vExt}`;
+  const output = "detached-audio.mp3";
+  await ffmpeg.writeFile(input, await fetchFile(file));
+  try {
+    await execOrThrow(ffmpeg, [
+      "-i",
+      input,
+      "-vn",
+      "-acodec",
+      "libmp3lame",
+      "-q:a",
+      "4",
+      output,
+    ]);
+  } catch {
+    await execOrThrow(ffmpeg, [
+      "-i",
+      input,
+      "-vn",
+      "-c:a",
+      "aac",
+      "detached-audio.m4a",
+    ]);
+    const data = await ffmpeg.readFile("detached-audio.m4a");
+    await ffmpeg.deleteFile(input);
+    try {
+      await ffmpeg.deleteFile("detached-audio.m4a");
+    } catch {
+      /* ignore */
+    }
+    return new File([toBlob(data, "audio/mp4")], `${basename(file.name)}-audio.m4a`, {
+      type: "audio/mp4",
+    });
+  }
+  const data = await ffmpeg.readFile(output);
+  await ffmpeg.deleteFile(input);
+  try {
+    await ffmpeg.deleteFile(output);
+  } catch {
+    /* ignore */
+  }
+  return new File([toBlob(data, "audio/mpeg")], `${basename(file.name)}-audio.mp3`, {
+    type: "audio/mpeg",
+  });
+}
+
 export async function equalizeAudio(file: File, onProgress?: MediaProgress) {
   await runAudioOut(
     file,

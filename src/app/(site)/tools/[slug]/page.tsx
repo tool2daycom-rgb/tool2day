@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
-import { VideoEditorWorkspace } from "@/components/video-editor-workspace";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
 
@@ -11,11 +10,16 @@ type Props = {
 };
 
 export function generateStaticParams() {
-  return tools.map((tool) => ({ slug: tool.slug }));
+  return tools
+    .filter((tool) => tool.slug !== "video-editor")
+    .map((tool) => ({ slug: tool.slug }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
+  if (slug === "video-editor") {
+    return { title: "محرر الفيديو" };
+  }
   const tool = getTool(slug);
   if (!tool) return {};
   return {
@@ -26,33 +30,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ToolPage({ params }: Props) {
   const { slug } = await params;
+  if (slug === "video-editor") {
+    redirect("/tools/video-editor");
+  }
+
   const tool = getTool(slug);
   if (!tool) notFound();
 
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
   const isPdf = slug === "pdf-editor";
-  const isVideo = slug === "video-editor";
-  const wide = isPdf || isVideo;
-
-  if (isVideo) {
-    return (
-      <div className="mx-auto w-full max-w-[1600px] px-2 py-4 sm:px-4 sm:py-6">
-        <Link
-          href={`/#${category.anchor}`}
-          className="mb-3 inline-block px-2 text-sm font-semibold text-[#2563eb] transition hover:underline"
-        >
-          ← {category.sectionTitle}
-        </Link>
-        <VideoEditorWorkspace />
-      </div>
-    );
-  }
 
   return (
     <div
       className={`mx-auto w-full px-4 py-10 sm:px-6 sm:py-14 ${
-        wide ? "max-w-[1400px]" : "max-w-3xl"
+        isPdf ? "max-w-[1400px]" : "max-w-3xl"
       }`}
     >
       <Link

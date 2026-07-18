@@ -57,6 +57,10 @@ export type VideoProjectExport = {
   videoH: number;
   overlays: VideoProjectOverlay[];
   audioTracks: VideoAudioTrack[];
+  /** Normalized crop 0–1 relative to source frame */
+  crop?: { x: number; y: number; w: number; h: number } | null;
+  chromaKey?: { enabled: boolean; color: string; similarity: number } | null;
+  removeLogo?: { x: number; y: number; w: number; h: number } | null;
 };
 
 async function execOrThrow(
@@ -152,6 +156,9 @@ export async function exportVideoProject(
     videoH,
     overlays,
     audioTracks,
+    crop,
+    chromaKey,
+    removeLogo,
   } = project;
 
   if (trimOut <= trimIn + 0.05) {
@@ -231,6 +238,28 @@ export async function exportVideoProject(
   const oh = Math.max(2, Math.round(outH / 2) * 2);
 
   const transforms: string[] = [];
+  if (crop && crop.w > 0.02 && crop.h > 0.02) {
+    // crop relative — applied after decode via crop filter with iw/ih
+    const cx = Math.max(0, Math.min(0.98, crop.x));
+    const cy = Math.max(0, Math.min(0.98, crop.y));
+    const cw = Math.max(0.02, Math.min(1 - cx, crop.w));
+    const ch = Math.max(0.02, Math.min(1 - cy, crop.h));
+    transforms.push(
+      `crop=iw*${cw.toFixed(4)}:ih*${ch.toFixed(4)}:iw*${cx.toFixed(4)}:ih*${cy.toFixed(4)}`,
+    );
+  }
+  if (removeLogo) {
+    const lx = Math.max(0, Math.round(removeLogo.x));
+    const ly = Math.max(0, Math.round(removeLogo.y));
+    const lw = Math.max(8, Math.round(removeLogo.w));
+    const lh = Math.max(8, Math.round(removeLogo.h));
+    transforms.push(`delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}`);
+  }
+  if (chromaKey?.enabled) {
+    const hex = (chromaKey.color || "#00ff00").replace("#", "");
+    const sim = Math.max(0.01, Math.min(1, chromaKey.similarity / 100));
+    transforms.push(`chromakey=0x${hex}:${sim.toFixed(3)}:0.1`);
+  }
   if (rotateFilter) transforms.push(rotateFilter);
   if (flipH) transforms.push("hflip");
   if (flipV) transforms.push("vflip");

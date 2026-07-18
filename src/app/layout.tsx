@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Cairo, Syne } from "next/font/google";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -37,11 +35,7 @@ export default function RootLayout({
       dir="rtl"
       className={`${cairo.variable} ${syne.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col font-sans">
-        <SiteHeader />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
-      </body>
+      <body className="min-h-full font-sans">{children}</body>
     </html>
   );
 }
