@@ -84,7 +84,8 @@ export const tools: Tool[] = [
   {
     slug: "video-editor",
     title: "محرر الفيديو",
-    description: "حرّر فيديوهاتك وصدّرها جاهزة للنشر.",
+    description:
+      "محرر احترافي بتايملاين ومعاينة: قص، سرعة، تدوير، صوت، قماش، نص وصور ثم تصدير.",
     category: "video",
     accept: "video/*",
     icon: Clapperboard,
