@@ -49,6 +49,9 @@ export type VideoProjectExport = {
   muted: boolean;
   fadeIn: number;
   fadeOut: number;
+  audioPitch?: number;
+  audioReverse?: boolean;
+  noiseReduce?: boolean;
   outW: number;
   outH: number;
   videoX: number;
@@ -148,6 +151,9 @@ export async function exportVideoProject(
     muted,
     fadeIn,
     fadeOut,
+    audioPitch = 1,
+    audioReverse = false,
+    noiseReduce = false,
     outW,
     outH,
     videoX,
@@ -305,7 +311,16 @@ export async function exportVideoProject(
 
   const vol = muted ? 0 : Math.max(0, Math.min(2, volume));
   const duration = (trimOut - trimIn) / speed;
-  const afades: string[] = [`atempo=${speed}`, `volume=${vol}`];
+  const pitch = Math.max(0.5, Math.min(2, audioPitch || 1));
+  const afades: string[] = [];
+  if (audioReverse) afades.push("areverse");
+  if (noiseReduce) afades.push("highpass=f=200,lowpass=f=3000");
+  if (Math.abs(pitch - 1) > 0.02) {
+    afades.push(
+      `asetrate=44100*${pitch.toFixed(3)},aresample=44100,atempo=${(1 / pitch).toFixed(3)}`,
+    );
+  }
+  afades.push(`atempo=${speed}`, `volume=${vol}`);
   if (fadeIn > 0) {
     afades.push(
       `afade=t=in:st=0:d=${Math.min(fadeIn, duration / 2).toFixed(3)}`,

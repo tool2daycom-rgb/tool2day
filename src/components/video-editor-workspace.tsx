@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
+import { analyzeWaveform } from "@/lib/audio-waveform";
 import { speakText, synthesizeToFile } from "@/lib/processors/tts";
 import {
   EMOJI_STICKERS,
@@ -100,7 +101,57 @@ type AudioTrack = {
   start: number;
   volume: number;
   duration: number;
+  peaks?: number[];
 };
+
+type AudioSection =
+  | "volume"
+  | "fade"
+  | "speed"
+  | "voice"
+  | "noise"
+  | "reverse"
+  | "pitch"
+  | "eq"
+  | null;
+
+function WaveformBars({
+  peaks,
+  className = "bg-sky-300",
+  dimmed = false,
+}: {
+  peaks: number[];
+  className?: string;
+  dimmed?: boolean;
+}) {
+  const bars = peaks.length > 0 ? peaks : Array.from({ length: 64 }, () => 0.35);
+  return (
+    <div
+      className={`flex h-full items-center gap-px px-0.5 ${dimmed ? "opacity-35" : "opacity-90"}`}
+      aria-hidden
+    >
+      {bars.map((p, i) => (
+        <span
+          key={i}
+          className={`min-w-[1px] flex-1 rounded-[1px] ${className}`}
+          style={{ height: `${Math.max(8, Math.round(p * 88))}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function slicePeaks(
+  peaks: number[],
+  start: number,
+  end: number,
+  total: number,
+): number[] {
+  if (!peaks.length || !total) return peaks;
+  const a = Math.floor((start / total) * peaks.length);
+  const b = Math.ceil((end / total) * peaks.length);
+  return peaks.slice(a, Math.max(a + 1, b));
+}
 
 function formatTime(sec: number) {
   if (!Number.isFinite(sec) || sec < 0) sec = 0;
@@ -200,6 +251,12 @@ export function VideoEditorWorkspace({
   const [fadeIn, setFadeIn] = useState(0);
   const [fadeOut, setFadeOut] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [audioPitch, setAudioPitch] = useState(1);
+  const [audioReverse, setAudioReverse] = useState(false);
+  const [noiseReduce, setNoiseReduce] = useState(false);
+  const [audioSection, setAudioSection] = useState<AudioSection>("volume");
+  const [videoPeaks, setVideoPeaks] = useState<number[]>([]);
+  const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const [rotate, setRotate] = useState<0 | 90 | 180 | 270>(0);
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
@@ -213,7 +270,9 @@ export function VideoEditorWorkspace({
   });
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
-  const [selectedId, setSelectedId] = useState<string | "video">("video");
+  const [selectedId, setSelectedId] = useState<string | "video" | "audio">(
+    "video",
+  );
   const [draftText, setDraftText] = useState("عنوان الفيديو");
   const [draftFont, setDraftFont] = useState<string>(VIDEO_FONTS[0].id);
   const [draftColor, setDraftColor] = useState("#ffffff");
@@ -279,6 +338,48 @@ export function VideoEditorWorkspace({
     return () => clearInterval(id);
   }, [playing, trimIn, trimOut]);
 
+  // Keep secondary audio tracks in sync with the playhead
+  useEffect(() => {
+    const map = audioElsRef.current;
+    const liveIds = new Set(audioTracks.map((t) => t.id));
+    for (const [id, el] of map) {
+      if (!liveIds.has(id)) {
+        el.pause();
+        el.src = "";
+        map.delete(id);
+      }
+    }
+    for (const t of audioTracks) {
+      let el = map.get(t.id);
+      if (!el) {
+        el = new Audio(t.url);
+        el.preload = "auto";
+        map.set(t.id, el);
+      }
+      el.volume = Math.max(0, Math.min(1, t.volume));
+      const local = currentTime - trimIn - t.start;
+      if (local >= 0 && local < t.duration - 0.02) {
+        if (Math.abs(el.currentTime - local) > 0.3) {
+          el.currentTime = Math.max(0, local);
+        }
+        if (playing && el.paused) void el.play().catch(() => undefined);
+        if (!playing && !el.paused) el.pause();
+      } else if (!el.paused) {
+        el.pause();
+      }
+    }
+  }, [audioTracks, currentTime, playing, trimIn]);
+
+  useEffect(() => {
+    return () => {
+      for (const el of audioElsRef.current.values()) {
+        el.pause();
+        el.src = "";
+      }
+      audioElsRef.current.clear();
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (!ctxMenu || !ctxMenuRef.current) return;
     const rect = ctxMenuRef.current.getBoundingClientRect();
@@ -318,6 +419,14 @@ export function VideoEditorWorkspace({
       prev.forEach((t) => URL.revokeObjectURL(t.url));
       return [];
     });
+    setVideoPeaks([]);
+    setMuted(false);
+    setVolume(1);
+    setFadeIn(0);
+    setFadeOut(0);
+    setAudioPitch(1);
+    setAudioReverse(false);
+    setNoiseReduce(false);
     setFlipH(false);
     setFlipV(false);
     setOpacity(1);
@@ -326,6 +435,10 @@ export function VideoEditorWorkspace({
     setStatus(`تم تحميل: ${f.name}`);
     setPanel("files");
     setShowRecordStudio(false);
+    void analyzeWaveform(f, 180).then((peaks) => {
+      setVideoPeaks(peaks);
+      setStatus(`تم تحميل: ${f.name} · ذبذبات الصوت جاهزة`);
+    });
   }
 
   function onLoadedMeta() {
@@ -382,6 +495,10 @@ export function VideoEditorWorkspace({
       );
       const audioUrl = URL.createObjectURL(audioFile);
       const dur = (await loadMediaDuration(audioUrl)) || clipDuration;
+      const peaks =
+        videoPeaks.length > 0
+          ? videoPeaks
+          : await analyzeWaveform(audioFile, 180);
       const id = nextId(idCounterRef, "detached");
       setAudioTracks((prev) => [
         ...prev.filter((t) => !t.id.startsWith("detached-")),
@@ -391,15 +508,18 @@ export function VideoEditorWorkspace({
           file: audioFile,
           url: audioUrl,
           start: 0,
-          volume: 1,
+          volume: volume > 0 ? volume : 1,
           duration: dur,
+          peaks,
         },
       ]);
       setMuted(true);
       setVolume(0);
-      setStatus("تم فصل الصوت — يظهر كمسار أزرق تحت الفيديو");
+      setSelectedId(id);
+      setStatus("تم فصل الصوت — مسار أزرق مستقل تحت الفيديو");
       setPanel("audio");
       setPropTab("audio");
+      setAudioSection("volume");
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "فشل فصل الصوت");
@@ -519,6 +639,7 @@ export function VideoEditorWorkspace({
     if (!f) return;
     const trackUrl = URL.createObjectURL(f);
     const dur = await loadMediaDuration(trackUrl);
+    const peaks = await analyzeWaveform(f, 120);
     const id = nextId(idCounterRef, "music");
     setAudioTracks((prev) => [
       ...prev,
@@ -530,8 +651,11 @@ export function VideoEditorWorkspace({
         start: Math.max(0, currentTime - trimIn),
         volume: 1,
         duration: dur,
+        peaks,
       },
     ]);
+    setSelectedId(id);
+    setPanel("audio");
     setStatus(`تمت إضافة الموسيقى: ${f.name}`);
   }
 
@@ -575,6 +699,7 @@ export function VideoEditorWorkspace({
       const audioFile = await synthesizeToFile(ttsText, { lang: ttsLang });
       const trackUrl = URL.createObjectURL(audioFile);
       const dur = await loadMediaDuration(trackUrl);
+      const peaks = await analyzeWaveform(audioFile, 80);
       const id = nextId(idCounterRef, "tts");
       setAudioTracks((prev) => [
         ...prev,
@@ -586,6 +711,7 @@ export function VideoEditorWorkspace({
           start: Math.max(0, currentTime - trimIn),
           volume: 1,
           duration: dur,
+          peaks,
         },
       ]);
       setStatus("تمت إضافة التعليق الصوتي إلى المخطط الزمني");
@@ -597,7 +723,13 @@ export function VideoEditorWorkspace({
   }
 
   function deleteSelected() {
-    if (selectedId === "video") return;
+    if (selectedId === "video" || selectedId === "audio") return;
+    const track = audioTracks.find((t) => t.id === selectedId);
+    if (track) {
+      removeAudioTrack(track.id);
+      setSelectedId("video");
+      return;
+    }
     setOverlays((prev) => {
       const victim = prev.find((o) => o.id === selectedId);
       if (victim?.type === "image") URL.revokeObjectURL(victim.src);
@@ -777,6 +909,9 @@ export function VideoEditorWorkspace({
           muted,
           fadeIn,
           fadeOut,
+          audioPitch,
+          audioReverse,
+          noiseReduce,
           outW: outSize.w,
           outH: outSize.h,
           videoX: videoBox.x * outSize.w,
@@ -1456,115 +1591,235 @@ export function VideoEditorWorkspace({
           )}
 
           {panel === "audio" && (
-            <div className="space-y-3 text-sm">
+            <div className="space-y-2 text-sm">
               <p className="font-semibold text-[#f5c518]">الصوت</p>
-              <div className="space-y-1">
-                {(
-                  [
-                    {
-                      label: "الحجم",
-                      action: () => setStatus("عدّل مستوى الصوت من الشريط أدناه"),
-                    },
-                    {
-                      label: "التنشيطات / تلاشي",
-                      action: () => setStatus("استخدم الظهور/الاختفاء التدريجي"),
-                    },
-                    {
-                      label: "السرعة",
-                      action: () => {
-                        setPropTab("video");
-                        setStatus("عدّل سرعة الفيديو من تبويب فيديو");
-                      },
-                    },
-                    {
-                      label: "مزيل الصوت",
-                      action: () => {
-                        setMuted(true);
-                        setVolume(0);
-                        setStatus("تم كتم صوت المقطع");
-                      },
-                    },
-                    {
-                      label: "تقليل الضوضاء",
-                      action: () =>
-                        setStatus("تقليل الضوضاء يُطبَّق عند التصدير قريباً"),
-                    },
-                    {
-                      label: "الصوت العكسي",
-                      action: () => setStatus("عكس الصوت قريباً"),
-                    },
-                    {
-                      label: "الزاوية / الطبقة",
-                      action: () => setPanel("tts"),
-                    },
-                    {
-                      label: "المعادل",
-                      action: () => setStatus("المعادل الصوتي قريباً"),
-                    },
-                  ] as const
-                ).map((tool) => (
-                  <button
-                    key={tool.label}
-                    type="button"
-                    onClick={tool.action}
-                    className="flex w-full items-center justify-between rounded-md border border-[#2a2a2e] bg-[#101012] px-3 py-2.5 text-xs text-[#ddd] hover:border-[#f5c518]/40 hover:bg-[#1a1a1d]"
+              <p className="text-[11px] leading-5 text-[#777]">
+                ذبذبات الصوت تظهر كمسار أزرق تحت الفيديو. عدّل المستوى والتلاشي
+                من هنا.
+              </p>
+
+              {(
+                [
+                  { id: "volume" as const, label: "الحجم" },
+                  { id: "fade" as const, label: "تلاشي" },
+                  { id: "speed" as const, label: "السرعة" },
+                  { id: "voice" as const, label: "مزيل الصوت" },
+                  { id: "noise" as const, label: "تقليل الضوضاء" },
+                  { id: "reverse" as const, label: "الصوت العكسي" },
+                  { id: "pitch" as const, label: "النبرة" },
+                  { id: "eq" as const, label: "المعادل" },
+                ] as const
+              ).map((tool) => {
+                const open = audioSection === tool.id;
+                return (
+                  <div
+                    key={tool.id}
+                    className="overflow-hidden rounded-md border border-[#2a2a2e] bg-[#101012]"
                   >
-                    {tool.label}
-                    <span className="text-[#555]">‹</span>
-                  </button>
-                ))}
-              </div>
-              <div className="border-t border-[#2a2a2e] pt-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs text-[#aaa]">مستوى الصوت</span>
-                  <button
-                    type="button"
-                    onClick={() => setMuted((m) => !m)}
-                    className="rounded border border-[#333] p-1"
-                  >
-                    {muted ? (
-                      <VolumeX className="h-4 w-4 text-red-400" />
-                    ) : (
-                      <Volume2 className="h-4 w-4" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAudioSection((s) => (s === tool.id ? null : tool.id))
+                      }
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-xs text-[#ddd] hover:bg-[#1a1a1d]"
+                    >
+                      {tool.label}
+                      <span className="text-[#555]">{open ? "▾" : "‹"}</span>
+                    </button>
+                    {open && (
+                      <div className="space-y-2 border-t border-[#2a2a2e] px-3 py-3 text-xs">
+                        {tool.id === "volume" && (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[#aaa]">
+                                مستوى الصوت {Math.round(volume * 100)}%
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMuted((m) => !m);
+                                  setStatus(
+                                    muted
+                                      ? "تم إلغاء كتم الصوت"
+                                      : "تم كتم صوت المقطع",
+                                  );
+                                }}
+                                className="rounded border border-[#333] p-1"
+                              >
+                                {muted ? (
+                                  <VolumeX className="h-4 w-4 text-red-400" />
+                                ) : (
+                                  <Volume2 className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={200}
+                              value={Math.round(volume * 100)}
+                              onChange={(e) => {
+                                const v = Number(e.target.value) / 100;
+                                setVolume(v);
+                                setMuted(v <= 0);
+                                const det = audioTracks.find((t) =>
+                                  t.id.startsWith("detached-"),
+                                );
+                                if (det) {
+                                  setAudioTracks((prev) =>
+                                    prev.map((t) =>
+                                      t.id === det.id
+                                        ? { ...t, volume: Math.max(0.01, v) }
+                                        : t,
+                                    ),
+                                  );
+                                }
+                              }}
+                              className="w-full accent-sky-400"
+                            />
+                          </>
+                        )}
+                        {tool.id === "fade" && (
+                          <>
+                            <label className="block text-[#888]">
+                              ظهور تدريجي {fadeIn.toFixed(1)}ث
+                            </label>
+                            <input
+                              type="range"
+                              min={0}
+                              max={5}
+                              step={0.1}
+                              value={fadeIn}
+                              onChange={(e) =>
+                                setFadeIn(Number(e.target.value))
+                              }
+                              className="mb-2 w-full accent-sky-400"
+                            />
+                            <label className="block text-[#888]">
+                              اختفاء تدريجي {fadeOut.toFixed(1)}ث
+                            </label>
+                            <input
+                              type="range"
+                              min={0}
+                              max={5}
+                              step={0.1}
+                              value={fadeOut}
+                              onChange={(e) =>
+                                setFadeOut(Number(e.target.value))
+                              }
+                              className="w-full accent-sky-400"
+                            />
+                          </>
+                        )}
+                        {tool.id === "speed" && (
+                          <>
+                            <label className="block text-[#888]">
+                              سرعة التشغيل {speed.toFixed(2)}×
+                            </label>
+                            <input
+                              type="range"
+                              min={50}
+                              max={200}
+                              value={Math.round(speed * 100)}
+                              onChange={(e) =>
+                                setSpeed(Number(e.target.value) / 100)
+                              }
+                              className="w-full accent-sky-400"
+                            />
+                          </>
+                        )}
+                        {tool.id === "voice" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = !(muted || volume === 0);
+                              setMuted(next);
+                              if (next) setVolume(0);
+                              else setVolume(1);
+                              setStatus(
+                                next
+                                  ? "تم كتم/إزالة صوت المقطع"
+                                  : "تم استعادة الصوت",
+                              );
+                            }}
+                            className="w-full rounded-md bg-sky-600/30 px-3 py-2 font-semibold text-sky-200"
+                          >
+                            {muted || volume === 0
+                              ? "استعادة الصوت"
+                              : "كتم / مزيل الصوت"}
+                          </button>
+                        )}
+                        {tool.id === "noise" && (
+                          <label className="flex items-center justify-between gap-2 text-[#ccc]">
+                            تفعيل تقليل الضوضاء عند التصدير
+                            <input
+                              type="checkbox"
+                              checked={noiseReduce}
+                              onChange={(e) => {
+                                setNoiseReduce(e.target.checked);
+                                setStatus(
+                                  e.target.checked
+                                    ? "تقليل الضوضاء مفعّل للتصدير"
+                                    : "تم إيقاف تقليل الضوضاء",
+                                );
+                              }}
+                            />
+                          </label>
+                        )}
+                        {tool.id === "reverse" && (
+                          <label className="flex items-center justify-between gap-2 text-[#ccc]">
+                            عكس الصوت عند التصدير
+                            <input
+                              type="checkbox"
+                              checked={audioReverse}
+                              onChange={(e) => {
+                                setAudioReverse(e.target.checked);
+                                setStatus(
+                                  e.target.checked
+                                    ? "عكس الصوت مفعّل للتصدير"
+                                    : "تم إيقاف عكس الصوت",
+                                );
+                              }}
+                            />
+                          </label>
+                        )}
+                        {tool.id === "pitch" && (
+                          <>
+                            <label className="block text-[#888]">
+                              النبرة {audioPitch.toFixed(2)}×
+                            </label>
+                            <input
+                              type="range"
+                              min={50}
+                              max={150}
+                              value={Math.round(audioPitch * 100)}
+                              onChange={(e) =>
+                                setAudioPitch(Number(e.target.value) / 100)
+                              }
+                              className="w-full accent-sky-400"
+                            />
+                          </>
+                        )}
+                        {tool.id === "eq" && (
+                          <p className="leading-5 text-[#888]">
+                            استخدم النبرة وتقليل الضوضاء لضبط الترددات. تحسينات
+                            المعادل الكامل قادمة.
+                          </p>
+                        )}
+                      </div>
                     )}
-                  </button>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={200}
-                  value={Math.round(volume * 100)}
-                  onChange={(e) => {
-                    setVolume(Number(e.target.value) / 100);
-                    setMuted(false);
-                  }}
-                  className="mb-3 w-full"
-                />
-                <label className="block text-[11px] text-[#888]">
-                  ظهور تدريجي (ث) {fadeIn.toFixed(1)}
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  value={fadeIn}
-                  onChange={(e) => setFadeIn(Number(e.target.value))}
-                  className="mb-2 w-full"
-                />
-                <label className="block text-[11px] text-[#888]">
-                  اختفاء تدريجي (ث) {fadeOut.toFixed(1)}
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                  value={fadeOut}
-                  onChange={(e) => setFadeOut(Number(e.target.value))}
-                  className="w-full"
-                />
-              </div>
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                disabled={detachBusy || !file}
+                onClick={() => void detachAudio()}
+                className="w-full rounded-md border border-[#3b82f6] bg-[#1e3a5f]/40 px-2 py-2.5 text-xs font-semibold text-[#93c5fd] disabled:opacity-50"
+              >
+                {detachBusy ? "جاري فصل الصوت…" : "فصل الصوت → مسار مستقل"}
+              </button>
             </div>
           )}
 
@@ -2026,10 +2281,11 @@ export function VideoEditorWorkspace({
           <div className="shrink-0 border-t border-[#2a2a2e] bg-[#121214] p-3">
             <div
               ref={timelineRef}
-              className={`relative overflow-hidden rounded-md bg-[#1a1a1d] ${
-                audioTracks.length > 0 ? "h-28" : "h-16"
-              }`}
-              style={{ transform: `scaleX(${timelineZoom})`, transformOrigin: "right center" }}
+              className="relative h-32 overflow-hidden rounded-md bg-[#1a1a1d]"
+              style={{
+                transform: `scaleX(${timelineZoom})`,
+                transformOrigin: "right center",
+              }}
               onPointerMove={onTimelineMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
@@ -2047,7 +2303,7 @@ export function VideoEditorWorkspace({
                 ))}
               </div>
 
-              {/* Clip */}
+              {/* Video clip */}
               <div
                 className="absolute top-5 h-9 overflow-hidden rounded border-2 border-amber-400"
                 style={{
@@ -2069,50 +2325,92 @@ export function VideoEditorWorkspace({
                 />
               </div>
 
-              {/* Audio tracks: detached = blue waveform, TTS = green, music = yellow */}
-              {audioTracks.length > 0 && (
-                <div className="absolute inset-x-0 top-[3.75rem] h-8">
-                  {audioTracks.map((t) => {
-                    const isDetached = t.id.startsWith("detached-");
-                    const isTts = t.id.startsWith("tts-");
-                    const left = timelinePct(trimIn + t.start);
-                    const width = duration
-                      ? Math.max(1, (t.duration / duration) * 100)
-                      : 1;
-                    return (
-                      <div
-                        key={t.id}
-                        className={`absolute h-8 overflow-hidden rounded border px-1 text-[9px] font-semibold ${
-                          isDetached
-                            ? "border-sky-500 bg-[#0c4a6e] text-sky-100"
-                            : isTts
-                              ? "border-emerald-600 bg-emerald-400/80 text-black"
-                              : "border-amber-500 bg-yellow-400/80 text-black"
-                        }`}
-                        style={{ left: `${left}%`, width: `${width}%` }}
-                        title={t.name}
-                      >
-                        {isDetached ? (
-                          <div className="flex h-full items-end gap-px px-0.5 pb-0.5">
-                            {Array.from({ length: 48 }).map((_, i) => (
-                              <span
-                                key={i}
-                                className="min-w-[2px] flex-1 rounded-sm bg-sky-400"
-                                style={{
-                                  height: `${20 + ((i * 17) % 70)}%`,
-                                  opacity: 0.55 + ((i * 13) % 45) / 100,
-                                }}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="truncate leading-8">
-                            {isTts ? "🎙" : "🎵"} {t.name}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+              {/* Primary blue audio waveform (linked or detached) */}
+              {(() => {
+                const detached = audioTracks.find((t) =>
+                  t.id.startsWith("detached-"),
+                );
+                const peaks = detached?.peaks?.length
+                  ? detached.peaks
+                  : slicePeaks(videoPeaks, trimIn, trimOut, duration);
+                const left = detached
+                  ? timelinePct(trimIn + detached.start)
+                  : timelinePct(trimIn);
+                const width = detached
+                  ? duration
+                    ? Math.max(1, (detached.duration / duration) * 100)
+                    : 1
+                  : Math.max(1, timelinePct(trimOut) - timelinePct(trimIn));
+                const dimmed = detached
+                  ? detached.volume <= 0
+                  : muted || volume <= 0;
+                return (
+                  <button
+                    type="button"
+                    className={`absolute top-[3.65rem] h-10 overflow-hidden rounded border-2 text-left ${
+                      selectedId === (detached?.id ?? "audio")
+                        ? "border-sky-300"
+                        : "border-sky-600"
+                    } bg-[#0b4f7a]`}
+                    style={{ left: `${left}%`, width: `${width}%` }}
+                    title={detached ? detached.name : "صوت الفيديو"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedId(detached?.id ?? "audio");
+                      setPanel("audio");
+                      setPropTab("audio");
+                      setAudioSection("volume");
+                    }}
+                  >
+                    <WaveformBars peaks={peaks} dimmed={dimmed} />
+                  </button>
+                );
+              })()}
+
+              {/* Extra audio tracks (music / TTS) */}
+              {audioTracks.filter((t) => !t.id.startsWith("detached-")).length >
+                0 && (
+                <div className="absolute inset-x-0 top-[6.9rem] h-5">
+                  {audioTracks
+                    .filter((t) => !t.id.startsWith("detached-"))
+                    .map((t) => {
+                      const isTts = t.id.startsWith("tts-");
+                      const left = timelinePct(trimIn + t.start);
+                      const width = duration
+                        ? Math.max(1, (t.duration / duration) * 100)
+                        : 1;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`absolute h-5 overflow-hidden rounded border ${
+                            isTts
+                              ? "border-emerald-600 bg-emerald-500/90"
+                              : "border-amber-500 bg-yellow-400/90"
+                          }`}
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                          title={t.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedId(t.id);
+                            setPanel("audio");
+                          }}
+                        >
+                          {t.peaks?.length ? (
+                            <WaveformBars
+                              peaks={t.peaks}
+                              className={
+                                isTts ? "bg-emerald-950" : "bg-amber-900"
+                              }
+                            />
+                          ) : (
+                            <span className="px-1 text-[9px] font-semibold text-black">
+                              {isTts ? "🎙" : "🎵"} {t.name}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                 </div>
               )}
 
@@ -2125,7 +2423,8 @@ export function VideoEditorWorkspace({
               </div>
             </div>
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              كليك يمين على المقطع ← فصل الصوت · اسحب حواف المقطع للقص
+              المسار الأزرق = ذبذبات الصوت · اضغطه لفتح أدوات الصوت · كليك يمين
+              للفصل
             </p>
           </div>
         </div>
