@@ -2,11 +2,13 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   AudioLines,
   Clapperboard,
@@ -138,6 +140,26 @@ function loadMediaDuration(src: string): Promise<number> {
   });
 }
 
+/** Keep context menu fully inside the viewport (opens upward near bottom). */
+function clampMenuPos(
+  x: number,
+  y: number,
+  w = 220,
+  h = 280,
+): { x: number; y: number } {
+  const pad = 10;
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  let left = x;
+  let top = y;
+  if (y + h > vh - pad) top = Math.max(pad, y - h);
+  if (left + w > vw - pad) left = vw - w - pad;
+  if (left < pad) left = pad;
+  if (top < pad) top = pad;
+  if (top + h > vh - pad) top = Math.max(pad, vh - h - pad);
+  return { x: left, y: top };
+}
+
 export function VideoEditorWorkspace({
   fullscreen = false,
 }: {
@@ -208,6 +230,7 @@ export function VideoEditorWorkspace({
   const [timelineZoom, setTimelineZoom] = useState(1);
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const ctxMenuRef = useRef<HTMLDivElement>(null);
   const [detachBusy, setDetachBusy] = useState(false);
   const [cropEnabled, setCropEnabled] = useState(false);
   const [crop, setCrop] = useState({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
@@ -255,6 +278,24 @@ export function VideoEditorWorkspace({
     }, 40);
     return () => clearInterval(id);
   }, [playing, trimIn, trimOut]);
+
+  useLayoutEffect(() => {
+    if (!ctxMenu || !ctxMenuRef.current) return;
+    const rect = ctxMenuRef.current.getBoundingClientRect();
+    const next = clampMenuPos(ctxMenu.x, ctxMenu.y, rect.width, rect.height);
+    if (next.x !== ctxMenu.x || next.y !== ctxMenu.y) {
+      setCtxMenu(next);
+    }
+  }, [ctxMenu]);
+
+  useEffect(() => {
+    if (!ctxMenu) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setCtxMenu(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ctxMenu]);
 
   async function onPick(list: FileList | null) {
     const f = list?.[0];
@@ -1995,7 +2036,8 @@ export function VideoEditorWorkspace({
               onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setCtxMenu({ x: e.clientX, y: e.clientY });
+                e.stopPropagation();
+                setCtxMenu(clampMenuPos(e.clientX, e.clientY));
               }}
             >
               {/* Ruler ticks */}
@@ -2101,68 +2143,85 @@ export function VideoEditorWorkspace({
         </div>
       )}
 
-      {ctxMenu && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-[60] cursor-default"
-            aria-label="إغلاق القائمة"
-            onClick={() => setCtxMenu(null)}
-          />
-          <div
-            className="fixed z-[70] min-w-48 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1d] py-1 text-sm shadow-2xl"
-            style={{ left: ctxMenu.x, top: ctxMenu.y }}
-          >
-            {(
-              [
-                { label: "تقسيم", shortcut: "S", fn: () => splitAtPlayhead() },
-                { label: "تكرار", shortcut: "D", fn: () => duplicateSelected() },
-                {
-                  label: "نسخ",
-                  shortcut: "C",
-                  fn: () => setStatus("تم نسخ العنصر المحدد"),
-                },
-                {
-                  label: "صامت",
-                  shortcut: "M",
-                  fn: () => {
-                    setMuted(true);
-                    setVolume(0);
+      {ctxMenu &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-[9998] cursor-default bg-transparent"
+              aria-label="إغلاق القائمة"
+              onClick={() => setCtxMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtxMenu(null);
+              }}
+            />
+            <div
+              ref={ctxMenuRef}
+              role="menu"
+              className="fixed z-[9999] min-w-52 rounded-lg border border-[#444] bg-[#1a1a1d] py-1 text-sm shadow-2xl"
+              style={{ left: ctxMenu.x, top: ctxMenu.y }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {(
+                [
+                  { label: "تقسيم", shortcut: "S", fn: () => splitAtPlayhead() },
+                  {
+                    label: "تكرار",
+                    shortcut: "D",
+                    fn: () => duplicateSelected(),
                   },
-                },
-                {
-                  label: "فصل الصوت",
-                  shortcut: "A",
-                  fn: () => {
-                    void detachAudio();
+                  {
+                    label: "نسخ",
+                    shortcut: "C",
+                    fn: () => setStatus("تم نسخ العنصر المحدد"),
                   },
-                },
-                {
-                  label: "حذف",
-                  shortcut: "Del",
-                  fn: () => deleteSelected(),
-                  danger: true,
-                },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={`flex w-full items-center justify-between px-3 py-2 text-right hover:bg-[#2a2a2e] ${
-                  "danger" in item && item.danger ? "text-red-400" : "text-[#ddd]"
-                }`}
-                onClick={() => {
-                  item.fn();
-                  setCtxMenu(null);
-                }}
-              >
-                <span>{item.label}</span>
-                <span className="text-[10px] text-[#666]">{item.shortcut}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+                  {
+                    label: "صامت",
+                    shortcut: "M",
+                    fn: () => {
+                      setMuted(true);
+                      setVolume(0);
+                    },
+                  },
+                  {
+                    label: "فصل الصوت",
+                    shortcut: "A",
+                    fn: () => {
+                      void detachAudio();
+                    },
+                  },
+                  {
+                    label: "حذف",
+                    shortcut: "Del",
+                    fn: () => deleteSelected(),
+                    danger: true,
+                  },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  className={`flex w-full items-center justify-between px-3 py-2.5 text-right hover:bg-[#2a2a2e] ${
+                    "danger" in item && item.danger
+                      ? "text-red-400"
+                      : "text-[#ddd]"
+                  }`}
+                  onClick={() => {
+                    item.fn();
+                    setCtxMenu(null);
+                  }}
+                >
+                  <span>{item.label}</span>
+                  <span className="text-[10px] text-[#666]">{item.shortcut}</span>
+                </button>
+              ))}
+            </div>
+          </>,
+          document.body,
+        )}
 
       {showRecordStudio && (
         <RecordStudio
