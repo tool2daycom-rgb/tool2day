@@ -19,6 +19,7 @@ import {
   Monitor,
   Music2,
   PencilLine,
+  FilePen,
   Presentation,
   RefreshCcw,
   Repeat2,
@@ -292,6 +293,14 @@ export const tools: Tool[] = [
   },
 
   // PDF
+  {
+    slug: "pdf-editor",
+    title: "محرر PDF",
+    description: "أضف نصاً وصوراً، احذف صفحات، ودوّر وعدّل مستند PDF.",
+    category: "pdf",
+    accept: "application/pdf",
+    icon: FilePen,
+  },
   {
     slug: "pdf-split",
     title: "تقسيم PDF",

@@ -23,6 +23,7 @@ export type ActiveToolKind =
   | "audio-reverse"
   | "audio-join"
   | "audio-eq"
+  | "pdf-editor"
   | "pdf-merge"
   | "pdf-split"
   | "pdf-rotate"
@@ -79,6 +80,7 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "audio-joiner": "audio-join",
   equalizer: "audio-eq",
   "voice-recorder": "voice-recorder",
+  "pdf-editor": "pdf-editor",
   "pdf-merge": "pdf-merge",
   "pdf-split": "pdf-split",
   "pdf-rotate": "pdf-rotate",

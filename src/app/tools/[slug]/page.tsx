@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
 
@@ -31,7 +32,11 @@ export default async function ToolPage({ params }: Props) {
   const category = categoryMeta[tool.category];
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+    <div
+      className={`mx-auto w-full px-4 py-10 sm:px-6 sm:py-14 ${
+        slug === "pdf-editor" ? "max-w-5xl" : "max-w-3xl"
+      }`}
+    >
       <Link
         href={`/#${category.anchor}`}
         className="text-sm font-semibold text-[#2563eb] transition hover:underline"
@@ -44,12 +49,19 @@ export default async function ToolPage({ params }: Props) {
       </div>
       <p className="mt-3 text-base leading-8 text-[#555]">{tool.description}</p>
       <div className="mt-8">
-        <ToolWorkspace
-          slug={tool.slug}
-          title={tool.title}
-          description={tool.description}
-          accept={tool.accept}
-        />
+        {slug === "pdf-editor" ? (
+          <PdfEditorWorkspace
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : (
+          <ToolWorkspace
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+            accept={tool.accept}
+          />
+        )}
       </div>
     </div>
   );
