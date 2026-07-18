@@ -34,6 +34,12 @@ export type VideoAudioTrack = {
   /** Start time within exported timeline (seconds) */
   start: number;
   volume: number;
+  /** Skip into source (seconds) */
+  offset?: number;
+  /** Play length (seconds) */
+  duration?: number;
+  /** True when this is the original video audio lane */
+  linked?: boolean;
 };
 
 export type VideoProjectExport = {
@@ -217,8 +223,10 @@ export async function exportVideoProject(
   }
 
   const audioStartIndex = 1 + overlays.length;
-  for (let i = 0; i < audioTracks.length; i++) {
-    const track = audioTracks[i]!;
+  const linkedTrack = audioTracks.find((t) => t.linked);
+  const extraTracks = audioTracks.filter((t) => !t.linked);
+  for (let i = 0; i < extraTracks.length; i++) {
+    const track = extraTracks[i]!;
     const ext = extensionForMime(track.file.type, "mp3");
     const name = `aud${i}.${ext}`;
     await ffmpeg.writeFile(name, await fetchFile(track.file));
@@ -320,7 +328,28 @@ export async function exportVideoProject(
       `asetrate=44100*${pitch.toFixed(3)},aresample=44100,atempo=${(1 / pitch).toFixed(3)}`,
     );
   }
-  afades.push(`atempo=${speed}`, `volume=${vol}`);
+  afades.push(`atempo=${speed}`);
+
+  if (linkedTrack) {
+    const off = Math.max(0, linkedTrack.offset || 0);
+    const clipDur = Math.max(0.1, linkedTrack.duration || duration);
+    if (off > 0.001) {
+      afades.push(`atrim=start=${off.toFixed(3)}:duration=${clipDur.toFixed(3)}`);
+      afades.push("asetpts=PTS-STARTPTS");
+    } else if (linkedTrack.duration && linkedTrack.duration + 0.05 < duration) {
+      afades.push(`atrim=start=0:duration=${clipDur.toFixed(3)}`);
+      afades.push("asetpts=PTS-STARTPTS");
+    }
+    const delayMs = Math.max(0, Math.round((linkedTrack.start || 0) * 1000));
+    if (delayMs > 0) afades.push(`adelay=${delayMs}|${delayMs}`);
+    afades.push(`volume=${Math.max(0, Math.min(2, linkedTrack.volume))}`);
+  } else if (extraTracks.some((t) => t.file)) {
+    // Detached/music-only: silence original video audio
+    afades.push("volume=0");
+  } else {
+    afades.push(`volume=${vol}`);
+  }
+
   if (fadeIn > 0) {
     afades.push(
       `afade=t=in:st=0:d=${Math.min(fadeIn, duration / 2).toFixed(3)}`,
@@ -333,19 +362,26 @@ export async function exportVideoProject(
     );
   }
 
-  // Mix original audio + TTS/music tracks
+  // Mix original audio + extra tracks (music / TTS / detached)
   fc.push(`[0:a]${afades.join(",")}[abase]`);
   let aOutLabel = "abase";
-  if (audioTracks.length > 0) {
+  if (extraTracks.length > 0) {
     const mixInputs = ["[abase]"];
-    audioTracks.forEach((track, i) => {
+    extraTracks.forEach((track, i) => {
       const idx = audioStartIndex + i;
       const label = `ax${i}`;
       const delayMs = Math.max(0, Math.round(track.start * 1000));
       const tvol = Math.max(0, Math.min(2, track.volume));
-      fc.push(
-        `[${idx}:a]volume=${tvol},adelay=${delayMs}|${delayMs}[${label}]`,
-      );
+      const off = Math.max(0, track.offset || 0);
+      const parts: string[] = [];
+      if (off > 0.001 || track.duration) {
+        const d = Math.max(0.1, track.duration || 999);
+        parts.push(`atrim=start=${off.toFixed(3)}:duration=${d.toFixed(3)}`);
+        parts.push("asetpts=PTS-STARTPTS");
+      }
+      parts.push(`volume=${tvol}`);
+      if (delayMs > 0) parts.push(`adelay=${delayMs}|${delayMs}`);
+      fc.push(`[${idx}:a]${parts.join(",")}[${label}]`);
       mixInputs.push(`[${label}]`);
     });
     fc.push(

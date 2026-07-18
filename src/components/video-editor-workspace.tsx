@@ -98,9 +98,15 @@ type AudioTrack = {
   name: string;
   file: File;
   url: string;
+  /** Position on timeline relative to video trimIn (seconds) */
   start: number;
   volume: number;
+  /** Visible/play length on timeline */
   duration: number;
+  /** Skip into source file (seconds) */
+  offset: number;
+  /** Full source media duration */
+  sourceDuration: number;
   peaks?: number[];
 };
 
@@ -117,24 +123,24 @@ type AudioSection =
 
 function WaveformBars({
   peaks,
-  className = "bg-sky-300",
+  className = "bg-white/85",
   dimmed = false,
 }: {
   peaks: number[];
   className?: string;
   dimmed?: boolean;
 }) {
-  const bars = peaks.length > 0 ? peaks : Array.from({ length: 64 }, () => 0.35);
+  const bars = peaks.length > 0 ? peaks : Array.from({ length: 96 }, () => 0.35);
   return (
     <div
-      className={`flex h-full items-center gap-px px-0.5 ${dimmed ? "opacity-35" : "opacity-90"}`}
+      className={`flex h-full items-center gap-[1px] px-1 ${dimmed ? "opacity-30" : "opacity-95"}`}
       aria-hidden
     >
       {bars.map((p, i) => (
         <span
           key={i}
-          className={`min-w-[1px] flex-1 rounded-[1px] ${className}`}
-          style={{ height: `${Math.max(8, Math.round(p * 88))}%` }}
+          className={`min-w-[1px] flex-1 rounded-[0.5px] ${className}`}
+          style={{ height: `${Math.max(10, Math.round(p * 92))}%` }}
         />
       ))}
     </div>
@@ -151,6 +157,16 @@ function slicePeaks(
   const a = Math.floor((start / total) * peaks.length);
   const b = Math.ceil((end / total) * peaks.length);
   return peaks.slice(a, Math.max(a + 1, b));
+}
+
+function peaksForClip(
+  peaks: number[] | undefined,
+  offset: number,
+  clipDur: number,
+  sourceDur: number,
+): number[] {
+  if (!peaks?.length) return [];
+  return slicePeaks(peaks, offset, offset + clipDur, sourceDur || 1);
 }
 
 function formatTime(sec: number) {
@@ -225,7 +241,17 @@ export function VideoEditorWorkspace({
   const stageRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
-    kind: "move" | "resize" | "trim-in" | "trim-out" | "playhead" | "video-move" | "video-resize";
+    kind:
+      | "move"
+      | "resize"
+      | "trim-in"
+      | "trim-out"
+      | "playhead"
+      | "video-move"
+      | "video-resize"
+      | "audio-move"
+      | "audio-trim-in"
+      | "audio-trim-out";
     id?: string;
     corner?: "se";
     startX: number;
@@ -238,6 +264,8 @@ export function VideoEditorWorkspace({
 
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
+  const fileLiveRef = useRef<File | null>(null);
+  const urlLiveRef = useRef<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [videoNatural, setVideoNatural] = useState({ w: 1280, h: 720 });
   const [currentTime, setCurrentTime] = useState(0);
@@ -319,9 +347,18 @@ export function VideoEditorWorkspace({
     const v = videoRef.current;
     if (!v) return;
     v.playbackRate = speed;
-    v.volume = muted ? 0 : volume;
-    v.muted = muted;
-  }, [speed, volume, muted]);
+    // When an audio lane owns sound, keep the video element silent
+    const hasAudioLane = audioTracks.some(
+      (t) => t.id === "linked-audio" || t.id.startsWith("detached-"),
+    );
+    if (hasAudioLane) {
+      v.muted = true;
+      v.volume = 0;
+    } else {
+      v.volume = muted ? 0 : volume;
+      v.muted = muted;
+    }
+  }, [speed, volume, muted, audioTracks]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -338,7 +375,7 @@ export function VideoEditorWorkspace({
     return () => clearInterval(id);
   }, [playing, trimIn, trimOut]);
 
-  // Keep secondary audio tracks in sync with the playhead
+  // Keep audio-lane elements in sync with the playhead (supports left/right offset)
   useEffect(() => {
     const map = audioElsRef.current;
     const liveIds = new Set(audioTracks.map((t) => t.id));
@@ -357,10 +394,11 @@ export function VideoEditorWorkspace({
         map.set(t.id, el);
       }
       el.volume = Math.max(0, Math.min(1, t.volume));
-      const local = currentTime - trimIn - t.start;
-      if (local >= 0 && local < t.duration - 0.02) {
-        if (Math.abs(el.currentTime - local) > 0.3) {
-          el.currentTime = Math.max(0, local);
+      const timelineLocal = currentTime - trimIn - t.start;
+      if (timelineLocal >= 0 && timelineLocal < t.duration - 0.02) {
+        const mediaTime = (t.offset || 0) + timelineLocal;
+        if (Math.abs(el.currentTime - mediaTime) > 0.3) {
+          el.currentTime = Math.max(0, mediaTime);
         }
         if (playing && el.paused) void el.play().catch(() => undefined);
         if (!playing && !el.paused) el.pause();
@@ -407,6 +445,8 @@ export function VideoEditorWorkspace({
   async function loadVideoFile(f: File) {
     if (url) URL.revokeObjectURL(url);
     const next = URL.createObjectURL(f);
+    fileLiveRef.current = f;
+    urlLiveRef.current = next;
     setFile(f);
     setUrl(next);
     setOverlays((prev) => {
@@ -416,7 +456,9 @@ export function VideoEditorWorkspace({
       return [];
     });
     setAudioTracks((prev) => {
-      prev.forEach((t) => URL.revokeObjectURL(t.url));
+      prev.forEach((t) => {
+        if (t.id !== "linked-audio") URL.revokeObjectURL(t.url);
+      });
       return [];
     });
     setVideoPeaks([]);
@@ -437,6 +479,13 @@ export function VideoEditorWorkspace({
     setShowRecordStudio(false);
     void analyzeWaveform(f, 180).then((peaks) => {
       setVideoPeaks(peaks);
+      setAudioTracks((prev) =>
+        prev.map((t) =>
+          t.id === "linked-audio" || t.id.startsWith("detached-")
+            ? { ...t, peaks }
+            : t,
+        ),
+      );
       setStatus(`تم تحميل: ${f.name} · ذبذبات الصوت جاهزة`);
     });
   }
@@ -454,6 +503,28 @@ export function VideoEditorWorkspace({
       h: v.videoHeight || 720,
     });
     setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
+    // Always create a movable blue audio lane under the video
+    const liveFile = fileLiveRef.current;
+    const liveUrl = urlLiveRef.current;
+    if (liveFile && liveUrl && d > 0) {
+      setAudioTracks([
+        {
+          id: "linked-audio",
+          name: liveFile.name,
+          file: liveFile,
+          url: liveUrl,
+          start: 0,
+          volume: 1,
+          duration: d,
+          offset: 0,
+          sourceDuration: d,
+          peaks: videoPeaks,
+        },
+      ]);
+      setSelectedId("linked-audio");
+      setPanel("audio");
+      setPropTab("audio");
+    }
   }
 
   function togglePlay() {
@@ -478,6 +549,19 @@ export function VideoEditorWorkspace({
     setCurrentTime(clamped);
   }
 
+  function setPrimaryAudioVolume(next: number) {
+    const v = Math.max(0, Math.min(2, next));
+    setVolume(v);
+    setMuted(v <= 0);
+    setAudioTracks((prev) =>
+      prev.map((t) =>
+        t.id === "linked-audio" || t.id.startsWith("detached-")
+          ? { ...t, volume: v }
+          : t,
+      ),
+    );
+  }
+
   async function detachAudio() {
     if (!file) return;
     if (audioTracks.some((t) => t.id.startsWith("detached-"))) {
@@ -499,24 +583,29 @@ export function VideoEditorWorkspace({
         videoPeaks.length > 0
           ? videoPeaks
           : await analyzeWaveform(audioFile, 180);
+      const linked = audioTracks.find((t) => t.id === "linked-audio");
       const id = nextId(idCounterRef, "detached");
       setAudioTracks((prev) => [
-        ...prev.filter((t) => !t.id.startsWith("detached-")),
+        ...prev.filter(
+          (t) => t.id !== "linked-audio" && !t.id.startsWith("detached-"),
+        ),
         {
           id,
-          name: "صوت مفصول",
+          name: file.name,
           file: audioFile,
           url: audioUrl,
-          start: 0,
-          volume: volume > 0 ? volume : 1,
-          duration: dur,
+          start: linked?.start ?? 0,
+          volume: linked?.volume ?? (volume > 0 ? volume : 1),
+          duration: linked?.duration ?? dur,
+          offset: linked?.offset ?? 0,
+          sourceDuration: dur,
           peaks,
         },
       ]);
       setMuted(true);
       setVolume(0);
       setSelectedId(id);
-      setStatus("تم فصل الصوت — مسار أزرق مستقل تحت الفيديو");
+      setStatus("تم فصل الصوت — اسحب المسار الأزرق يمين/يسار");
       setPanel("audio");
       setPropTab("audio");
       setAudioSection("volume");
@@ -651,6 +740,8 @@ export function VideoEditorWorkspace({
         start: Math.max(0, currentTime - trimIn),
         volume: 1,
         duration: dur,
+        offset: 0,
+        sourceDuration: dur,
         peaks,
       },
     ]);
@@ -662,7 +753,9 @@ export function VideoEditorWorkspace({
   function removeAudioTrack(id: string) {
     setAudioTracks((prev) => {
       const victim = prev.find((t) => t.id === id);
-      if (victim) URL.revokeObjectURL(victim.url);
+      if (victim && victim.id !== "linked-audio" && victim.url !== url) {
+        URL.revokeObjectURL(victim.url);
+      }
       return prev.filter((t) => t.id !== id);
     });
   }
@@ -711,6 +804,8 @@ export function VideoEditorWorkspace({
           start: Math.max(0, currentTime - trimIn),
           volume: 1,
           duration: dur,
+          offset: 0,
+          sourceDuration: dur,
           peaks,
         },
       ]);
@@ -875,6 +970,31 @@ export function VideoEditorWorkspace({
     if (kind === "playhead") seekTo(timeFromClientX(e.clientX));
   }
 
+  function onAudioClipPointerDown(
+    e: ReactPointerEvent,
+    id: string,
+    kind: "audio-move" | "audio-trim-in" | "audio-trim-out",
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const track = audioTracks.find((t) => t.id === id);
+    if (!track) return;
+    setSelectedId(id);
+    setPanel("audio");
+    setPropTab("audio");
+    dragRef.current = {
+      kind,
+      id,
+      startX: e.clientX,
+      startY: e.clientY,
+      ox: track.start,
+      oy: track.offset || 0,
+      ow: track.duration,
+      oh: track.sourceDuration || track.duration,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
   function onTimelineMove(e: ReactPointerEvent) {
     const drag = dragRef.current;
     if (!drag) return;
@@ -885,6 +1005,50 @@ export function VideoEditorWorkspace({
     }
     if (drag.kind === "trim-out") {
       setTrimOut(Math.max(trimIn + 0.2, Math.min(duration, t)));
+    }
+    if (
+      (drag.kind === "audio-move" ||
+        drag.kind === "audio-trim-in" ||
+        drag.kind === "audio-trim-out") &&
+      drag.id
+    ) {
+      const el = timelineRef.current;
+      if (!el || !duration) return;
+      const rect = el.getBoundingClientRect();
+      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * duration;
+      if (drag.kind === "audio-move") {
+        const maxStart = Math.max(0, duration - drag.ow);
+        const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
+        setAudioTracks((prev) =>
+          prev.map((tr) =>
+            tr.id === drag.id ? { ...tr, start: nextStart } : tr,
+          ),
+        );
+      } else if (drag.kind === "audio-trim-in") {
+        // Drag right edge of left handle: crop start of audio, shift clip right
+        const maxIn = Math.min(drag.ow - 0.15, drag.oh - drag.oy - 0.15);
+        const delta = Math.max(-drag.oy, Math.min(maxIn, dt));
+        setAudioTracks((prev) =>
+          prev.map((tr) =>
+            tr.id === drag.id
+              ? {
+                  ...tr,
+                  start: Math.max(0, drag.ox + delta),
+                  offset: drag.oy + delta,
+                  duration: Math.max(0.15, drag.ow - delta),
+                }
+              : tr,
+          ),
+        );
+      } else if (drag.kind === "audio-trim-out") {
+        const maxDur = drag.oh - drag.oy;
+        const nextDur = Math.max(0.15, Math.min(maxDur, drag.ow + dt));
+        setAudioTracks((prev) =>
+          prev.map((tr) =>
+            tr.id === drag.id ? { ...tr, duration: nextDur } : tr,
+          ),
+        );
+      }
     }
   }
 
@@ -955,6 +1119,9 @@ export function VideoEditorWorkspace({
             file: t.file,
             start: t.start,
             volume: t.volume,
+            offset: t.offset || 0,
+            duration: t.duration,
+            linked: t.id === "linked-audio",
           })),
           crop: cropEnabled ? crop : null,
           chromaKey: chromaEnabled
@@ -1637,11 +1804,12 @@ export function VideoEditorWorkspace({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setMuted((m) => !m);
+                                  const nextMuted = !muted;
+                                  setPrimaryAudioVolume(nextMuted ? 0 : 1);
                                   setStatus(
-                                    muted
-                                      ? "تم إلغاء كتم الصوت"
-                                      : "تم كتم صوت المقطع",
+                                    nextMuted
+                                      ? "تم كتم صوت المقطع"
+                                      : "تم إلغاء كتم الصوت",
                                   );
                                 }}
                                 className="rounded border border-[#333] p-1"
@@ -1659,21 +1827,9 @@ export function VideoEditorWorkspace({
                               max={200}
                               value={Math.round(volume * 100)}
                               onChange={(e) => {
-                                const v = Number(e.target.value) / 100;
-                                setVolume(v);
-                                setMuted(v <= 0);
-                                const det = audioTracks.find((t) =>
-                                  t.id.startsWith("detached-"),
+                                setPrimaryAudioVolume(
+                                  Number(e.target.value) / 100,
                                 );
-                                if (det) {
-                                  setAudioTracks((prev) =>
-                                    prev.map((t) =>
-                                      t.id === det.id
-                                        ? { ...t, volume: Math.max(0.01, v) }
-                                        : t,
-                                    ),
-                                  );
-                                }
                               }}
                               className="w-full accent-sky-400"
                             />
@@ -2281,7 +2437,7 @@ export function VideoEditorWorkspace({
           <div className="shrink-0 border-t border-[#2a2a2e] bg-[#121214] p-3">
             <div
               ref={timelineRef}
-              className="relative h-32 overflow-hidden rounded-md bg-[#1a1a1d]"
+              className="relative h-36 overflow-hidden rounded-md bg-[#1a1a1d]"
               style={{
                 transform: `scaleX(${timelineZoom})`,
                 transformOrigin: "right center",
@@ -2305,7 +2461,7 @@ export function VideoEditorWorkspace({
 
               {/* Video clip */}
               <div
-                className="absolute top-5 h-9 overflow-hidden rounded border-2 border-amber-400"
+                className="absolute top-5 h-8 overflow-hidden rounded border-2 border-amber-400"
                 style={{
                   left: `${timelinePct(trimIn)}%`,
                   width: `${Math.max(1, timelinePct(trimOut) - timelinePct(trimIn))}%`,
@@ -2325,54 +2481,79 @@ export function VideoEditorWorkspace({
                 />
               </div>
 
-              {/* Primary blue audio waveform (linked or detached) */}
-              {(() => {
-                const detached = audioTracks.find((t) =>
-                  t.id.startsWith("detached-"),
-                );
-                const peaks = detached?.peaks?.length
-                  ? detached.peaks
-                  : slicePeaks(videoPeaks, trimIn, trimOut, duration);
-                const left = detached
-                  ? timelinePct(trimIn + detached.start)
-                  : timelinePct(trimIn);
-                const width = detached
-                  ? duration
-                    ? Math.max(1, (detached.duration / duration) * 100)
-                    : 1
-                  : Math.max(1, timelinePct(trimOut) - timelinePct(trimIn));
-                const dimmed = detached
-                  ? detached.volume <= 0
-                  : muted || volume <= 0;
-                return (
-                  <button
-                    type="button"
-                    className={`absolute top-[3.65rem] h-10 overflow-hidden rounded border-2 text-left ${
-                      selectedId === (detached?.id ?? "audio")
-                        ? "border-sky-300"
-                        : "border-sky-600"
-                    } bg-[#0b4f7a]`}
-                    style={{ left: `${left}%`, width: `${width}%` }}
-                    title={detached ? detached.name : "صوت الفيديو"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedId(detached?.id ?? "audio");
-                      setPanel("audio");
-                      setPropTab("audio");
-                      setAudioSection("volume");
-                    }}
-                  >
-                    <WaveformBars peaks={peaks} dimmed={dimmed} />
-                  </button>
-                );
-              })()}
+              {/* Blue audio lane — drag left/right + edge trim (like 123apps) */}
+              {audioTracks
+                .filter(
+                  (t) =>
+                    t.id === "linked-audio" || t.id.startsWith("detached-"),
+                )
+                .map((t) => {
+                  const left = timelinePct(trimIn + t.start);
+                  const width = duration
+                    ? Math.max(1.2, (t.duration / duration) * 100)
+                    : 1;
+                  const peaks = peaksForClip(
+                    t.peaks?.length ? t.peaks : videoPeaks,
+                    t.offset || 0,
+                    t.duration,
+                    t.sourceDuration || duration || 1,
+                  );
+                  const selected =
+                    selectedId === t.id || selectedId === "audio";
+                  return (
+                    <div
+                      key={t.id}
+                      role="button"
+                      tabIndex={0}
+                      className={`absolute top-[3.4rem] h-12 cursor-grab overflow-hidden rounded-sm border-2 active:cursor-grabbing ${
+                        selected
+                          ? "border-cyan-300 shadow-[0_0_0_1px_rgba(103,232,249,0.35)]"
+                          : "border-[#1d4f7a]"
+                      } bg-[#1283c9]`}
+                      style={{ left: `${left}%`, width: `${width}%` }}
+                      title="اسحب يمين/يسار · اسحب الحواف للقص"
+                      onPointerDown={(e) =>
+                        onAudioClipPointerDown(e, t.id, "audio-move")
+                      }
+                    >
+                      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 truncate px-2 pt-0.5 text-[9px] font-semibold text-white/90">
+                        {t.name}
+                      </div>
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 top-3">
+                        <WaveformBars
+                          peaks={peaks}
+                          dimmed={t.volume <= 0}
+                          className="bg-white/90"
+                        />
+                      </div>
+                      <div
+                        className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize bg-white/90"
+                        onPointerDown={(e) =>
+                          onAudioClipPointerDown(e, t.id, "audio-trim-in")
+                        }
+                      />
+                      <div
+                        className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize bg-white/90"
+                        onPointerDown={(e) =>
+                          onAudioClipPointerDown(e, t.id, "audio-trim-out")
+                        }
+                      />
+                    </div>
+                  );
+                })}
 
               {/* Extra audio tracks (music / TTS) */}
-              {audioTracks.filter((t) => !t.id.startsWith("detached-")).length >
-                0 && (
-                <div className="absolute inset-x-0 top-[6.9rem] h-5">
+              {audioTracks.filter(
+                (t) =>
+                  t.id !== "linked-audio" && !t.id.startsWith("detached-"),
+              ).length > 0 && (
+                <div className="absolute inset-x-0 top-[6.85rem] h-6">
                   {audioTracks
-                    .filter((t) => !t.id.startsWith("detached-"))
+                    .filter(
+                      (t) =>
+                        t.id !== "linked-audio" &&
+                        !t.id.startsWith("detached-"),
+                    )
                     .map((t) => {
                       const isTts = t.id.startsWith("tts-");
                       const left = timelinePct(trimIn + t.start);
@@ -2380,35 +2561,41 @@ export function VideoEditorWorkspace({
                         ? Math.max(1, (t.duration / duration) * 100)
                         : 1;
                       return (
-                        <button
+                        <div
                           key={t.id}
-                          type="button"
-                          className={`absolute h-5 overflow-hidden rounded border ${
+                          className={`absolute h-6 cursor-grab overflow-hidden rounded border active:cursor-grabbing ${
                             isTts
-                              ? "border-emerald-600 bg-emerald-500/90"
-                              : "border-amber-500 bg-yellow-400/90"
+                              ? "border-emerald-600 bg-emerald-600"
+                              : "border-amber-500 bg-amber-500"
                           }`}
                           style={{ left: `${left}%`, width: `${width}%` }}
                           title={t.name}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(t.id);
-                            setPanel("audio");
-                          }}
+                          onPointerDown={(e) =>
+                            onAudioClipPointerDown(e, t.id, "audio-move")
+                          }
                         >
-                          {t.peaks?.length ? (
-                            <WaveformBars
-                              peaks={t.peaks}
-                              className={
-                                isTts ? "bg-emerald-950" : "bg-amber-900"
-                              }
-                            />
-                          ) : (
-                            <span className="px-1 text-[9px] font-semibold text-black">
-                              {isTts ? "🎙" : "🎵"} {t.name}
-                            </span>
-                          )}
-                        </button>
+                          <WaveformBars
+                            peaks={peaksForClip(
+                              t.peaks,
+                              t.offset || 0,
+                              t.duration,
+                              t.sourceDuration || t.duration,
+                            )}
+                            className="bg-black/50"
+                          />
+                          <div
+                            className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-ew-resize bg-white/80"
+                            onPointerDown={(e) =>
+                              onAudioClipPointerDown(e, t.id, "audio-trim-in")
+                            }
+                          />
+                          <div
+                            className="absolute inset-y-0 right-0 z-20 w-1.5 cursor-ew-resize bg-white/80"
+                            onPointerDown={(e) =>
+                              onAudioClipPointerDown(e, t.id, "audio-trim-out")
+                            }
+                          />
+                        </div>
                       );
                     })}
                 </div>
@@ -2416,15 +2603,15 @@ export function VideoEditorWorkspace({
 
               {/* Playhead */}
               <div
-                className="absolute top-0 z-20 h-full w-0.5 bg-white"
+                className="absolute top-0 z-20 h-full w-0.5 bg-[#ff5a36]"
                 style={{ left: `${timelinePct(currentTime)}%` }}
               >
-                <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-white" />
+                <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff5a36]" />
               </div>
             </div>
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              المسار الأزرق = ذبذبات الصوت · اضغطه لفتح أدوات الصوت · كليك يمين
-              للفصل
+              المسار الأزرق = ذبذبات الصوت · اسحبه يمين/يسار · اسحب الحواف البيضاء
+              للقص
             </p>
           </div>
         </div>
