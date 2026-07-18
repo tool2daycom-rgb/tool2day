@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isToolLive } from "@/lib/processors/active-tools";
 import {
   categoryMeta,
   categoryOrder,
@@ -18,14 +19,34 @@ function CategorySection({ category }: { category: ToolCategory }) {
       <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {tools.map((tool) => {
           const Icon = tool.icon;
+          const live = isToolLive(tool.slug);
           return (
             <li key={tool.slug}>
               <Link
                 href={`/tools/${tool.slug}`}
-                className="group flex items-center gap-3 text-[#222] transition hover:text-[#2563eb]"
+                className={`group flex items-center gap-3 transition ${
+                  live
+                    ? "text-[#222] hover:text-[#2563eb]"
+                    : "text-[#888] hover:text-[#555]"
+                }`}
               >
-                <Icon className="h-5 w-5 shrink-0 stroke-[1.5] text-[#333] transition group-hover:text-[#2563eb]" />
+                <Icon
+                  className={`h-5 w-5 shrink-0 stroke-[1.5] transition ${
+                    live
+                      ? "text-[#333] group-hover:text-[#2563eb]"
+                      : "text-[#aaa]"
+                  }`}
+                />
                 <span className="text-[15px] leading-6">{tool.title}</span>
+                {live ? (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    شغّال
+                  </span>
+                ) : (
+                  <span className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] text-[#888]">
+                    قريباً
+                  </span>
+                )}
               </Link>
             </li>
           );
@@ -45,6 +66,10 @@ export function HomeDirectory() {
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
           الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
         </h1>
+        <p className="mt-3 text-sm text-[#666]">
+          اختر أداة معلّمة بـ <span className="font-semibold text-emerald-700">شغّال</span>{" "}
+          للبدء فوراً
+        </p>
       </div>
 
       <div className="rounded-2xl border border-[#e8e8e8] bg-white px-5 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:px-10">
