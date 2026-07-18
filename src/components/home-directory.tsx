@@ -42,11 +42,7 @@ function CategorySection({ category }: { category: ToolCategory }) {
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
                     شغّال
                   </span>
-                ) : (
-                  <span className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] text-[#888]">
-                    قريباً
-                  </span>
-                )}
+                ) : null}
               </Link>
             </li>
           );
@@ -67,8 +63,7 @@ export function HomeDirectory() {
           الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
         </h1>
         <p className="mt-3 text-sm text-[#666]">
-          اختر أداة معلّمة بـ <span className="font-semibold text-emerald-700">شغّال</span>{" "}
-          للبدء فوراً
+          كل الأدوات مفعّلة — ارفع ملفك وابدأ المعالجة مباشرة في المتصفح
         </p>
       </div>
 

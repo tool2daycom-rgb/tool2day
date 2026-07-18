@@ -497,3 +497,157 @@ export async function editVideoBasic(
 
   await runVideoOut(file, args, "edited", onProgress);
 }
+
+export async function cropVideo(
+  file: File,
+  crop: { x: number; y: number; w: number; h: number },
+  onProgress?: MediaProgress,
+) {
+  await runVideoOut(
+    file,
+    [
+      "-vf",
+      `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y}`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-c:a",
+      "copy",
+    ],
+    "cropped",
+    onProgress,
+  );
+}
+
+export async function addAudioToVideo(
+  video: File,
+  audio: File,
+  onProgress?: MediaProgress,
+) {
+  const ffmpeg = await getFFmpeg(onProgress);
+  const vExt = extensionForMime(video.type, "mp4");
+  const aExt = extensionForMime(audio.type, "mp3");
+  await ffmpeg.writeFile(`v.${vExt}`, await fetchFile(video));
+  await ffmpeg.writeFile(`a.${aExt}`, await fetchFile(audio));
+  await ffmpeg.exec([
+    "-i",
+    `v.${vExt}`,
+    "-i",
+    `a.${aExt}`,
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-shortest",
+    "output.mp4",
+  ]);
+  const data = await ffmpeg.readFile("output.mp4");
+  downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-audio.mp4`);
+}
+
+export async function addImageToVideo(
+  video: File,
+  image: File,
+  onProgress?: MediaProgress,
+) {
+  const ffmpeg = await getFFmpeg(onProgress);
+  const vExt = extensionForMime(video.type, "mp4");
+  const iExt = image.type.includes("png") ? "png" : "jpg";
+  await ffmpeg.writeFile(`v.${vExt}`, await fetchFile(video));
+  await ffmpeg.writeFile(`i.${iExt}`, await fetchFile(image));
+  await ffmpeg.exec([
+    "-i",
+    `v.${vExt}`,
+    "-i",
+    `i.${iExt}`,
+    "-filter_complex",
+    "[1:v]scale=200:-1[img];[0:v][img]overlay=20:20",
+    "-c:a",
+    "copy",
+    "output.mp4",
+  ]);
+  const data = await ffmpeg.readFile("output.mp4");
+  downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-image.mp4`);
+}
+
+export async function addTextToVideo(
+  video: File,
+  text: string,
+  onProgress?: MediaProgress,
+) {
+  // Render text to PNG then overlay (drawtext font often missing in wasm)
+  const canvas = document.createElement("canvas");
+  canvas.width = 1280;
+  canvas.height = 120;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("تعذر إنشاء طبقة النص");
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 48px Cairo, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(text.slice(0, 60) || "Tool2Day", canvas.width / 2, 75);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء النص"))),
+      "image/png",
+    );
+  });
+  const overlay = new File([blob], "text.png", { type: "image/png" });
+  await addImageToVideo(video, overlay, onProgress);
+}
+
+export async function removeLogo(
+  file: File,
+  box: { x: number; y: number; w: number; h: number },
+  onProgress?: MediaProgress,
+) {
+  await runVideoOut(
+    file,
+    [
+      "-vf",
+      `delogo=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-c:a",
+      "copy",
+    ],
+    "delogo",
+    onProgress,
+  );
+}
+
+export async function stabilizeVideo(file: File, onProgress?: MediaProgress) {
+  await runVideoOut(
+    file,
+    [
+      "-vf",
+      "deshake",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-c:a",
+      "copy",
+    ],
+    "stable",
+    onProgress,
+  );
+}
+
+export async function equalizeAudio(file: File, onProgress?: MediaProgress) {
+  await runAudioOut(
+    file,
+    [
+      "-af",
+      "equalizer=f=100:t=q:w=1:g=2,equalizer=f=1000:t=q:w=1:g=1,equalizer=f=4000:t=q:w=1:g=2",
+      "-acodec",
+      "libmp3lame",
+    ],
+    "eq",
+    onProgress,
+  );
+}
