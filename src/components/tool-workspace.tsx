@@ -312,7 +312,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       setStatus("تم! تم تنزيل/تشغيل النتيجة");
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "فشلت المعالجة");
+      const { formatProcessError } = await import("@/lib/processors/ffmpeg-client");
+      setError(formatProcessError(err));
       setStatus(null);
     } finally {
       setBusy(false);

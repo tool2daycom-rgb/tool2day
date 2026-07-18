@@ -34,8 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
-# vercel
-.vercel
+# ffmpeg core copied at install/build
+/public/ffmpeg/
+
 
 # typescript
 *.tsbuildinfo

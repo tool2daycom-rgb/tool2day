@@ -3,11 +3,16 @@ import { toBlobURL } from "@ffmpeg/util";
 
 let ffmpeg: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
+let lastLog = "";
+
+export function getLastFfmpegLog() {
+  return lastLog;
+}
 
 export async function getFFmpeg(onProgress?: (ratio: number) => void) {
   if (ffmpeg?.loaded) {
     if (onProgress) {
-      ffmpeg.on("progress", ({ progress }) => onProgress(progress));
+      ffmpeg.on("progress", ({ progress }) => onProgress(Math.min(1, Math.max(0, progress))));
     }
     return ffmpeg;
   }
@@ -15,32 +20,59 @@ export async function getFFmpeg(onProgress?: (ratio: number) => void) {
   if (!loading) {
     loading = (async () => {
       const instance = new FFmpeg();
-      const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
-
       instance.on("log", ({ message }) => {
-        if (process.env.NODE_ENV === "development") {
-          console.debug("[ffmpeg]", message);
-        }
+        lastLog = message;
       });
 
-      await instance.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(
-          `${baseURL}/ffmpeg-core.wasm`,
-          "application/wasm",
-        ),
-      });
+      // Prefer same-origin core (copied to /public/ffmpeg) — more reliable than CDN
+      const localBase = `${window.location.origin}/ffmpeg`;
+      const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+
+      const loadFrom = async (baseURL: string) => {
+        await instance.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(
+            `${baseURL}/ffmpeg-core.wasm`,
+            "application/wasm",
+          ),
+        });
+      };
+
+      try {
+        await loadFrom(localBase);
+      } catch (localErr) {
+        console.warn("Local ffmpeg core failed, trying CDN", localErr);
+        await loadFrom(cdnBase);
+      }
 
       ffmpeg = instance;
       return instance;
-    })();
+    })().catch((err) => {
+      loading = null;
+      ffmpeg = null;
+      throw err;
+    });
   }
 
   const instance = await loading;
   if (onProgress) {
-    instance.on("progress", ({ progress }) => onProgress(progress));
+    instance.on("progress", ({ progress }) =>
+      onProgress(Math.min(1, Math.max(0, progress))),
+    );
   }
   return instance;
+}
+
+/** Runs ffmpeg and throws if exit code is non-zero. */
+export async function runFFmpeg(args: string[]) {
+  const ff = await getFFmpeg();
+  const code = await ff.exec(args);
+  if (typeof code === "number" && code !== 0) {
+    throw new Error(
+      `فشل FFmpeg (رمز ${code})${lastLog ? `: ${lastLog}` : ""}`,
+    );
+  }
+  return ff;
 }
 
 export function extensionForMime(mime: string, fallback: string) {
@@ -54,12 +86,22 @@ export function extensionForMime(mime: string, fallback: string) {
   return fallback;
 }
 
+export function inputFileName(file: File, fallbackExt: string) {
+  const fromName = file.name.split(".").pop()?.toLowerCase();
+  if (fromName && /^[a-z0-9]{2,5}$/i.test(fromName)) {
+    return `input.${fromName}`;
+  }
+  return `input.${extensionForMime(file.type, fallbackExt)}`;
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   URL.revokeObjectURL(url);
 }
 
@@ -74,4 +116,18 @@ export function toBlob(data: Uint8Array | string, type: string) {
 
 export function basename(name: string) {
   return name.replace(/\.[^/.]+$/, "");
+}
+
+export function formatProcessError(err: unknown) {
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : "فشلت المعالجة";
+  const log = getLastFfmpegLog();
+  if (log && !msg.includes(log)) {
+    return `${msg}${log ? ` — ${log}` : ""}`;
+  }
+  return msg || "فشلت المعالجة";
 }

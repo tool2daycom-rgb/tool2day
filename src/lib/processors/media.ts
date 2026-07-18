@@ -4,10 +4,24 @@ import {
   downloadBlob,
   extensionForMime,
   getFFmpeg,
+  getLastFfmpegLog,
+  inputFileName,
   toBlob,
 } from "./ffmpeg-client";
 
 export type MediaProgress = (ratio: number) => void;
+
+async function execOrThrow(
+  ffmpeg: Awaited<ReturnType<typeof getFFmpeg>>,
+  args: string[],
+) {
+  const code = await ffmpeg.exec(args);
+  if (typeof code === "number" && code !== 0) {
+    throw new Error(
+      `فشل FFmpeg (رمز ${code})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
+    );
+  }
+}
 
 async function runVideoOut(
   file: File,
@@ -16,11 +30,10 @@ async function runVideoOut(
   onProgress?: MediaProgress,
 ) {
   const ffmpeg = await getFFmpeg(onProgress);
-  const inputExt = extensionForMime(file.type, "mp4");
-  const input = `input.${inputExt}`;
+  const input = inputFileName(file, "mp4");
   const output = `output.mp4`;
   await ffmpeg.writeFile(input, await fetchFile(file));
-  await ffmpeg.exec(["-i", input, ...argsAfterInput, output]);
+  await execOrThrow(ffmpeg, ["-i", input, ...argsAfterInput, output]);
   const data = await ffmpeg.readFile(output);
   downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-${suffix}.mp4`);
   await ffmpeg.deleteFile(input);
@@ -34,11 +47,10 @@ async function runAudioOut(
   onProgress?: MediaProgress,
 ) {
   const ffmpeg = await getFFmpeg(onProgress);
-  const inputExt = extensionForMime(file.type, "mp3");
-  const input = `input.${inputExt}`;
+  const input = inputFileName(file, "mp3");
   const output = `output.mp3`;
   await ffmpeg.writeFile(input, await fetchFile(file));
-  await ffmpeg.exec(["-i", input, ...argsAfterInput, output]);
+  await execOrThrow(ffmpeg, ["-i", input, ...argsAfterInput, output]);
   const data = await ffmpeg.readFile(output);
   downloadBlob(toBlob(data, "audio/mpeg"), `${basename(file.name)}-${suffix}.mp3`);
   await ffmpeg.deleteFile(input);
@@ -51,35 +63,72 @@ export async function convertVideo(
   onProgress?: MediaProgress,
 ) {
   const ffmpeg = await getFFmpeg(onProgress);
-  const inputExt = extensionForMime(file.type, "mp4");
-  const input = `input.${inputExt}`;
+  const input = inputFileName(file, "mp4");
   const output = `output.${format}`;
   await ffmpeg.writeFile(input, await fetchFile(file));
 
-  if (format === "webm") {
-    await ffmpeg.exec([
-      "-i",
-      input,
-      "-c:v",
-      "libvpx",
-      "-b:v",
-      "1M",
-      "-c:a",
-      "libvorbis",
-      output,
-    ]);
-  } else {
-    await ffmpeg.exec([
-      "-i",
-      input,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-c:a",
-      "aac",
-      output,
-    ]);
+  const run = (args: string[]) => execOrThrow(ffmpeg, args);
+
+  try {
+    if (format === "webm") {
+      await run([
+        "-i",
+        input,
+        "-c:v",
+        "libvpx",
+        "-b:v",
+        "1M",
+        "-c:a",
+        "libvorbis",
+        output,
+      ]);
+    } else {
+      try {
+        await run(["-i", input, "-c", "copy", output]);
+      } catch {
+        try {
+          await run([
+            "-i",
+            input,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-movflags",
+            "+faststart",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            output,
+          ]);
+        } catch {
+          await run([
+            "-i",
+            input,
+            "-c:v",
+            "mpeg4",
+            "-q:v",
+            "5",
+            "-c:a",
+            "aac",
+            output,
+          ]);
+        }
+      }
+    }
+  } catch (err) {
+    try {
+      await ffmpeg.deleteFile(input);
+    } catch {
+      /* ignore */
+    }
+    const detail = getLastFfmpegLog();
+    throw new Error(
+      err instanceof Error
+        ? `${err.message}${detail ? ` (${detail})` : ""}`
+        : `فشل تحويل الفيديو${detail ? `: ${detail}` : ""}`,
+    );
   }
 
   const data = await ffmpeg.readFile(output);
@@ -90,8 +139,12 @@ export async function convertVideo(
         ? "video/quicktime"
         : "video/mp4";
   downloadBlob(toBlob(data, mime), `${basename(file.name)}.${format}`);
-  await ffmpeg.deleteFile(input);
-  await ffmpeg.deleteFile(output);
+  try {
+    await ffmpeg.deleteFile(input);
+    await ffmpeg.deleteFile(output);
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function trimMedia(
@@ -162,7 +215,7 @@ export async function convertAudio(
           ? ["-vn", "-c:a", "aac"]
           : ["-vn", "-c:a", "libvorbis"];
 
-  await ffmpeg.exec(["-i", input, ...codecArgs, output]);
+  await execOrThrow(ffmpeg, ["-i", input, ...codecArgs, output]);
   const data = await ffmpeg.readFile(output);
   const mimeMap = {
     mp3: "audio/mpeg",
@@ -290,7 +343,7 @@ export async function loopVideo(
   const input = `input.${inputExt}`;
   const output = `output.mp4`;
   await ffmpeg.writeFile(input, await fetchFile(file));
-  await ffmpeg.exec([
+  await execOrThrow(ffmpeg, [
     "-stream_loop",
     String(Math.max(1, times) - 1),
     "-i",
@@ -320,7 +373,7 @@ export async function mergeVideos(files: File[], onProgress?: MediaProgress) {
     await ffmpeg.writeFile(name, await fetchFile(files[i]));
     // re-encode each to mp4 for concat safety
     const norm = `norm${i}.mp4`;
-    await ffmpeg.exec([
+    await execOrThrow(ffmpeg, [
       "-i",
       name,
       "-c:v",
@@ -336,7 +389,7 @@ export async function mergeVideos(files: File[], onProgress?: MediaProgress) {
   }
 
   await ffmpeg.writeFile("list.txt", listLines.join("\n"));
-  await ffmpeg.exec([
+  await execOrThrow(ffmpeg, [
     "-f",
     "concat",
     "-safe",
@@ -436,13 +489,13 @@ export async function joinAudio(files: File[], onProgress?: MediaProgress) {
     const name = `a${i}.${ext}`;
     const norm = `an${i}.mp3`;
     await ffmpeg.writeFile(name, await fetchFile(files[i]));
-    await ffmpeg.exec(["-i", name, "-acodec", "libmp3lame", norm]);
+    await execOrThrow(ffmpeg, ["-i", name, "-acodec", "libmp3lame", norm]);
     listLines.push(`file '${norm}'`);
     await ffmpeg.deleteFile(name);
   }
 
   await ffmpeg.writeFile("alist.txt", listLines.join("\n"));
-  await ffmpeg.exec([
+  await execOrThrow(ffmpeg, [
     "-f",
     "concat",
     "-safe",
@@ -530,7 +583,7 @@ export async function addAudioToVideo(
   const aExt = extensionForMime(audio.type, "mp3");
   await ffmpeg.writeFile(`v.${vExt}`, await fetchFile(video));
   await ffmpeg.writeFile(`a.${aExt}`, await fetchFile(audio));
-  await ffmpeg.exec([
+  await execOrThrow(ffmpeg, [
     "-i",
     `v.${vExt}`,
     "-i",
@@ -556,7 +609,7 @@ export async function addImageToVideo(
   const iExt = image.type.includes("png") ? "png" : "jpg";
   await ffmpeg.writeFile(`v.${vExt}`, await fetchFile(video));
   await ffmpeg.writeFile(`i.${iExt}`, await fetchFile(image));
-  await ffmpeg.exec([
+  await execOrThrow(ffmpeg, [
     "-i",
     `v.${vExt}`,
     "-i",
