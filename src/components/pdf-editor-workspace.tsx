@@ -35,6 +35,8 @@ type Overlay =
       y: number;
       width: number;
       height: number;
+      naturalW: number;
+      naturalH: number;
     };
 
 type SelectedWord = {
@@ -218,9 +220,27 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   const displaySizeRef = useRef({ w: 1, h: 1 });
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const loadIdRef = useRef(0);
-  const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(
-    null,
-  );
+  const dragRef = useRef<
+    | {
+        mode: "move";
+        id: string;
+        offsetX: number;
+        offsetY: number;
+      }
+    | {
+        mode: "resize";
+        id: string;
+        corner: "nw" | "ne" | "sw" | "se";
+        startX: number;
+        startY: number;
+        originX: number;
+        originY: number;
+        originW: number;
+        originH: number;
+        aspect: number;
+      }
+    | null
+  >(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
@@ -532,10 +552,13 @@ export function PdfEditorWorkspace({ title, description }: Props) {
         y: displaySize.h * 0.15,
         width: dims.w * scale,
         height: dims.h * scale,
+        naturalW: dims.w,
+        naturalH: dims.h,
       },
     ]);
     setSelectedId(id);
     setSelectMode(false);
+    setStatus("اسحب الصورة لتغيير مكانها، ومن الزوايا لتغيير الحجم");
   }
 
   function onPointerDown(e: ReactPointerEvent<HTMLDivElement>, id: string) {
@@ -544,6 +567,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     const el = e.currentTarget;
     const rect = el.getBoundingClientRect();
     dragRef.current = {
+      mode: "move",
       id,
       offsetX: e.clientX - rect.left,
       offsetY: e.clientY - rect.top,
@@ -552,22 +576,126 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     el.setPointerCapture(e.pointerId);
   }
 
+  function onResizePointerDown(
+    e: ReactPointerEvent<HTMLDivElement>,
+    id: string,
+    corner: "nw" | "ne" | "sw" | "se",
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const item = overlays.find((o) => o.id === id);
+    if (!item || item.type !== "image") return;
+    dragRef.current = {
+      mode: "resize",
+      id,
+      corner,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: item.x,
+      originY: item.y,
+      originW: item.width,
+      originH: item.height,
+      aspect: item.width / Math.max(1, item.height),
+    };
+    setSelectedId(id);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     const stage = stageRef.current;
     if (!drag || !stage) return;
     const stageRect = stage.getBoundingClientRect();
-    const x = e.clientX - stageRect.left - drag.offsetX;
-    const y = e.clientY - stageRect.top - drag.offsetY;
+
+    if (drag.mode === "move") {
+      const x = e.clientX - stageRect.left - drag.offsetX;
+      const y = e.clientY - stageRect.top - drag.offsetY;
+      setOverlays((prev) =>
+        prev.map((item) => {
+          if (item.id !== drag.id) return item;
+          const maxX = displaySize.w - (item.type === "image" ? item.width : 40);
+          const maxY = displaySize.h - (item.type === "image" ? item.height : 24);
+          return {
+            ...item,
+            x: Math.max(0, Math.min(maxX, x)),
+            y: Math.max(0, Math.min(maxY, y)),
+          };
+        }),
+      );
+      return;
+    }
+
+    // resize
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    const minSize = 32;
+    const maxW = displaySize.w;
+    const maxH = displaySize.h;
+
     setOverlays((prev) =>
       prev.map((item) => {
-        if (item.id !== drag.id) return item;
-        const maxX = displaySize.w - (item.type === "image" ? item.width : 40);
-        const maxY = displaySize.h - (item.type === "image" ? item.height : 24);
+        if (item.id !== drag.id || item.type !== "image") return item;
+
+        let { originX: x, originY: y, originW: w, originH: h } = drag;
+        const aspect = drag.aspect;
+
+        if (drag.corner === "se") {
+          w = Math.max(minSize, drag.originW + dx);
+          h = w / aspect;
+        } else if (drag.corner === "sw") {
+          w = Math.max(minSize, drag.originW - dx);
+          h = w / aspect;
+          x = drag.originX + drag.originW - w;
+        } else if (drag.corner === "ne") {
+          w = Math.max(minSize, drag.originW + dx);
+          h = w / aspect;
+          y = drag.originY + drag.originH - h;
+        } else {
+          // nw
+          w = Math.max(minSize, drag.originW - dx);
+          h = w / aspect;
+          x = drag.originX + drag.originW - w;
+          y = drag.originY + drag.originH - h;
+        }
+
+        // Clamp inside page
+        if (x < 0) {
+          w += x;
+          h = w / aspect;
+          x = 0;
+          if (drag.corner === "ne" || drag.corner === "nw") {
+            y = drag.originY + drag.originH - h;
+          }
+        }
+        if (y < 0) {
+          h = Math.max(minSize, h + y);
+          w = h * aspect;
+          y = 0;
+          if (drag.corner === "nw" || drag.corner === "sw") {
+            x = drag.originX + drag.originW - w;
+          }
+        }
+        if (x + w > maxW) {
+          w = maxW - x;
+          h = w / aspect;
+          if (drag.corner === "ne" || drag.corner === "nw") {
+            y = drag.originY + drag.originH - h;
+          }
+        }
+        if (y + h > maxH) {
+          h = maxH - y;
+          w = h * aspect;
+          if (drag.corner === "nw" || drag.corner === "sw") {
+            x = drag.originX + drag.originW - w;
+          }
+        }
+
         return {
           ...item,
-          x: Math.max(0, Math.min(maxX, x)),
-          y: Math.max(0, Math.min(maxY, y)),
+          x: Math.max(0, x),
+          y: Math.max(0, y),
+          width: Math.max(minSize, Math.min(maxW, w)),
+          height: Math.max(minSize, Math.min(maxH, h)),
         };
       }),
     );
@@ -583,6 +711,24 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     }
     dragRef.current = null;
   }
+
+  function resizeSelectedImage(nextWidth: number) {
+    setOverlays((prev) =>
+      prev.map((item) => {
+        if (item.id !== selectedId || item.type !== "image") return item;
+        const aspect = item.naturalW / Math.max(1, item.naturalH);
+        const width = Math.max(32, Math.min(displaySize.w - item.x, nextWidth));
+        const height = Math.max(32, Math.min(displaySize.h - item.y, width / aspect));
+        return { ...item, width, height };
+      }),
+    );
+  }
+
+  const selectedImage =
+    overlays.find(
+      (o): o is Extract<Overlay, { type: "image" }> =>
+        o.id === selectedId && o.type === "image",
+    ) ?? null;
 
   async function embedFontFor(
     doc: PDFDocument,
@@ -895,6 +1041,8 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                   className="relative mx-auto bg-white shadow-xl"
                   style={{ width: displaySize.w, height: displaySize.h }}
                   onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  onPointerCancel={onPointerUp}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -909,6 +1057,7 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                     <div
                       key={item.id}
                       onPointerDown={(e) => onPointerDown(e, item.id)}
+                      onPointerMove={onPointerMove}
                       onPointerUp={onPointerUp}
                       onPointerCancel={onPointerUp}
                       className={`absolute z-10 cursor-move ${
@@ -931,13 +1080,70 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                           {item.text}
                         </div>
                       ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.src}
-                          alt=""
-                          className="h-full w-full object-contain"
-                          draggable={false}
-                        />
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={item.src}
+                            alt=""
+                            className="h-full w-full object-contain"
+                            draggable={false}
+                          />
+                          {selectedId === item.id &&
+                            (
+                              [
+                                {
+                                  corner: "nw" as const,
+                                  style: {
+                                    left: 0,
+                                    top: 0,
+                                    cursor: "nwse-resize",
+                                    transform: "translate(-50%, -50%)",
+                                  },
+                                },
+                                {
+                                  corner: "ne" as const,
+                                  style: {
+                                    right: 0,
+                                    top: 0,
+                                    cursor: "nesw-resize",
+                                    transform: "translate(50%, -50%)",
+                                  },
+                                },
+                                {
+                                  corner: "sw" as const,
+                                  style: {
+                                    left: 0,
+                                    bottom: 0,
+                                    cursor: "nesw-resize",
+                                    transform: "translate(-50%, 50%)",
+                                  },
+                                },
+                                {
+                                  corner: "se" as const,
+                                  style: {
+                                    right: 0,
+                                    bottom: 0,
+                                    cursor: "nwse-resize",
+                                    transform: "translate(50%, 50%)",
+                                  },
+                                },
+                              ] as const
+                            ).map(({ corner, style }) => (
+                              <div
+                                key={corner}
+                                role="slider"
+                                aria-label={`تغيير الحجم ${corner}`}
+                                onPointerDown={(e) =>
+                                  onResizePointerDown(e, item.id, corner)
+                                }
+                                onPointerMove={onPointerMove}
+                                onPointerUp={onPointerUp}
+                                onPointerCancel={onPointerUp}
+                                className="absolute z-20 h-3.5 w-3.5 rounded-sm border-2 border-white bg-[#2563eb] shadow"
+                                style={style}
+                              />
+                            ))}
+                        </>
                       )}
                     </div>
                   ))}
@@ -1055,6 +1261,70 @@ export function PdfEditorWorkspace({ title, description }: Props) {
                 className="hidden"
                 onChange={(e) => void addImageOverlay(e.target.files)}
               />
+              {selectedImage ? (
+                <div className="mt-3 space-y-2 rounded-md bg-[#f8fafc] p-3">
+                  <p className="text-xs font-semibold text-[#334155]">
+                    حجم الصورة المحددة
+                  </p>
+                  <input
+                    type="range"
+                    min={40}
+                    max={Math.max(40, Math.floor(displaySize.w * 0.95))}
+                    value={Math.round(selectedImage.width)}
+                    onChange={(e) => resizeSelectedImage(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="flex items-center gap-2 text-sm">
+                    <label className="text-xs text-[#666]">العرض</label>
+                    <input
+                      type="number"
+                      min={32}
+                      className="w-20 rounded border border-[#ddd] px-2 py-1"
+                      value={Math.round(selectedImage.width)}
+                      onChange={(e) =>
+                        resizeSelectedImage(Number(e.target.value) || 32)
+                      }
+                    />
+                    <span className="text-xs text-[#888]">
+                      × {Math.round(selectedImage.height)} بكسل
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="flex-1 rounded border border-[#ddd] px-2 py-1 text-xs"
+                      onClick={() =>
+                        resizeSelectedImage(selectedImage.width * 0.8)
+                      }
+                    >
+                      أصغر
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 rounded border border-[#ddd] px-2 py-1 text-xs"
+                      onClick={() =>
+                        resizeSelectedImage(selectedImage.width * 1.25)
+                      }
+                    >
+                      أكبر
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 rounded border border-[#ddd] px-2 py-1 text-xs"
+                      onClick={() =>
+                        resizeSelectedImage(
+                          Math.min(displaySize.w * 0.5, selectedImage.naturalW),
+                        )
+                      }
+                    >
+                      وسط
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-5 text-[#64748b]">
+                    أو اسحب المربعات الزرقاء على زوايا الصورة
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
