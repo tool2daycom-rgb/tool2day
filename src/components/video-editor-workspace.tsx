@@ -123,24 +123,29 @@ type AudioSection =
 
 function WaveformBars({
   peaks,
-  className = "bg-white/85",
   dimmed = false,
 }: {
   peaks: number[];
-  className?: string;
   dimmed?: boolean;
 }) {
-  const bars = peaks.length > 0 ? peaks : Array.from({ length: 96 }, () => 0.35);
+  const bars =
+    peaks.length > 0 ? peaks : Array.from({ length: 120 }, (_, i) => {
+      const a = 0.22 + 0.55 * Math.abs(Math.sin(i * 0.41));
+      const b = 0.18 * Math.abs(Math.sin(i * 1.3));
+      return Math.min(1, a + b);
+    });
   return (
     <div
-      className={`flex h-full items-center gap-[1px] px-1 ${dimmed ? "opacity-30" : "opacity-95"}`}
+      className={`flex h-full w-full items-center justify-between gap-[1px] px-[2px] ${
+        dimmed ? "opacity-25" : "opacity-100"
+      }`}
       aria-hidden
     >
       {bars.map((p, i) => (
         <span
           key={i}
-          className={`min-w-[1px] flex-1 rounded-[0.5px] ${className}`}
-          style={{ height: `${Math.max(10, Math.round(p * 92))}%` }}
+          className="min-w-[2px] flex-1 rounded-[1px] bg-[#8fd4ff]"
+          style={{ height: `${Math.max(12, Math.round(p * 90))}%` }}
         />
       ))}
     </div>
@@ -285,6 +290,7 @@ export function VideoEditorWorkspace({
   const [audioSection, setAudioSection] = useState<AudioSection>("volume");
   const [videoPeaks, setVideoPeaks] = useState<number[]>([]);
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const audioClipboardRef = useRef<Omit<AudioTrack, "id"> | null>(null);
   const [rotate, setRotate] = useState<0 | 90 | 180 | 270>(0);
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
@@ -436,6 +442,36 @@ export function VideoEditorWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [ctxMenu]);
 
+  useEffect(() => {
+    if (!file) return;
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteSelected();
+      } else if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        splitAtPlayhead();
+      } else if (e.key === "c" || e.key === "C") {
+        e.preventDefault();
+        copySelected();
+      } else if (e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        duplicateSelected();
+      } else if (e.key === "v" || e.key === "V") {
+        e.preventDefault();
+        pasteAudioFromClipboard();
+      } else if (e.key === "m" || e.key === "M") {
+        e.preventDefault();
+        setPrimaryAudioVolume(muted || volume <= 0 ? 1 : 0);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file, selectedId, audioTracks, muted, volume, currentTime, trimIn]);
+
   async function onPick(list: FileList | null) {
     const f = list?.[0];
     if (!f) return;
@@ -477,7 +513,7 @@ export function VideoEditorWorkspace({
     setStatus(`تم تحميل: ${f.name}`);
     setPanel("files");
     setShowRecordStudio(false);
-    void analyzeWaveform(f, 180).then((peaks) => {
+    void analyzeWaveform(f, 240).then((peaks) => {
       setVideoPeaks(peaks);
       setAudioTracks((prev) =>
         prev.map((t) =>
@@ -618,14 +654,180 @@ export function VideoEditorWorkspace({
     }
   }
 
+  function getSelectedAudioTrack(): AudioTrack | null {
+    if (selectedId === "audio") {
+      return (
+        audioTracks.find((t) => t.id === "linked-audio") ||
+        audioTracks.find((t) => t.id.startsWith("detached-")) ||
+        audioTracks[0] ||
+        null
+      );
+    }
+    return audioTracks.find((t) => t.id === selectedId) ?? null;
+  }
+
   function splitAtPlayhead() {
-    // Soft split: set trimOut to playhead (keep left) — user can re-extend
+    const track = getSelectedAudioTrack();
+    if (track) {
+      const local = currentTime - trimIn - track.start;
+      if (local <= 0.15 || local >= track.duration - 0.15) {
+        setError("حرّك رأس التشغيل داخل مسار الصوت الأزرق ثم اقسم");
+        return;
+      }
+      const rightId = nextId(
+        idCounterRef,
+        track.id.startsWith("detached")
+          ? "detached"
+          : track.id === "linked-audio"
+            ? "audio"
+            : "audio",
+      );
+      const left: AudioTrack = { ...track, duration: local };
+      const right: AudioTrack = {
+        ...track,
+        id: rightId,
+        name: `${track.name} (2)`,
+        start: track.start + local,
+        offset: (track.offset || 0) + local,
+        duration: track.duration - local,
+      };
+      setAudioTracks((prev) => [
+        ...prev.filter((t) => t.id !== track.id),
+        left,
+        right,
+      ]);
+      setSelectedId(rightId);
+      setStatus(`تم تقسيم الصوت عند ${formatTime(currentTime)}`);
+      setError(null);
+      return;
+    }
+
     if (currentTime <= trimIn + 0.1 || currentTime >= trimOut - 0.1) {
       setError("حرّك رأس التشغيل داخل المقطع ثم اقسم");
       return;
     }
     setTrimOut(currentTime);
-    setStatus(`تم القص عند ${formatTime(currentTime)}`);
+    setStatus(`تم قص الفيديو عند ${formatTime(currentTime)}`);
+  }
+
+  function copySelected() {
+    const track = getSelectedAudioTrack();
+    if (track) {
+      audioClipboardRef.current = {
+        name: track.name,
+        file: track.file,
+        url: track.url,
+        start: track.start,
+        volume: track.volume,
+        duration: track.duration,
+        offset: track.offset || 0,
+        sourceDuration: track.sourceDuration || track.duration,
+        peaks: track.peaks,
+      };
+      setStatus("تم نسخ مسار الصوت — الصق بالتكرار أو من القائمة");
+      return;
+    }
+    const ov = overlays.find((o) => o.id === selectedId);
+    if (ov) {
+      setStatus("تم نسخ العنصر — استخدم تكرار للإضافة");
+      return;
+    }
+    setStatus("حدّد مسار الصوت الأزرق أولاً للنسخ");
+  }
+
+  function duplicateSelected() {
+    const track = getSelectedAudioTrack();
+    if (track) {
+      const id = nextId(
+        idCounterRef,
+        track.id.startsWith("detached") ? "detached" : "audio",
+      );
+      const start = Math.min(
+        Math.max(0, duration - track.duration),
+        track.start + Math.max(0.4, track.duration * 0.05),
+      );
+      setAudioTracks((prev) => [
+        ...prev,
+        {
+          ...track,
+          id,
+          name: `${track.name} نسخة`,
+          start,
+        },
+      ]);
+      setSelectedId(id);
+      setStatus("تم تكرار مسار الصوت");
+      return;
+    }
+    const ov = overlays.find((o) => o.id === selectedId);
+    if (!ov) {
+      setStatus("حدّد مسار الصوت للتكرار");
+      return;
+    }
+    const id = nextId(idCounterRef, ov.type[0]);
+    setOverlays((prev) => [
+      ...prev,
+      {
+        ...ov,
+        id,
+        x: Math.min(0.8, ov.x + 0.04),
+        y: Math.min(0.8, ov.y + 0.04),
+      },
+    ]);
+    setSelectedId(id);
+  }
+
+  function pasteAudioFromClipboard() {
+    const clip = audioClipboardRef.current;
+    if (!clip) {
+      setStatus("لا يوجد صوت منسوخ — انسخ المسار أولاً");
+      return;
+    }
+    const id = nextId(idCounterRef, "audio");
+    const start = Math.max(0, currentTime - trimIn);
+    setAudioTracks((prev) => [
+      ...prev,
+      {
+        ...clip,
+        id,
+        name: `${clip.name} ملصق`,
+        start,
+      },
+    ]);
+    setSelectedId(id);
+    setStatus("تم لصق مسار الصوت");
+  }
+
+  function deleteSelected() {
+    const track = getSelectedAudioTrack();
+    if (track) {
+      if (track.id === "linked-audio") {
+        setPrimaryAudioVolume(0);
+        setAudioTracks((prev) => prev.filter((t) => t.id !== "linked-audio"));
+        setStatus("تم حذف مسار الصوت (صامت)");
+        setSelectedId("video");
+        return;
+      }
+      setAudioTracks((prev) => {
+        const othersShare = prev.some(
+          (t) => t.id !== track.id && t.url === track.url,
+        );
+        if (!othersShare && track.url !== url) {
+          URL.revokeObjectURL(track.url);
+        }
+        return prev.filter((t) => t.id !== track.id);
+      });
+      setSelectedId("video");
+      setStatus("تم حذف مسار الصوت");
+      return;
+    }
+    if (selectedId === "video" || selectedId === "audio") return;
+    setOverlays((prev) => {
+      const victim = prev.find((o) => o.id === selectedId);
+      if (victim?.type === "image") URL.revokeObjectURL(victim.src);
+      return prev.filter((o) => o.id !== selectedId);
+    });
+    setSelectedId("video");
   }
 
   function addTextOverlay() {
@@ -815,38 +1017,6 @@ export function VideoEditorWorkspace({
     } finally {
       setTtsBusy(false);
     }
-  }
-
-  function deleteSelected() {
-    if (selectedId === "video" || selectedId === "audio") return;
-    const track = audioTracks.find((t) => t.id === selectedId);
-    if (track) {
-      removeAudioTrack(track.id);
-      setSelectedId("video");
-      return;
-    }
-    setOverlays((prev) => {
-      const victim = prev.find((o) => o.id === selectedId);
-      if (victim?.type === "image") URL.revokeObjectURL(victim.src);
-      return prev.filter((o) => o.id !== selectedId);
-    });
-    setSelectedId("video");
-  }
-
-  function duplicateSelected() {
-    const src = overlays.find((o) => o.id === selectedId);
-    if (!src) return;
-    const id = nextId(idCounterRef, src.type[0]);
-    setOverlays((prev) => [
-      ...prev,
-      {
-        ...src,
-        id,
-        x: Math.min(0.8, src.x + 0.04),
-        y: Math.min(0.8, src.y + 0.04),
-      },
-    ]);
-    setSelectedId(id);
   }
 
   function onOverlayPointerDown(
@@ -2370,23 +2540,31 @@ export function VideoEditorWorkspace({
               type="button"
               onClick={splitAtPlayhead}
               className="rounded border border-[#333] p-1.5 hover:bg-[#222]"
-              title="قص"
+              title="تقسيم الصوت/الفيديو (S)"
             >
               <Scissors className="h-4 w-4" />
             </button>
             <button
               type="button"
-              onClick={duplicateSelected}
+              onClick={copySelected}
               className="rounded border border-[#333] p-1.5 hover:bg-[#222]"
-              title="نسخ"
+              title="نسخ الصوت (C)"
             >
               <Copy className="h-4 w-4" />
             </button>
             <button
               type="button"
+              onClick={duplicateSelected}
+              className="rounded border border-[#333] p-1.5 hover:bg-[#222]"
+              title="تكرار الصوت (D)"
+            >
+              <Copy className="h-4 w-4 opacity-70" />
+            </button>
+            <button
+              type="button"
               onClick={deleteSelected}
               className="rounded border border-[#333] p-1.5 hover:bg-[#222]"
-              title="حذف"
+              title="حذف الصوت (Del)"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -2485,7 +2663,9 @@ export function VideoEditorWorkspace({
               {audioTracks
                 .filter(
                   (t) =>
-                    t.id === "linked-audio" || t.id.startsWith("detached-"),
+                    t.id === "linked-audio" ||
+                    t.id.startsWith("detached-") ||
+                    t.id.startsWith("audio-"),
                 )
                 .map((t) => {
                   const left = timelinePct(trimIn + t.start);
@@ -2505,35 +2685,39 @@ export function VideoEditorWorkspace({
                       key={t.id}
                       role="button"
                       tabIndex={0}
-                      className={`absolute top-[3.4rem] h-12 cursor-grab overflow-hidden rounded-sm border-2 active:cursor-grabbing ${
+                      className={`absolute top-[3.35rem] h-[3.25rem] cursor-grab overflow-hidden rounded-[3px] border active:cursor-grabbing ${
                         selected
-                          ? "border-cyan-300 shadow-[0_0_0_1px_rgba(103,232,249,0.35)]"
-                          : "border-[#1d4f7a]"
-                      } bg-[#1283c9]`}
+                          ? "border-[#7dd3fc] ring-1 ring-[#7dd3fc]/40"
+                          : "border-[#0e4d73]"
+                      } bg-[#0c5f8f]`}
                       style={{ left: `${left}%`, width: `${width}%` }}
-                      title="اسحب يمين/يسار · اسحب الحواف للقص"
+                      title="سحب · قص الحواف · كليك يمين للقائمة"
                       onPointerDown={(e) =>
                         onAudioClipPointerDown(e, t.id, "audio-move")
                       }
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedId(t.id);
+                        setPanel("audio");
+                        setCtxMenu(clampMenuPos(e.clientX, e.clientY));
+                      }}
                     >
-                      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 truncate px-2 pt-0.5 text-[9px] font-semibold text-white/90">
+                      <div className="pointer-events-none absolute start-1 top-0.5 z-10 max-w-[70%] truncate rounded bg-[#083a58]/90 px-1.5 py-[1px] text-[9px] font-semibold text-white">
                         {t.name}
                       </div>
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 top-3">
-                        <WaveformBars
-                          peaks={peaks}
-                          dimmed={t.volume <= 0}
-                          className="bg-white/90"
-                        />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-1.5 top-4">
+                        <WaveformBars peaks={peaks} dimmed={t.volume <= 0} />
                       </div>
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1.5 bg-[#062a40]/85" />
                       <div
-                        className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize bg-white/90"
+                        className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize bg-[#e8f7ff]"
                         onPointerDown={(e) =>
                           onAudioClipPointerDown(e, t.id, "audio-trim-in")
                         }
                       />
                       <div
-                        className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize bg-white/90"
+                        className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize bg-[#e8f7ff]"
                         onPointerDown={(e) =>
                           onAudioClipPointerDown(e, t.id, "audio-trim-out")
                         }
@@ -2545,14 +2729,17 @@ export function VideoEditorWorkspace({
               {/* Extra audio tracks (music / TTS) */}
               {audioTracks.filter(
                 (t) =>
-                  t.id !== "linked-audio" && !t.id.startsWith("detached-"),
+                  t.id !== "linked-audio" &&
+                  !t.id.startsWith("detached-") &&
+                  !t.id.startsWith("audio-"),
               ).length > 0 && (
                 <div className="absolute inset-x-0 top-[6.85rem] h-6">
                   {audioTracks
                     .filter(
                       (t) =>
                         t.id !== "linked-audio" &&
-                        !t.id.startsWith("detached-"),
+                        !t.id.startsWith("detached-") &&
+                        !t.id.startsWith("audio-"),
                     )
                     .map((t) => {
                       const isTts = t.id.startsWith("tts-");
@@ -2565,14 +2752,20 @@ export function VideoEditorWorkspace({
                           key={t.id}
                           className={`absolute h-6 cursor-grab overflow-hidden rounded border active:cursor-grabbing ${
                             isTts
-                              ? "border-emerald-600 bg-emerald-600"
-                              : "border-amber-500 bg-amber-500"
+                              ? "border-emerald-600 bg-emerald-700"
+                              : "border-amber-500 bg-amber-600"
                           }`}
                           style={{ left: `${left}%`, width: `${width}%` }}
                           title={t.name}
                           onPointerDown={(e) =>
                             onAudioClipPointerDown(e, t.id, "audio-move")
                           }
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setSelectedId(t.id);
+                            setCtxMenu(clampMenuPos(e.clientX, e.clientY));
+                          }}
                         >
                           <WaveformBars
                             peaks={peaksForClip(
@@ -2581,7 +2774,6 @@ export function VideoEditorWorkspace({
                               t.duration,
                               t.sourceDuration || t.duration,
                             )}
-                            className="bg-black/50"
                           />
                           <div
                             className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-ew-resize bg-white/80"
@@ -2603,15 +2795,15 @@ export function VideoEditorWorkspace({
 
               {/* Playhead */}
               <div
-                className="absolute top-0 z-20 h-full w-0.5 bg-[#ff5a36]"
+                className="absolute top-0 z-20 h-full w-0.5 bg-[#ff4d2e]"
                 style={{ left: `${timelinePct(currentTime)}%` }}
               >
-                <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff5a36]" />
+                <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff4d2e]" />
               </div>
             </div>
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              المسار الأزرق = ذبذبات الصوت · اسحبه يمين/يسار · اسحب الحواف البيضاء
-              للقص
+              اسحب المسار الأزرق · قص من الحواف · تقسيم / نسخ / تكرار / حذف من
+              الشريط أو كليك يمين
             </p>
           </div>
         </div>
@@ -2661,15 +2853,17 @@ export function VideoEditorWorkspace({
                   {
                     label: "نسخ",
                     shortcut: "C",
-                    fn: () => setStatus("تم نسخ العنصر المحدد"),
+                    fn: () => copySelected(),
+                  },
+                  {
+                    label: "لصق",
+                    shortcut: "V",
+                    fn: () => pasteAudioFromClipboard(),
                   },
                   {
                     label: "صامت",
                     shortcut: "M",
-                    fn: () => {
-                      setMuted(true);
-                      setVolume(0);
-                    },
+                    fn: () => setPrimaryAudioVolume(0),
                   },
                   {
                     label: "فصل الصوت",
