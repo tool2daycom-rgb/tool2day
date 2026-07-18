@@ -34,7 +34,7 @@ export default async function ToolPage({ params }: Props) {
   return (
     <div
       className={`mx-auto w-full px-4 py-10 sm:px-6 sm:py-14 ${
-        slug === "pdf-editor" ? "max-w-5xl" : "max-w-3xl"
+        slug === "pdf-editor" ? "max-w-[1400px]" : "max-w-3xl"
       }`}
     >
       <Link
