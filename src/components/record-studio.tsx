@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Camera,
   CameraOff,
+  Circle,
   Mic,
   MicOff,
   Monitor,
@@ -60,10 +61,45 @@ export function RecordStudio({ onClose, onRecorded }: Props) {
   });
   const [camReady, setCamReady] = useState(false);
   const [screenReady, setScreenReady] = useState(false);
+  const [camShape, setCamShape] = useState<"rect" | "circle">("rect");
 
   const camStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const camBoxRef = useRef(camBox);
+  const camShapeRef = useRef(camShape);
+  const camOnRef = useRef(camOn);
+  const camReadyRef = useRef(camReady);
+  const screenReadyRef = useRef(screenReady);
+
+  useEffect(() => {
+    camBoxRef.current = camBox;
+  }, [camBox]);
+  useEffect(() => {
+    camShapeRef.current = camShape;
+  }, [camShape]);
+  useEffect(() => {
+    camOnRef.current = camOn;
+  }, [camOn]);
+  useEffect(() => {
+    camReadyRef.current = camReady;
+  }, [camReady]);
+  useEffect(() => {
+    screenReadyRef.current = screenReady;
+  }, [screenReady]);
+
+  function setCamShapeMode(shape: "rect" | "circle") {
+    setCamShape(shape);
+    if (shape === "circle") {
+      setCamBox((b) => {
+        const size = Math.max(120, Math.min(b.w, b.h));
+        return { ...b, w: size, h: size };
+      });
+      setStatus("وضع دائري — اسحب الزوايا لتغيير الحجم");
+    } else {
+      setStatus("وضع مستطيل — اسحب الزوايا لتغيير الحجم");
+    }
+  }
 
   useEffect(() => {
     // Place cam near bottom-left once stage known
@@ -191,15 +227,14 @@ export function RecordStudio({ onClose, onRecorded }: Props) {
     ctx.fillRect(0, 0, w, h);
 
     const screenVid = screenVideoRef.current;
-    if (screenReady && screenVid && screenVid.readyState >= 2) {
-      // cover
+    if (screenReadyRef.current && screenVid && screenVid.readyState >= 2) {
       const vw = screenVid.videoWidth || w;
       const vh = screenVid.videoHeight || h;
       const scale = Math.max(w / vw, h / vh);
       const dw = vw * scale;
       const dh = vh * scale;
       ctx.drawImage(screenVid, (w - dw) / 2, (h - dh) / 2, dw, dh);
-    } else if (!camReady) {
+    } else if (!camReadyRef.current) {
       ctx.fillStyle = "#888";
       ctx.font = "18px Cairo, sans-serif";
       ctx.textAlign = "center";
@@ -207,31 +242,54 @@ export function RecordStudio({ onClose, onRecorded }: Props) {
     }
 
     const camVid = camVideoRef.current;
-    if (camReady && camOn && camVid && camVid.readyState >= 2) {
-      const { x, y, w: cw, h: ch } = camBox;
+    if (
+      camReadyRef.current &&
+      camOnRef.current &&
+      camVid &&
+      camVid.readyState >= 2
+    ) {
+      const { x, y, w: cw, h: ch } = camBoxRef.current;
+      const shape = camShapeRef.current;
       ctx.save();
-      // rounded rect clip
-      const r = 12;
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + cw, y, x + cw, y + ch, r);
-      ctx.arcTo(x + cw, y + ch, x, y + ch, r);
-      ctx.arcTo(x, y + ch, x, y, r);
-      ctx.arcTo(x, y, x + cw, y, r);
-      ctx.closePath();
+      if (shape === "circle") {
+        const cx = x + cw / 2;
+        const cy = y + ch / 2;
+        const radius = Math.min(cw, ch) / 2;
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      } else {
+        const r = 12;
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + cw, y, x + cw, y + ch, r);
+        ctx.arcTo(x + cw, y + ch, x, y + ch, r);
+        ctx.arcTo(x, y + ch, x, y, r);
+        ctx.arcTo(x, y, x + cw, y, r);
+        ctx.closePath();
+      }
       ctx.clip();
-      ctx.drawImage(camVid, x, y, cw, ch);
+      // Cover-fit camera into box
+      const vw = camVid.videoWidth || cw;
+      const vh = camVid.videoHeight || ch;
+      const scale = Math.max(cw / vw, ch / vh);
+      const dw = vw * scale;
+      const dh = vh * scale;
+      ctx.drawImage(camVid, x + (cw - dw) / 2, y + (ch - dh) / 2, dw, dh);
       ctx.restore();
-      // border
+
       ctx.strokeStyle = "#f5c518";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.arcTo(x + cw, y, x + cw, y + ch, r);
-      ctx.arcTo(x + cw, y + ch, x, y + ch, r);
-      ctx.arcTo(x, y + ch, x, y, r);
-      ctx.arcTo(x, y, x + cw, y, r);
-      ctx.closePath();
+      if (shape === "circle") {
+        ctx.arc(x + cw / 2, y + ch / 2, Math.min(cw, ch) / 2, 0, Math.PI * 2);
+      } else {
+        const r = 12;
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + cw, y, x + cw, y + ch, r);
+        ctx.arcTo(x + cw, y + ch, x, y + ch, r);
+        ctx.arcTo(x, y + ch, x, y, r);
+        ctx.arcTo(x, y, x + cw, y, r);
+        ctx.closePath();
+      }
       ctx.stroke();
     }
 
@@ -255,7 +313,7 @@ export function RecordStudio({ onClose, onRecorded }: Props) {
       cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camReady, screenReady, camOn, camBox]);
+  }, []);
 
   function onCamPointerDown(e: ReactPointerEvent, mode: "move" | "resize") {
     e.preventDefault();
@@ -285,6 +343,17 @@ export function RecordStudio({ onClose, onRecorded }: Props) {
         w: drag.ow,
         h: drag.oh,
       });
+    } else if (camShapeRef.current === "circle") {
+      const delta = Math.max(dx, dy);
+      const size = Math.max(
+        120,
+        Math.min(
+          canvas.width - drag.ox,
+          canvas.height - drag.oy,
+          drag.ow + delta,
+        ),
+      );
+      setCamBox({ x: drag.ox, y: drag.oy, w: size, h: size });
     } else {
       const w = Math.max(120, Math.min(canvas.width - drag.ox, drag.ow + dx));
       const h = Math.max(90, Math.min(canvas.height - drag.oy, drag.oh + dy));
@@ -385,37 +454,77 @@ export function RecordStudio({ onClose, onRecorded }: Props) {
           <video ref={camVideoRef} className="hidden" muted playsInline />
           <video ref={screenVideoRef} className="hidden" muted playsInline />
 
-          {/* Interactive cam handles overlay (UI only — drawing is on canvas) */}
+          {/* Interactive cam handles + shape mode toggles */}
           {camOn && camReady && (
-            <div
-              className="absolute z-10 cursor-move"
-              style={{
-                left: camBox.x,
-                top: camBox.y,
-                width: camBox.w,
-                height: camBox.h,
-              }}
-              onPointerDown={(e) => onCamPointerDown(e, "move")}
-              onPointerMove={onCamPointerMove}
-              onPointerUp={onCamPointerUp}
-              onPointerCancel={onCamPointerUp}
-            >
-              <div className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-[#f5c518]" />
-              {(
-                [
-                  ["nw", "left-0 top-0 -translate-x-1/2 -translate-y-1/2"],
-                  ["ne", "right-0 top-0 translate-x-1/2 -translate-y-1/2"],
-                  ["sw", "left-0 bottom-0 -translate-x-1/2 translate-y-1/2"],
-                  ["se", "right-0 bottom-0 translate-x-1/2 translate-y-1/2"],
-                ] as const
-              ).map(([corner, cls]) => (
+            <>
+              <div
+                className="absolute z-20 flex gap-1 rounded-lg border border-[#333] bg-[#121214]/95 p-1 shadow-lg"
+                style={{
+                  left: camBox.x,
+                  top: Math.max(8, camBox.y - 40),
+                }}
+              >
+                <button
+                  type="button"
+                  title="مستطيل"
+                  onClick={() => setCamShapeMode("rect")}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md ${
+                    camShape === "rect"
+                      ? "bg-[#f5c518] text-[#111]"
+                      : "text-[#ccc] hover:bg-[#222]"
+                  }`}
+                >
+                  <Square className="h-4 w-4" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  title="دائري"
+                  onClick={() => setCamShapeMode("circle")}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md ${
+                    camShape === "circle"
+                      ? "bg-[#f5c518] text-[#111]"
+                      : "text-[#ccc] hover:bg-[#222]"
+                  }`}
+                >
+                  <Circle className="h-4 w-4" strokeWidth={2} />
+                </button>
+              </div>
+              <div
+                className="absolute z-10 cursor-move"
+                style={{
+                  left: camBox.x,
+                  top: camBox.y,
+                  width: camBox.w,
+                  height: camBox.h,
+                }}
+                onPointerDown={(e) => onCamPointerDown(e, "move")}
+                onPointerMove={onCamPointerMove}
+                onPointerUp={onCamPointerUp}
+                onPointerCancel={onCamPointerUp}
+              >
                 <div
-                  key={corner}
-                  className={`absolute h-3.5 w-3.5 rounded-sm bg-[#f5c518] ${cls}`}
-                  onPointerDown={(e) => onCamPointerDown(e, "resize")}
+                  className={`pointer-events-none absolute inset-0 ring-2 ring-[#f5c518] ${
+                    camShape === "circle" ? "rounded-full" : "rounded-xl"
+                  }`}
                 />
-              ))}
-            </div>
+                {(
+                  [
+                    ["nw", "left-0 top-0 -translate-x-1/2 -translate-y-1/2"],
+                    ["ne", "right-0 top-0 translate-x-1/2 -translate-y-1/2"],
+                    ["sw", "left-0 bottom-0 -translate-x-1/2 translate-y-1/2"],
+                    ["se", "right-0 bottom-0 translate-x-1/2 translate-y-1/2"],
+                  ] as const
+                ).map(([corner, cls]) => (
+                  <div
+                    key={corner}
+                    className={`absolute h-3.5 w-3.5 bg-[#f5c518] ${
+                      camShape === "circle" ? "rounded-full" : "rounded-sm"
+                    } ${cls}`}
+                    onPointerDown={(e) => onCamPointerDown(e, "resize")}
+                  />
+                ))}
+              </div>
+            </>
           )}
 
           {!screenReady && !camReady && (
