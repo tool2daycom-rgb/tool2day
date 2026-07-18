@@ -45,6 +45,7 @@ export default async function ToolPage({ params }: Props) {
       <p className="mt-3 text-base leading-8 text-[#555]">{tool.description}</p>
       <div className="mt-8">
         <ToolWorkspace
+          slug={tool.slug}
           title={tool.title}
           description={tool.description}
           accept={tool.accept}
