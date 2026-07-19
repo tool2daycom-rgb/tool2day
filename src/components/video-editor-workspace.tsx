@@ -5913,19 +5913,18 @@ export function VideoEditorWorkspace({
                       </div>
 
                       <div
-                        className="absolute top-0 z-40 h-full"
+                        className="pointer-events-none absolute top-0 z-[80] h-full"
                         style={{ left: `${timelinePct(currentTime)}%` }}
-                        onPointerDown={(e) => e.stopPropagation()}
                       >
-                        {/* خط الرأس كامل الارتفاع */}
+                        {/* خط الرأس فوق كل الشرائط */}
                         <div
-                          className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2 cursor-ew-resize"
+                          className="pointer-events-auto absolute inset-y-0 left-1/2 z-[81] w-3 -translate-x-1/2 cursor-ew-resize"
                           onPointerDown={(e) => {
                             e.stopPropagation();
                             onTimelinePointerDown(e, "playhead");
                           }}
                         >
-                          <div className="mx-auto h-full w-0.5 bg-[#ff4d2e]" />
+                          <div className="mx-auto h-full w-[2px] bg-[#ff4d2e] shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
                         </div>
                         {/* المقص أسفل المسطرة قليلاً — على المسارات مثل Filmora/CapCut */}
                         <button
@@ -5936,7 +5935,7 @@ export function VideoEditorWorkspace({
                             e.stopPropagation();
                             splitAtPlayhead();
                           }}
-                          className="group absolute top-[26px] left-1/2 z-50 flex -translate-x-1/2 flex-col items-center"
+                          className="group pointer-events-auto absolute top-[26px] left-1/2 z-[82] flex -translate-x-1/2 flex-col items-center"
                         >
                           <span className="inline-flex h-11 w-7 items-center justify-center rounded-full border-2 border-white/90 bg-[#e11d2e] text-white shadow-[0_2px_10px_rgba(0,0,0,0.45)] hover:scale-105 hover:bg-[#f12a3c]">
                             <Scissors className="h-4 w-4" strokeWidth={2.5} />
