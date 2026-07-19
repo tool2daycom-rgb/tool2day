@@ -141,6 +141,35 @@ type VideoLaneState = {
   solo: boolean;
 };
 
+/** مسار فيديو إضافي فوق المسار الأساسي (فيديو 2، 3…) */
+type VideoLayerTrack = {
+  id: string;
+  visible: boolean;
+  locked: boolean;
+  muted: boolean;
+};
+
+/** مقطع فيديو أو صورة على مسار طبقة */
+type LayerClip = {
+  id: string;
+  trackId: string;
+  kind: "video" | "image";
+  name: string;
+  file: File;
+  url: string;
+  /** موضع على الخط الزمني نسبةً إلى trimIn */
+  start: number;
+  duration: number;
+  offset: number;
+  sourceDuration: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity: number;
+  locked?: boolean;
+};
+
 type AudioSection =
   | "volume"
   | "fade"
@@ -307,10 +336,15 @@ export function VideoEditorWorkspace({
   const imageRef = useRef<HTMLInputElement>(null);
   const musicRef = useRef<HTMLInputElement>(null);
   const videoSwapRef = useRef<HTMLInputElement>(null);
+  const layerMediaRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const scrollSyncLock = useRef(false);
+  const layerTargetTrackRef = useRef<string | null>(null);
+  const layerVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const dragRef = useRef<{
     kind:
       | "move"
@@ -322,7 +356,10 @@ export function VideoEditorWorkspace({
       | "video-resize"
       | "audio-move"
       | "audio-trim-in"
-      | "audio-trim-out";
+      | "audio-trim-out"
+      | "layer-move"
+      | "layer-trim-in"
+      | "layer-trim-out";
     id?: string;
     corner?: "se";
     startX: number;
@@ -402,6 +439,8 @@ export function VideoEditorWorkspace({
     muted: false,
     solo: false,
   });
+  const [videoLayers, setVideoLayers] = useState<VideoLayerTrack[]>([]);
+  const [layerClips, setLayerClips] = useState<LayerClip[]>([]);
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -519,6 +558,39 @@ export function VideoEditorWorkspace({
     }
   }, [audioTracks, currentTime, playing, trimIn, videoLane.solo]);
 
+  // Sync layered video clips with the playhead
+  useEffect(() => {
+    const map = layerVideoElsRef.current;
+    for (const clip of layerClips) {
+      if (clip.kind !== "video") continue;
+      const el = map.get(clip.id);
+      if (!el) continue;
+      const track = videoLayers.find((t) => t.id === clip.trackId);
+      if (!track?.visible) {
+        if (!el.paused) el.pause();
+        continue;
+      }
+      el.muted = true;
+      const local = currentTime - trimIn - clip.start;
+      if (local >= 0 && local < clip.duration - 0.02) {
+        const mediaTime = clip.offset + local;
+        if (Math.abs(el.currentTime - mediaTime) > 0.35) {
+          el.currentTime = Math.max(0, mediaTime);
+        }
+        if (playing && el.paused) void el.play().catch(() => undefined);
+        if (!playing && !el.paused) el.pause();
+      } else if (!el.paused) {
+        el.pause();
+      }
+    }
+  }, [layerClips, videoLayers, currentTime, playing, trimIn]);
+
+  useEffect(() => {
+    return () => {
+      layerVideoElsRef.current.clear();
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       for (const el of audioElsRef.current.values()) {
@@ -554,6 +626,8 @@ export function VideoEditorWorkspace({
     const scroll = timelineScrollRef.current;
     if (!scroll) return;
     function onWheel(e: WheelEvent) {
+      // Ctrl/⌘/Alt + عجلة = تكبير. غير ذلك تمرير حر (أعلى/أسفل/يمين/يسار)
+      if (!(e.ctrlKey || e.metaKey || e.altKey)) return;
       e.preventDefault();
       const dir = e.deltaY > 0 ? -1 : 1;
       setTimelineZoom((z) => {
@@ -565,6 +639,24 @@ export function VideoEditorWorkspace({
     scroll.addEventListener("wheel", onWheel, { passive: false });
     return () => scroll.removeEventListener("wheel", onWheel);
   }, [file, url]);
+
+  function syncHeaderScroll() {
+    const a = timelineScrollRef.current;
+    const b = headerScrollRef.current;
+    if (!a || !b || scrollSyncLock.current) return;
+    scrollSyncLock.current = true;
+    b.scrollTop = a.scrollTop;
+    scrollSyncLock.current = false;
+  }
+
+  function syncTimelineScroll() {
+    const a = timelineScrollRef.current;
+    const b = headerScrollRef.current;
+    if (!a || !b || scrollSyncLock.current) return;
+    scrollSyncLock.current = true;
+    a.scrollTop = b.scrollTop;
+    scrollSyncLock.current = false;
+  }
 
   function bumpTimelineZoom(delta: number) {
     setTimelineZoom((z) => {
@@ -638,6 +730,11 @@ export function VideoEditorWorkspace({
       });
       return [];
     });
+    setLayerClips((prev) => {
+      prev.forEach((c) => URL.revokeObjectURL(c.url));
+      return [];
+    });
+    setVideoLayers([]);
     setVideoPeaks([]);
     setMuted(false);
     setVolume(1);
@@ -1013,6 +1110,13 @@ export function VideoEditorWorkspace({
       setStatus("تم حذف مسار الصوت");
       return;
     }
+    const layer = layerClips.find((c) => c.id === selectedId);
+    if (layer) {
+      removeLayerClip(layer.id);
+      setSelectedId("video");
+      setStatus("تم حذف طبقة المونتاج");
+      return;
+    }
     if (selectedId === "video" || selectedId === "audio") return;
     setOverlays((prev) => {
       const victim = prev.find((o) => o.id === selectedId);
@@ -1086,35 +1190,7 @@ export function VideoEditorWorkspace({
   }
 
   async function addImageOverlay(list: FileList | null) {
-    const img = list?.[0];
-    if (!img) return;
-    const src = URL.createObjectURL(img);
-    const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve({ w: el.naturalWidth, h: el.naturalHeight });
-      el.onerror = () => reject(new Error("فشل قراءة الصورة"));
-      el.src = src;
-    });
-    const aspectRatio = dims.w / Math.max(1, dims.h);
-    const w = 0.28;
-    const h = w / aspectRatio / (outSize.w / outSize.h);
-    const id = nextId(idCounterRef, "i");
-    setOverlays((prev) => [
-      ...prev,
-      {
-        id,
-        type: "image",
-        src,
-        file: img,
-        x: 0.36,
-        y: 0.3,
-        w,
-        h: Math.min(0.5, h),
-        opacity: 1,
-      },
-    ]);
-    setSelectedId(id);
-    setStatus("اسحب زوايا الصورة لتغيير الحجم");
+    await addLayerMedia(list);
   }
 
   async function uploadMusic(list: FileList | null) {
@@ -1218,6 +1294,29 @@ export function VideoEditorWorkspace({
   ) {
     e.preventDefault();
     e.stopPropagation();
+    const layer = layerClips.find((c) => c.id === id);
+    if (layer) {
+      const track = videoLayers.find((t) => t.id === layer.trackId);
+      if (layer.locked || track?.locked) {
+        setStatus("المسار مقفل — افتح القفل للتعديل");
+        setSelectedId(id);
+        return;
+      }
+      setSelectedId(id);
+      dragRef.current = {
+        kind,
+        id,
+        corner: "se",
+        startX: e.clientX,
+        startY: e.clientY,
+        ox: layer.x,
+        oy: layer.y,
+        ow: layer.w,
+        oh: layer.h,
+      };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
     const item = overlays.find((o) => o.id === id);
     if (!item) return;
     setSelectedId(id);
@@ -1284,6 +1383,26 @@ export function VideoEditorWorkspace({
       return;
     }
     if ((drag.kind === "move" || drag.kind === "resize") && drag.id) {
+      if (layerClips.some((c) => c.id === drag.id)) {
+        setLayerClips((prev) =>
+          prev.map((item) => {
+            if (item.id !== drag.id) return item;
+            if (drag.kind === "move") {
+              return {
+                ...item,
+                x: Math.max(0, Math.min(0.95, drag.ox + dx)),
+                y: Math.max(0, Math.min(0.95, drag.oy + dy)),
+              };
+            }
+            return {
+              ...item,
+              w: Math.max(0.08, Math.min(0.95, drag.ow + dx)),
+              h: Math.max(0.06, Math.min(0.95, drag.oh + dy)),
+            };
+          }),
+        );
+        return;
+      }
       setOverlays((prev) =>
         prev.map((item) => {
           if (item.id !== drag.id) return item;
@@ -1423,6 +1542,153 @@ export function VideoEditorWorkspace({
     });
   }
 
+  function ensureTopVideoLayer(): string {
+    if (videoLayers.length > 0) {
+      return videoLayers[videoLayers.length - 1]!.id;
+    }
+    const id = nextId(idCounterRef, "vtrack");
+    setVideoLayers([
+      { id, visible: true, locked: false, muted: true },
+    ]);
+    return id;
+  }
+
+  function addVideoLayerTrack() {
+    const id = nextId(idCounterRef, "vtrack");
+    setVideoLayers((prev) => [
+      ...prev,
+      { id, visible: true, locked: false, muted: true },
+    ]);
+    layerTargetTrackRef.current = id;
+    setStatus(`تم إضافة فيديو ${videoLayers.length + 2} — ارفع فيديو أو صورة عليه`);
+    layerMediaRef.current?.click();
+  }
+
+  function patchVideoLayer(
+    id: string,
+    patch: Partial<Pick<VideoLayerTrack, "visible" | "locked" | "muted">>,
+  ) {
+    setVideoLayers((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    );
+  }
+
+  async function addLayerMedia(list: FileList | null, trackId?: string) {
+    const f = list?.[0];
+    if (!f) return;
+    const tid = trackId || layerTargetTrackRef.current || ensureTopVideoLayer();
+    // Ensure track exists if ensureTop queued a setState
+    setVideoLayers((prev) =>
+      prev.some((t) => t.id === tid)
+        ? prev
+        : [...prev, { id: tid, visible: true, locked: false, muted: true }],
+    );
+    const mediaUrl = URL.createObjectURL(f);
+    const isVideo = f.type.startsWith("video/");
+    let sourceDuration = 5;
+    let w = 0.45;
+    let h = 0.45;
+    if (isVideo) {
+      sourceDuration = (await loadMediaDuration(mediaUrl)) || 5;
+      const dims = await new Promise<{ w: number; h: number }>((resolve) => {
+        const v = document.createElement("video");
+        v.preload = "metadata";
+        v.onloadedmetadata = () =>
+          resolve({
+            w: v.videoWidth || 1280,
+            h: v.videoHeight || 720,
+          });
+        v.onerror = () => resolve({ w: 1280, h: 720 });
+        v.src = mediaUrl;
+      });
+      const ar = dims.w / Math.max(1, dims.h);
+      w = 0.5;
+      h = Math.min(0.7, w / ar / (outSize.w / Math.max(1, outSize.h)));
+    } else {
+      const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve({ w: el.naturalWidth, h: el.naturalHeight });
+        el.onerror = () => reject(new Error("فشل قراءة الصورة"));
+        el.src = mediaUrl;
+      });
+      const ar = dims.w / Math.max(1, dims.h);
+      w = 0.4;
+      h = Math.min(0.6, w / ar / (outSize.w / Math.max(1, outSize.h)));
+      sourceDuration = Math.max(3, clipDuration);
+    }
+    const playDur = Math.min(
+      sourceDuration,
+      Math.max(1, clipDuration - Math.max(0, currentTime - trimIn)),
+    );
+    const id = nextId(idCounterRef, isVideo ? "lvid" : "limg");
+    setLayerClips((prev) => [
+      ...prev,
+      {
+        id,
+        trackId: tid,
+        kind: isVideo ? "video" : "image",
+        name: f.name,
+        file: f,
+        url: mediaUrl,
+        start: Math.max(0, currentTime - trimIn),
+        duration: playDur,
+        offset: 0,
+        sourceDuration,
+        x: 0.25,
+        y: 0.2,
+        w,
+        h,
+        opacity: 1,
+      },
+    ]);
+    setSelectedId(id);
+    setPropTab("video");
+    setStatus(
+      isVideo
+        ? "تمت إضافة فيديو كطبقة مونتاج — اسحبه على الخط الزمني"
+        : "تمت إضافة صورة كطبقة مونتاج — اسحبها وحرّكها في المعاينة",
+    );
+    layerTargetTrackRef.current = null;
+  }
+
+  function onLayerClipPointerDown(
+    e: ReactPointerEvent,
+    id: string,
+    kind: "layer-move" | "layer-trim-in" | "layer-trim-out",
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const clip = layerClips.find((c) => c.id === id);
+    if (!clip) return;
+    const track = videoLayers.find((t) => t.id === clip.trackId);
+    if (clip.locked || track?.locked) {
+      setStatus("المسار مقفل — افتح القفل للتعديل");
+      setSelectedId(id);
+      return;
+    }
+    setSelectedId(id);
+    setPropTab("video");
+    dragRef.current = {
+      kind,
+      id,
+      startX: e.clientX,
+      startY: e.clientY,
+      ox: clip.start,
+      oy: clip.offset,
+      ow: clip.duration,
+      oh: clip.sourceDuration,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function removeLayerClip(id: string) {
+    setLayerClips((prev) => {
+      const victim = prev.find((c) => c.id === id);
+      if (victim) URL.revokeObjectURL(victim.url);
+      return prev.filter((c) => c.id !== id);
+    });
+  }
+
   function onTimelineMove(e: ReactPointerEvent) {
     const drag = dragRef.current;
     if (!drag) return;
@@ -1478,6 +1744,49 @@ export function VideoEditorWorkspace({
         );
       }
     }
+    if (
+      (drag.kind === "layer-move" ||
+        drag.kind === "layer-trim-in" ||
+        drag.kind === "layer-trim-out") &&
+      drag.id
+    ) {
+      const el = timelineRef.current;
+      if (!el || !duration) return;
+      const rect = el.getBoundingClientRect();
+      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * duration;
+      if (drag.kind === "layer-move") {
+        const maxStart = Math.max(0, duration - drag.ow);
+        const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
+        setLayerClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id ? { ...c, start: nextStart } : c,
+          ),
+        );
+      } else if (drag.kind === "layer-trim-in") {
+        const maxIn = Math.min(drag.ow - 0.15, drag.oh - drag.oy - 0.15);
+        const delta = Math.max(-drag.oy, Math.min(maxIn, dt));
+        setLayerClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id
+              ? {
+                  ...c,
+                  start: Math.max(0, drag.ox + delta),
+                  offset: drag.oy + delta,
+                  duration: Math.max(0.15, drag.ow - delta),
+                }
+              : c,
+          ),
+        );
+      } else if (drag.kind === "layer-trim-out") {
+        const maxDur = drag.oh - drag.oy;
+        const nextDur = Math.max(0.15, Math.min(maxDur, drag.ow + dt));
+        setLayerClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id ? { ...c, duration: nextDur } : c,
+          ),
+        );
+      }
+    }
   }
 
   async function onExport() {
@@ -1510,6 +1819,23 @@ export function VideoEditorWorkspace({
           videoY: videoBox.y * outSize.h,
           videoW: videoBox.w * outSize.w,
           videoH: videoBox.h * outSize.h,
+          videoLayers: videoLayers.flatMap((track) => {
+            if (!track.visible) return [];
+            return layerClips
+              .filter((c) => c.trackId === track.id)
+              .map((c) => ({
+                file: c.file,
+                kind: c.kind,
+                start: c.start,
+                duration: c.duration,
+                offset: c.offset,
+                x: c.x,
+                y: c.y,
+                w: c.w,
+                h: c.h,
+                opacity: c.opacity,
+              }));
+          }),
           overlays: overlays.map((o) => {
             if (o.type === "text") {
               return {
@@ -1770,14 +2096,21 @@ export function VideoEditorWorkspace({
           {panel === "media" && (
             <div className="space-y-3 text-sm">
               <p className="font-semibold text-[#f5c518]">الوسائط</p>
+              <p className="text-[11px] leading-5 text-[#777]">
+                أضف فيديو أو صورة كطبقة فوق الفيديو الأساسي للمونتاج (مسارات
+                فيديو 2، 3…). عجلة الماوس تمرّر؛ Ctrl+عجلة للتكبير.
+              </p>
               <div className="grid grid-cols-1 gap-2">
                 <button
                   type="button"
-                  onClick={() => imageRef.current?.click()}
-                  className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
+                  onClick={() => {
+                    layerTargetTrackRef.current = null;
+                    layerMediaRef.current?.click();
+                  }}
+                  className="flex items-center justify-center gap-2 rounded-md border border-[#f5c518]/40 bg-[#f5c518]/10 px-3 py-2 text-xs text-[#f5c518] hover:bg-[#f5c518]/20"
                 >
                   <ImagePlus className="h-4 w-4" />
-                  رفع صورة (إضافة كطبقة)
+                  فيديو / صورة فوق الفيديو
                 </button>
                 <button
                   type="button"
@@ -1793,9 +2126,19 @@ export function VideoEditorWorkspace({
                   className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
                 >
                   <FileVideo className="h-4 w-4" />
-                  استبدال الفيديو
+                  استبدال الفيديو الأساسي
                 </button>
               </div>
+              <input
+                ref={layerMediaRef}
+                type="file"
+                accept="video/*,image/*"
+                className="hidden"
+                onChange={(e) => {
+                  void addLayerMedia(e.target.files);
+                  e.target.value = "";
+                }}
+              />
               <input
                 ref={imageRef}
                 type="file"
@@ -2762,6 +3105,71 @@ export function VideoEditorWorkspace({
                 )}
               </div>
 
+              {/* Montage layers (Video 2+) — stacked above base */}
+              {videoLayers.map((track, trackIdx) => {
+                if (!track.visible) return null;
+                return layerClips
+                  .filter((c) => c.trackId === track.id)
+                  .map((clip) => {
+                    const local = currentTime - trimIn - clip.start;
+                    const active = local >= 0 && local < clip.duration;
+                    if (!active) return null;
+                    return (
+                      <div
+                        key={clip.id}
+                        className={`absolute z-20 ${
+                          selectedId === clip.id
+                            ? "ring-2 ring-[#f5c518]"
+                            : "ring-1 ring-white/25"
+                        }`}
+                        style={{
+                          left: `${clip.x * 100}%`,
+                          top: `${clip.y * 100}%`,
+                          width: `${clip.w * 100}%`,
+                          height: `${clip.h * 100}%`,
+                          opacity: clip.opacity,
+                          zIndex: 20 + trackIdx,
+                        }}
+                        onPointerDown={(e) =>
+                          onOverlayPointerDown(e, clip.id, "move")
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedId(clip.id);
+                        }}
+                      >
+                        {clip.kind === "image" ? (
+                          <img
+                            src={clip.url}
+                            alt=""
+                            className="h-full w-full object-contain"
+                            draggable={false}
+                          />
+                        ) : (
+                          <video
+                            src={clip.url}
+                            muted
+                            playsInline
+                            className="h-full w-full object-contain"
+                            ref={(el) => {
+                              if (el) layerVideoElsRef.current.set(clip.id, el);
+                              else layerVideoElsRef.current.delete(clip.id);
+                            }}
+                          />
+                        )}
+                        {selectedId === clip.id && (
+                          <div
+                            className="absolute bottom-0 right-0 h-3.5 w-3.5 translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[#111] bg-[#f5c518]"
+                            onPointerDown={(e) =>
+                              onOverlayPointerDown(e, clip.id, "resize")
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  });
+              })}
+
               {overlays.map((item) => (
                 <div
                   key={item.id}
@@ -2959,13 +3367,15 @@ export function VideoEditorWorkspace({
               const ADD_H = 32;
               const HEADER_W = 118;
               const lanes = audioTracks;
+              const layerCount = videoLayers.length;
+              const videoBlockH = (1 + layerCount) * (VIDEO_H + 4);
+              const audioBlockH =
+                Math.max(1, lanes.length) * (LANE_H + LANE_GAP);
               const bodyH =
-                RULER +
-                VIDEO_H +
-                8 +
-                Math.max(1, lanes.length) * (LANE_H + LANE_GAP) +
-                ADD_H +
-                8;
+                RULER + videoBlockH + 8 + audioBlockH + ADD_H + 8;
+
+              // أعلى القائمة = أعلى طبقة (فيديو N … فيديو 2) ثم فيديو 1
+              const layersTopFirst = [...videoLayers].reverse();
 
               const laneHeader = (
                 label: string,
@@ -2973,11 +3383,12 @@ export function VideoEditorWorkspace({
                   visible: boolean;
                   muted: boolean;
                   locked: boolean;
-                  solo: boolean;
+                  solo?: boolean;
+                  showSolo?: boolean;
                   onToggleVisible: () => void;
                   onToggleMute: () => void;
                   onToggleLock: () => void;
-                  onToggleSolo: () => void;
+                  onToggleSolo?: () => void;
                 },
               ) => (
                 <div
@@ -3000,13 +3411,15 @@ export function VideoEditorWorkspace({
                         <EyeOff className="h-3.5 w-3.5" />
                       )}
                     </TrackCtrlBtn>
-                    <TrackCtrlBtn
-                      title={opts.solo ? "إلغاء العزل" : "عزل المسار (Solo)"}
-                      active={opts.solo}
-                      onClick={opts.onToggleSolo}
-                    >
-                      <Mic className="h-3.5 w-3.5" />
-                    </TrackCtrlBtn>
+                    {opts.showSolo !== false && opts.onToggleSolo && (
+                      <TrackCtrlBtn
+                        title={opts.solo ? "إلغاء العزل" : "عزل المسار (Solo)"}
+                        active={!!opts.solo}
+                        onClick={opts.onToggleSolo}
+                      >
+                        <Mic className="h-3.5 w-3.5" />
+                      </TrackCtrlBtn>
+                    )}
                     <TrackCtrlBtn
                       title={opts.muted ? "إلغاء الكتم" : "كتم الصوت"}
                       danger={opts.muted}
@@ -3038,83 +3451,125 @@ export function VideoEditorWorkspace({
                 <div
                   dir="ltr"
                   className="flex max-h-72 overflow-hidden rounded-md border border-[#2a2a2e] bg-[#1a1a1d]"
-                  style={{ minHeight: Math.min(bodyH + 4, 288) }}
                 >
-                  {/* Track headers — يسار الخط عند 00:00 (بداية الفيديو) */}
+                  {/* Track headers — يسار عند 00:00، تمرير عمودي متزامن */}
                   <div
-                    className="flex shrink-0 flex-col border-r border-[#2a2a2e] bg-[#161618]"
-                    style={{ width: HEADER_W, height: bodyH }}
+                    ref={headerScrollRef}
+                    className="shrink-0 overflow-y-auto overflow-x-hidden border-r border-[#2a2a2e] bg-[#161618]"
+                    style={{ width: HEADER_W }}
                     dir="rtl"
+                    onScroll={syncTimelineScroll}
                   >
                     <div
-                      className="shrink-0 border-b border-[#2a2a2e] px-2 text-[9px] text-[#666]"
-                      style={{ height: RULER }}
+                      className="flex flex-col"
+                      style={{ height: bodyH, minHeight: bodyH }}
                     >
-                      <span className="flex h-full items-end pb-0.5">المسارات</span>
-                    </div>
-                    <div style={{ height: VIDEO_H + 8, paddingTop: 4 }}>
-                      {laneHeader("فيديو 1", {
-                        visible: videoLane.visible,
-                        muted: videoLane.muted,
-                        locked: videoLane.locked,
-                        solo: videoLane.solo,
-                        onToggleVisible: () => toggleVideoLane("visible"),
-                        onToggleMute: () => toggleVideoLane("muted"),
-                        onToggleLock: () => toggleVideoLane("locked"),
-                        onToggleSolo: toggleVideoSolo,
-                      })}
-                    </div>
-                    {lanes.map((t, i) => (
                       <div
-                        key={t.id}
-                        style={{
-                          height: LANE_H + LANE_GAP,
-                          paddingTop: i === 0 ? 4 : 0,
-                        }}
+                        className="shrink-0 border-b border-[#2a2a2e] px-2 text-[9px] text-[#666]"
+                        style={{ height: RULER }}
                       >
-                        {laneHeader(`صوت ${i + 1}`, {
-                          visible: t.visible !== false,
-                          muted: !!t.muted || t.volume <= 0,
-                          locked: !!t.locked,
-                          solo: !!t.solo,
-                          onToggleVisible: () =>
-                            patchAudioTrack(t.id, {
-                              visible: t.visible === false,
-                            }),
-                          onToggleMute: () => {
-                            const nextMuted = !(t.muted || t.volume <= 0);
-                            patchAudioTrack(t.id, {
-                              muted: nextMuted,
-                              volume: nextMuted ? 0 : t.volume <= 0 ? 1 : t.volume,
-                            });
-                          },
-                          onToggleLock: () =>
-                            patchAudioTrack(t.id, { locked: !t.locked }),
-                          onToggleSolo: () => toggleAudioSolo(t.id),
+                        <span className="flex h-full items-end pb-0.5">
+                          المسارات
+                        </span>
+                      </div>
+                      {layersTopFirst.map((track, revIdx) => {
+                        const num = videoLayers.length + 1 - revIdx;
+                        return (
+                          <div
+                            key={track.id}
+                            style={{ height: VIDEO_H + 4 }}
+                          >
+                            {laneHeader(`فيديو ${num}`, {
+                              visible: track.visible,
+                              muted: track.muted,
+                              locked: track.locked,
+                              showSolo: false,
+                              onToggleVisible: () =>
+                                patchVideoLayer(track.id, {
+                                  visible: !track.visible,
+                                }),
+                              onToggleMute: () =>
+                                patchVideoLayer(track.id, {
+                                  muted: !track.muted,
+                                }),
+                              onToggleLock: () =>
+                                patchVideoLayer(track.id, {
+                                  locked: !track.locked,
+                                }),
+                            })}
+                          </div>
+                        );
+                      })}
+                      <div style={{ height: VIDEO_H + 4 }}>
+                        {laneHeader("فيديو 1", {
+                          visible: videoLane.visible,
+                          muted: videoLane.muted,
+                          locked: videoLane.locked,
+                          solo: videoLane.solo,
+                          onToggleVisible: () => toggleVideoLane("visible"),
+                          onToggleMute: () => toggleVideoLane("muted"),
+                          onToggleLock: () => toggleVideoLane("locked"),
+                          onToggleSolo: toggleVideoSolo,
                         })}
                       </div>
-                    ))}
-                    {lanes.length === 0 && (
+                      {lanes.map((t, i) => (
+                        <div
+                          key={t.id}
+                          style={{ height: LANE_H + LANE_GAP }}
+                        >
+                          {laneHeader(`صوت ${i + 1}`, {
+                            visible: t.visible !== false,
+                            muted: !!t.muted || t.volume <= 0,
+                            locked: !!t.locked,
+                            solo: !!t.solo,
+                            onToggleVisible: () =>
+                              patchAudioTrack(t.id, {
+                                visible: t.visible === false,
+                              }),
+                            onToggleMute: () => {
+                              const nextMuted = !(t.muted || t.volume <= 0);
+                              patchAudioTrack(t.id, {
+                                muted: nextMuted,
+                                volume: nextMuted
+                                  ? 0
+                                  : t.volume <= 0
+                                    ? 1
+                                    : t.volume,
+                              });
+                            },
+                            onToggleLock: () =>
+                              patchAudioTrack(t.id, { locked: !t.locked }),
+                            onToggleSolo: () => toggleAudioSolo(t.id),
+                          })}
+                        </div>
+                      ))}
+                      {lanes.length === 0 && (
+                        <div style={{ height: LANE_H + LANE_GAP }} />
+                      )}
                       <div
-                        className="border-b border-[#2a2a2e]"
-                        style={{ height: LANE_H + LANE_GAP }}
-                      />
-                    )}
-                    <div
-                      className="flex items-center justify-center"
-                      style={{ height: ADD_H + 8 }}
-                    >
-                      <button
-                        type="button"
-                        title="إضافة مسار صوت"
-                        onClick={() => {
-                          musicRef.current?.click();
-                          setPanel("media");
-                        }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#444] bg-[#222] text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                        className="flex items-center justify-center gap-1"
+                        style={{ height: ADD_H + 8 }}
                       >
-                        <Plus className="h-4 w-4" />
-                      </button>
+                        <button
+                          type="button"
+                          title="إضافة مسار فيديو (طبقة مونتاج)"
+                          onClick={addVideoLayerTrack}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#f5c518]/50 bg-[#2a2410] text-[#f5c518] hover:bg-[#3a3218]"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          title="إضافة مسار صوت"
+                          onClick={() => {
+                            musicRef.current?.click();
+                            setPanel("media");
+                          }}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#444] bg-[#222] text-[#ccc] hover:border-[#7dd3fc] hover:text-[#7dd3fc]"
+                        >
+                          <Music className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -3122,6 +3577,7 @@ export function VideoEditorWorkspace({
                     ref={timelineScrollRef}
                     dir="ltr"
                     className="min-w-0 flex-1 overflow-x-auto overflow-y-auto"
+                    onScroll={syncHeaderScroll}
                   >
                     <div
                       ref={timelineRef}
@@ -3141,7 +3597,6 @@ export function VideoEditorWorkspace({
                         setCtxMenu(clampMenuPos(e.clientX, e.clientY));
                       }}
                     >
-                      {/* Ruler */}
                       <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[22px] items-end justify-between border-b border-[#2a2a2e] px-1 pb-0.5 text-[9px] text-[#777]">
                         {Array.from({
                           length: Math.max(
@@ -3157,10 +3612,123 @@ export function VideoEditorWorkspace({
                         ))}
                       </div>
 
-                      {/* Video lane */}
+                      {/* Extra video layers (top → just above Video 1) */}
+                      {layersTopFirst.map((track, revIdx) => {
+                        const top = RULER + 2 + revIdx * (VIDEO_H + 4);
+                        const clips = layerClips.filter(
+                          (c) => c.trackId === track.id,
+                        );
+                        return (
+                          <div
+                            key={track.id}
+                            className="absolute inset-x-0"
+                            style={{ top, height: VIDEO_H }}
+                          >
+                            <div className="pointer-events-none absolute inset-y-0 w-full border-t border-[#252528]" />
+                            {clips.map((clip) => {
+                              const left = timelinePct(trimIn + clip.start);
+                              const width = duration
+                                ? Math.max(1.2, (clip.duration / duration) * 100)
+                                : 1;
+                              const selected = selectedId === clip.id;
+                              return (
+                                <div
+                                  key={clip.id}
+                                  role="button"
+                                  tabIndex={0}
+                                  className={`absolute h-full overflow-hidden rounded border ${
+                                    track.locked || clip.locked
+                                      ? "cursor-not-allowed"
+                                      : "cursor-grab active:cursor-grabbing"
+                                  } ${
+                                    selected
+                                      ? "border-[#f5c518] ring-1 ring-[#f5c518]/40"
+                                      : clip.kind === "image"
+                                        ? "border-violet-600"
+                                        : "border-amber-600"
+                                  } ${
+                                    clip.kind === "image"
+                                      ? "bg-violet-900/80"
+                                      : "bg-[#5a3a10]"
+                                  } ${!track.visible ? "opacity-35" : ""}`}
+                                  style={{
+                                    left: `${left}%`,
+                                    width: `${width}%`,
+                                  }}
+                                  title={clip.name}
+                                  onPointerDown={(e) =>
+                                    onLayerClipPointerDown(
+                                      e,
+                                      clip.id,
+                                      "layer-move",
+                                    )
+                                  }
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSelectedId(clip.id);
+                                    setCtxMenu(
+                                      clampMenuPos(e.clientX, e.clientY),
+                                    );
+                                  }}
+                                >
+                                  <div className="pointer-events-none flex h-full items-center gap-1 px-2 text-[10px] font-semibold text-amber-100">
+                                    {(track.locked || clip.locked) && (
+                                      <Lock className="h-3 w-3 shrink-0" />
+                                    )}
+                                    <span className="truncate">{clip.name}</span>
+                                  </div>
+                                  {!(track.locked || clip.locked) && (
+                                    <>
+                                      <div
+                                        className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize bg-white/80"
+                                        onPointerDown={(e) =>
+                                          onLayerClipPointerDown(
+                                            e,
+                                            clip.id,
+                                            "layer-trim-in",
+                                          )
+                                        }
+                                      />
+                                      <div
+                                        className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize bg-white/80"
+                                        onPointerDown={(e) =>
+                                          onLayerClipPointerDown(
+                                            e,
+                                            clip.id,
+                                            "layer-trim-out",
+                                          )
+                                        }
+                                      />
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {clips.length === 0 && (
+                              <button
+                                type="button"
+                                className="absolute inset-x-2 inset-y-1 rounded border border-dashed border-[#444] text-[10px] text-[#888] hover:border-[#f5c518] hover:text-[#f5c518]"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  layerTargetTrackRef.current = track.id;
+                                  layerMediaRef.current?.click();
+                                }}
+                              >
+                                + فيديو أو صورة
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Video 1 base lane */}
                       <div
                         className="absolute inset-x-0"
-                        style={{ top: RULER + 4, height: VIDEO_H }}
+                        style={{
+                          top: RULER + 2 + layerCount * (VIDEO_H + 4),
+                          height: VIDEO_H,
+                        }}
                       >
                         <div
                           className={`absolute h-full overflow-hidden rounded border-2 border-amber-400 ${
@@ -3201,10 +3769,15 @@ export function VideoEditorWorkspace({
                         </div>
                       </div>
 
-                      {/* Stacked audio lanes */}
+                      {/* Audio lanes */}
                       {lanes.map((t, i) => {
                         const top =
-                          RULER + VIDEO_H + 12 + i * (LANE_H + LANE_GAP);
+                          RULER +
+                          2 +
+                          layerCount * (VIDEO_H + 4) +
+                          VIDEO_H +
+                          8 +
+                          i * (LANE_H + LANE_GAP);
                         const left = timelinePct(trimIn + t.start);
                         const width = duration
                           ? Math.max(1.2, (t.duration / duration) * 100)
@@ -3302,14 +3875,15 @@ export function VideoEditorWorkspace({
                         );
                       })}
 
-                      {/* Empty placeholder lane */}
                       <div
                         className="absolute inset-x-2 flex items-center justify-center gap-2 rounded border border-dashed border-[#333] text-[11px] text-[#666]"
                         style={{
                           top:
                             RULER +
+                            2 +
+                            layerCount * (VIDEO_H + 4) +
                             VIDEO_H +
-                            12 +
+                            8 +
                             Math.max(1, lanes.length) * (LANE_H + LANE_GAP),
                           height: ADD_H,
                         }}
@@ -3318,18 +3892,27 @@ export function VideoEditorWorkspace({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            addVideoLayerTrack();
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-[#f5c518]/40 bg-[#2a2410] px-2 py-0.5 text-[#f5c518] hover:bg-[#3a3218]"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          مسار فيديو
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
                             musicRef.current?.click();
                             setPanel("media");
                           }}
-                          className="inline-flex items-center gap-1 rounded-full border border-[#444] bg-[#222] px-2 py-0.5 text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                          className="inline-flex items-center gap-1 rounded-full border border-[#444] bg-[#222] px-2 py-0.5 text-[#ccc] hover:border-[#7dd3fc] hover:text-[#7dd3fc]"
                         >
                           <Plus className="h-3.5 w-3.5" />
-                          أضف مسار صوت
+                          مسار صوت
                         </button>
-                        <span>ضع الملفات هنا أو اضغط للرفع</span>
                       </div>
 
-                      {/* Playhead */}
                       <div
                         className="pointer-events-none absolute top-0 z-30 h-full w-0.5 bg-[#ff4d2e]"
                         style={{ left: `${timelinePct(currentTime)}%` }}
@@ -3342,8 +3925,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              عين = إظهار · ميك = عزل · سماعة = كتم · قفل = منع التعديل · + =
-              مسار جديد
+              تمرير ↑↓ للمسارات · Ctrl+عجلة للتكبير · + فيديو = طبقة مونتاج فوق
+              الفيديو
             </p>
           </div>
         </div>

@@ -42,6 +42,23 @@ export type VideoAudioTrack = {
   linked?: boolean;
 };
 
+/** Timed video/image layers composited above the base clip */
+export type VideoLayerClip = {
+  file: File;
+  kind: "video" | "image";
+  /** Start on exported timeline (seconds) */
+  start: number;
+  duration: number;
+  /** Skip into source (seconds) — video only */
+  offset?: number;
+  /** Normalized 0–1 of output frame */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  opacity?: number;
+};
+
 export type VideoProjectExport = {
   file: File;
   trimIn: number;
@@ -64,6 +81,8 @@ export type VideoProjectExport = {
   videoY: number;
   videoW: number;
   videoH: number;
+  /** Bottom → top stacking order */
+  videoLayers?: VideoLayerClip[];
   overlays: VideoProjectOverlay[];
   audioTracks: VideoAudioTrack[];
   /** Normalized crop 0–1 relative to source frame */
@@ -166,6 +185,7 @@ export async function exportVideoProject(
     videoY,
     videoW,
     videoH,
+    videoLayers = [],
     overlays,
     audioTracks,
     crop,
@@ -192,6 +212,22 @@ export async function exportVideoProject(
     input,
   ];
   const tempFiles: string[] = [input];
+
+  const layerNames: string[] = [];
+  for (let i = 0; i < videoLayers.length; i++) {
+    const layer = videoLayers[i]!;
+    const ext =
+      layer.kind === "image"
+        ? layer.file.type.includes("png")
+          ? "png"
+          : "jpg"
+        : extensionForMime(layer.file.type, "mp4");
+    const name = `lyr${i}.${ext}`;
+    await ffmpeg.writeFile(name, await fetchFile(layer.file));
+    layerNames.push(name);
+    tempFiles.push(name);
+    args.push("-i", name);
+  }
 
   const overlayNames: string[] = [];
   for (let i = 0; i < overlays.length; i++) {
@@ -222,7 +258,7 @@ export async function exportVideoProject(
     }
   }
 
-  const audioStartIndex = 1 + overlays.length;
+  const audioStartIndex = 1 + videoLayers.length + overlays.length;
   const linkedTrack = audioTracks.find((t) => t.linked);
   const extraTracks = audioTracks.filter((t) => !t.linked);
   for (let i = 0; i < extraTracks.length; i++) {
@@ -292,8 +328,40 @@ export async function exportVideoProject(
   fc.push(`[scaled]pad=${ow}:${oh}:${vx}:${vy}:black[v0]`);
 
   let vlabel = "v0";
-  overlays.forEach((ov, i) => {
+  // Video/image montage layers (timed), bottom → top
+  videoLayers.forEach((layer, i) => {
     const inputIdx = i + 1;
+    const ox = Math.round(layer.x * ow);
+    const oy = Math.round(layer.y * oh);
+    const iw = Math.max(2, Math.round(layer.w * ow));
+    const ih = Math.max(2, Math.round(layer.h * oh));
+    const a = Math.max(0.05, Math.min(1, layer.opacity ?? 1));
+    const start = Math.max(0, layer.start);
+    const dur = Math.max(0.05, layer.duration);
+    const end = start + dur;
+    const next = `vl${i}`;
+    const prep: string[] = [];
+    if (layer.kind === "video") {
+      const off = Math.max(0, layer.offset || 0);
+      prep.push(
+        `trim=start=${off.toFixed(3)}:duration=${dur.toFixed(3)}`,
+        "setpts=PTS-STARTPTS",
+      );
+    }
+    prep.push(`scale=${iw}:${ih}:force_original_aspect_ratio=decrease`);
+    prep.push(`pad=${iw}:${ih}:(ow-iw)/2:(oh-ih)/2`);
+    if (a < 0.999) {
+      prep.push(`format=rgba,colorchannelmixer=aa=${a.toFixed(3)}`);
+    }
+    fc.push(`[${inputIdx}:v]${prep.join(",")}[lyr${i}]`);
+    fc.push(
+      `[${vlabel}][lyr${i}]overlay=${ox}:${oy}:enable='between(t\\,${start.toFixed(3)}\\,${end.toFixed(3)})'[${next}]`,
+    );
+    vlabel = next;
+  });
+
+  overlays.forEach((ov, i) => {
+    const inputIdx = 1 + videoLayers.length + i;
     const ox = Math.round(ov.x * ow);
     const oy = Math.round(ov.y * oh);
     const next = `v${i + 1}`;
@@ -433,6 +501,9 @@ export async function exportVideoProject(
       "-i",
       input,
     ];
+    for (const name of layerNames) {
+      videoArgs.push("-i", name);
+    }
     for (const name of overlayNames) {
       videoArgs.push("-i", name);
     }
