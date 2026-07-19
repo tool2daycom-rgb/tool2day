@@ -1,15 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 148" fill="none" role="img" aria-label="Tool2Day">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 150" fill="none" role="img" aria-label="Tool2Day">
   <defs>
-    <clipPath id="b1">
-      <rect x="82" y="82" width="24" height="44" rx="12"/>
+    <clipPath id="barShort">
+      <rect x="88" y="86" width="26" height="46" rx="13"/>
     </clipPath>
   </defs>
-  <rect x="82" y="82" width="24" height="44" rx="12" fill="#5B9BF5"/>
-  <rect x="112" y="54" width="24" height="72" rx="12" fill="#F5C518"/>
-  <rect x="142" y="28" width="24" height="98" rx="12" fill="#E8874A"/>
-  <circle cx="60" cy="64" r="42" fill="#F5C518"/>
-  <circle cx="60" cy="64" r="42" fill="#7C6AF2" clip-path="url(#b1)"/>
-  <g transform="rotate(48 34 118)">
-    <rect x="24" y="98" width="16" height="52" rx="8" fill="#E8874A"/>
-  </g>
+  <!-- Rising bars -->
+  <rect x="88" y="86" width="26" height="46" rx="13" fill="#5B9BF5"/>
+  <rect x="120" y="56" width="26" height="76" rx="13" fill="#F5C518"/>
+  <rect x="152" y="28" width="26" height="104" rx="13" fill="#E8874A"/>
+  <!-- Lens -->
+  <circle cx="58" cy="66" r="44" fill="#F5C518"/>
+  <!-- Violet overlap (distinct from Google red) -->
+  <circle cx="58" cy="66" r="44" fill="#7C6AF2" clip-path="url(#barShort)"/>
+  <!-- Handle outside, mirrored angle -->
+  <line
+    x1="28" y1="98"
+    x2="6" y2="132"
+    stroke="#E8874A"
+    stroke-width="16"
+    stroke-linecap="round"
+  />
 </svg>
