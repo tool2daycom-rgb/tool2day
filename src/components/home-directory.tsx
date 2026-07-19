@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 import { isToolLive } from "@/lib/processors/active-tools";
 import {
   categoryMeta,
@@ -56,9 +57,9 @@ export function HomeDirectory() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-12 text-center sm:mb-16">
-        <p className="font-[family-name:var(--font-display)] text-4xl font-extrabold tracking-tight text-[#111] sm:text-5xl">
-          Tool2Day
-        </p>
+        <div className="flex justify-center">
+          <BrandLogo size="lg" showWord className="text-4xl text-[#111] sm:text-5xl" />
+        </div>
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
           الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
         </h1>

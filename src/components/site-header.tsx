@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronDown, Globe, User } from "lucide-react";
 import { useState } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 import {
   categoryMeta,
   getToolsByCategory,
@@ -18,14 +19,10 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link
           href="/"
-          className="flex shrink-0 items-center gap-2 font-[family-name:var(--font-display)] text-lg font-bold tracking-tight"
+          className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight"
+          aria-label="Tool2Day — الصفحة الرئيسية"
         >
-          <span className="flex gap-1" aria-hidden>
-            <span className="h-2 w-2 rounded-full bg-[#ff8a3d]" />
-            <span className="h-2 w-2 rounded-full bg-[#ffd24d]" />
-            <span className="h-2 w-2 rounded-full bg-[#4da3ff]" />
-          </span>
-          Tool2Day
+          <BrandLogo size="md" showWord />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

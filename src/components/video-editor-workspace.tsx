@@ -3683,7 +3683,13 @@ export function VideoEditorWorkspace({
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Clapperboard className="h-4 w-4 text-[#f5c518]" />
           {fullscreen && (
-            <a href="/" className="text-[#f5c518] hover:underline">
+            <a href="/" className="inline-flex items-center gap-2 text-[#f5c518] hover:underline">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/logo-mark-sizes.svg"
+                alt=""
+                className="h-4 w-auto"
+              />
               Tool2Day
             </a>
           )}
