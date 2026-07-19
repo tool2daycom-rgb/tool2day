@@ -417,6 +417,42 @@ function aspectSize(
   return { w: Math.round((max * videoW) / Math.max(1, videoH)), h: max };
 }
 
+type VideoResizeCorner = "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w";
+
+/** يضع الفيديو داخل القماش بنسبة احتواء مع هامش للتحريك */
+function fitVideoInCanvas(
+  canvasW: number,
+  canvasH: number,
+  mediaW: number,
+  mediaH: number,
+  pad = 0.12,
+): { x: number; y: number; w: number; h: number } {
+  const cw = Math.max(1, canvasW);
+  const ch = Math.max(1, canvasH);
+  const mw = Math.max(1, mediaW || cw);
+  const mh = Math.max(1, mediaH || ch);
+  const canvasRatio = cw / ch;
+  const mediaRatio = mw / mh;
+  const maxSpan = 1 - pad * 2;
+  let w: number;
+  let h: number;
+  if (mediaRatio > canvasRatio) {
+    w = maxSpan;
+    h = (w * cw) / mediaRatio / ch;
+  } else {
+    h = maxSpan;
+    w = (h * ch * mediaRatio) / cw;
+  }
+  w = Math.min(maxSpan, Math.max(0.15, w));
+  h = Math.min(maxSpan, Math.max(0.15, h));
+  return {
+    x: (1 - w) / 2,
+    y: (1 - h) / 2,
+    w,
+    h,
+  };
+}
+
 function nextId(counterRef: { current: number }, prefix: string) {
   counterRef.current += 1;
   return `${prefix}-${counterRef.current}`;
@@ -494,7 +530,7 @@ export function VideoEditorWorkspace({
       | "main-trim-in"
       | "main-trim-out";
     id?: string;
-    corner?: "se";
+    corner?: VideoResizeCorner | "se";
     startX: number;
     startY: number;
     ox: number;
@@ -631,11 +667,12 @@ export function VideoEditorWorkspace({
   function applyAspect(id: Aspect) {
     setAspect(id);
     setLockProjectSize(false);
-    setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
     const preset = ASPECT_PRESETS.find((p) => p.id === id);
+    let nextOut = aspectSize(id, videoNatural.w, videoNatural.h, customSize);
     if (preset && preset.w > 0 && preset.h > 0) {
       setCustomSize({ w: preset.w, h: preset.h });
       setProjectProfile((p) => ({ ...p, w: preset.w, h: preset.h }));
+      nextOut = { w: preset.w, h: preset.h };
     }
     if (id === "custom") {
       setProjectProfile((p) => ({
@@ -643,8 +680,21 @@ export function VideoEditorWorkspace({
         w: customSize.w,
         h: customSize.h,
       }));
+      nextOut = aspectSize("custom", videoNatural.w, videoNatural.h, customSize);
     }
+    setVideoBox(
+      fitVideoInCanvas(
+        nextOut.w,
+        nextOut.h,
+        videoNatural.w || nextOut.w,
+        videoNatural.h || nextOut.h,
+      ),
+    );
+    setStatus(`حجم القماش: ${nextOut.w}×${nextOut.h}`);
     setAspectMenuOpen(false);
+    setPanel("canvas");
+    setPropTab("video");
+    setSelectedId("video");
   }
 
   function updateVideoScale(axis: "w" | "h", pct: number) {
@@ -1281,7 +1331,10 @@ export function VideoEditorWorkspace({
     setTrimOut(d);
     setCurrentTime(0);
     setVideoNatural({ w: mw, h: mh });
-    setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
+    const canvas = lockProjectSize
+      ? { w: projectProfile.w, h: projectProfile.h }
+      : aspectSize(aspect, mw, mh, customSize);
+    setVideoBox(fitVideoInCanvas(canvas.w, canvas.h, mw, mh));
     setMainClips([
       {
         id: nextId(idCounterRef, "main"),
@@ -1343,6 +1396,7 @@ export function VideoEditorWorkspace({
     setLockProjectSize(false);
     setAspect("original");
     setVideoNatural({ w: media.w, h: media.h });
+    setVideoBox(fitVideoInCanvas(media.w, media.h, media.w, media.h));
     setStatus(`تمت مطابقة المشروع مع الوسائط: ${media.w}×${media.h} ${media.fps}fps`);
     setMediaPrompt(null);
   }
@@ -2407,6 +2461,7 @@ export function VideoEditorWorkspace({
   function onVideoHandleDown(
     e: ReactPointerEvent,
     kind: "video-move" | "video-resize",
+    corner: VideoResizeCorner = "se",
   ) {
     e.preventDefault();
     e.stopPropagation();
@@ -2419,6 +2474,7 @@ export function VideoEditorWorkspace({
     setPropTab("video");
     dragRef.current = {
       kind,
+      corner,
       startX: e.clientX,
       startY: e.clientY,
       ox: videoBox.x,
@@ -2426,16 +2482,41 @@ export function VideoEditorWorkspace({
       ow: videoBox.w,
       oh: videoBox.h,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const onMove = (ev: PointerEvent) => {
+      applyMainVideoDrag(ev.clientX, ev.clientY);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (
+        dragRef.current?.kind === "video-move" ||
+        dragRef.current?.kind === "video-resize"
+      ) {
+        dragRef.current = null;
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
   }
 
-  function onStagePointerMove(e: ReactPointerEvent) {
+  function applyMainVideoDrag(clientX: number, clientY: number) {
     const drag = dragRef.current;
     const stage = stageRef.current;
     if (!drag || !stage) return;
+    if (drag.kind !== "video-move" && drag.kind !== "video-resize") return;
     const rect = stage.getBoundingClientRect();
-    const dx = (e.clientX - drag.startX) / rect.width;
-    const dy = (e.clientY - drag.startY) / rect.height;
+    if (rect.width < 2 || rect.height < 2) return;
+    const dx = (clientX - drag.startX) / rect.width;
+    const dy = (clientY - drag.startY) / rect.height;
+    const min = 0.08;
 
     if (drag.kind === "video-move") {
       setVideoBox({
@@ -2446,12 +2527,62 @@ export function VideoEditorWorkspace({
       });
       return;
     }
-    if (drag.kind === "video-resize") {
-      const w = Math.max(0.15, Math.min(1 - drag.ox, drag.ow + dx));
-      const h = Math.max(0.15, Math.min(1 - drag.oy, drag.oh + dy));
-      setVideoBox({ x: drag.ox, y: drag.oy, w, h });
+
+    const corner = (drag.corner as VideoResizeCorner) || "se";
+    let x = drag.ox;
+    let y = drag.oy;
+    let w = drag.ow;
+    let h = drag.oh;
+
+    if (corner === "e" || corner === "ne" || corner === "se") {
+      w = Math.max(min, Math.min(1 - drag.ox, drag.ow + dx));
+    }
+    if (corner === "s" || corner === "se" || corner === "sw") {
+      h = Math.max(min, Math.min(1 - drag.oy, drag.oh + dy));
+    }
+    if (corner === "w" || corner === "nw" || corner === "sw") {
+      w = Math.max(min, Math.min(drag.ow + drag.ox, drag.ow - dx));
+      x = drag.ox + drag.ow - w;
+    }
+    if (corner === "n" || corner === "nw" || corner === "ne") {
+      h = Math.max(min, Math.min(drag.oh + drag.oy, drag.oh - dy));
+      y = drag.oy + drag.oh - h;
+    }
+
+    if (
+      scaleLock &&
+      (corner === "nw" || corner === "ne" || corner === "sw" || corner === "se")
+    ) {
+      const ratio = drag.ow / Math.max(0.001, drag.oh);
+      if (Math.abs(dx) * rect.width >= Math.abs(dy) * rect.height) {
+        h = Math.max(min, w / ratio);
+        if (corner === "nw" || corner === "ne") y = drag.oy + drag.oh - h;
+        if (corner === "nw" || corner === "sw") x = drag.ox + drag.ow - w;
+      } else {
+        w = Math.max(min, h * ratio);
+        if (corner === "nw" || corner === "sw") x = drag.ox + drag.ow - w;
+        if (corner === "nw" || corner === "ne") y = drag.oy + drag.oh - h;
+      }
+    }
+
+    w = Math.min(1, Math.max(min, w));
+    h = Math.min(1, Math.max(min, h));
+    x = Math.max(0, Math.min(1 - w, x));
+    y = Math.max(0, Math.min(1 - h, y));
+    setVideoBox({ x, y, w, h });
+  }
+
+  function onStagePointerMove(e: ReactPointerEvent) {
+    const drag = dragRef.current;
+    const stage = stageRef.current;
+    if (!drag || !stage) return;
+    if (drag.kind === "video-move" || drag.kind === "video-resize") {
+      applyMainVideoDrag(e.clientX, e.clientY);
       return;
     }
+    const rect = stage.getBoundingClientRect();
+    const dx = (e.clientX - drag.startX) / rect.width;
+    const dy = (e.clientY - drag.startY) / rect.height;
     if ((drag.kind === "move" || drag.kind === "resize") && drag.id) {
       if (layerClips.some((c) => c.id === drag.id)) {
         setLayerClips((prev) =>
@@ -4938,17 +5069,22 @@ export function VideoEditorWorkspace({
         {/* Preview + timeline */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0a0a0b]">
           <div
-            className={`flex flex-1 items-center justify-center p-4 ${
+            className={`flex flex-1 items-center justify-center overflow-hidden p-4 ${
               fullscreen ? "min-h-0" : ""
             }`}
           >
             <div
               ref={stageRef}
-              className={`relative w-full max-w-4xl bg-black shadow-2xl ${
-                fullscreen ? "max-h-full" : "max-h-[48vh]"
-              } ${previewTool === "hand" ? "cursor-grab active:cursor-grabbing" : ""}`}
+              className={`relative bg-black shadow-2xl ${
+                previewTool === "hand" ? "cursor-grab active:cursor-grabbing" : ""
+              }`}
               style={{
                 aspectRatio: `${outSize.w} / ${outSize.h}`,
+                width: fullscreen
+                  ? `min(100%, calc(85vh * ${outSize.w} / ${outSize.h}))`
+                  : `min(100%, calc(48vh * ${outSize.w} / ${outSize.h}))`,
+                maxHeight: fullscreen ? "100%" : "48vh",
+                height: "auto",
               }}
               onPointerMove={onStagePointerMove}
               onPointerUp={onPointerUp}
@@ -4964,8 +5100,8 @@ export function VideoEditorWorkspace({
               }}
             >
               <div
-                className={`absolute overflow-hidden ${
-                  selectedId === "video" ? "ring-2 ring-[#f5c518]" : ""
+                className={`absolute z-10 overflow-visible ${
+                  selectedId === "video" ? "outline outline-2 outline-[#f5c518]" : ""
                 } ${
                   previewTool === "hand"
                     ? "cursor-grab active:cursor-grabbing"
@@ -4988,6 +5124,7 @@ export function VideoEditorWorkspace({
                   ]
                     .filter(Boolean)
                     .join(" ") || undefined,
+                  touchAction: "none",
                 }}
                 onPointerDown={(e) => {
                   e.stopPropagation();
@@ -4998,17 +5135,32 @@ export function VideoEditorWorkspace({
                 <video
                   ref={videoRef}
                   src={url}
-                  className="h-full w-full object-contain"
+                  className="pointer-events-none h-full w-full object-fill"
                   onLoadedMetadata={onLoadedMeta}
-                  onClick={(e) => e.stopPropagation()}
                   playsInline
+                  draggable={false}
                 />
-                {selectedId === "video" && (
-                  <div
-                    className="absolute bottom-0 right-0 h-3.5 w-3.5 translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[#111] bg-[#f5c518]"
-                    onPointerDown={(e) => onVideoHandleDown(e, "video-resize")}
-                  />
-                )}
+                {selectedId === "video" &&
+                  (
+                    [
+                      ["nw", "left-0 top-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize"],
+                      ["ne", "right-0 top-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize"],
+                      ["sw", "left-0 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize"],
+                      ["se", "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize"],
+                      ["n", "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize"],
+                      ["s", "left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-ns-resize"],
+                      ["w", "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize"],
+                      ["e", "right-0 top-1/2 translate-x-1/2 -translate-y-1/2 cursor-ew-resize"],
+                    ] as const
+                  ).map(([corner, pos]) => (
+                    <div
+                      key={corner}
+                      className={`absolute z-20 h-3 w-3 rounded-full border-2 border-[#111] bg-white shadow ${pos}`}
+                      onPointerDown={(e) =>
+                        onVideoHandleDown(e, "video-resize", corner)
+                      }
+                    />
+                  ))}
               </div>
 
               {/* Montage layers (Video 2+) — stacked above base */}
