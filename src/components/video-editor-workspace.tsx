@@ -1071,27 +1071,71 @@ export function VideoEditorWorkspace({
     return null;
   }
 
-  function splitAtPlayhead() {
-    const cutAt = currentTime; // القص تماماً عند الخط الأحمر
+  /** يجد مقطعاً قابلاً للقص تحت/قرب الخط الأحمر (حتى عند الحافة) */
+  function resolveCutTime<
+    T extends { start: number; duration: number },
+  >(
+    clips: T[],
+    cutAt: number,
+  ): { clip: T; at: number } | null {
+    const MIN = 0.08;
+    const interior = clips
+      .map((c) => {
+        const edge = Math.min(MIN, Math.max(0.04, c.duration / 4));
+        if (cutAt >= c.start + edge && cutAt <= c.start + c.duration - edge) {
+          return { clip: c, at: cutAt, dist: 0 };
+        }
+        return null;
+      })
+      .filter(Boolean) as { clip: T; at: number; dist: number }[];
+    if (interior.length > 0) {
+      return { clip: interior[0]!.clip, at: interior[0]!.at };
+    }
+    // قرب بداية مقطع → قص قليلاً داخله (صورة المقص على حافة المقطع)
+    let best: { clip: T; at: number; dist: number } | null = null;
+    for (const c of clips) {
+      if (c.duration < MIN * 2) continue;
+      const edge = Math.min(MIN, c.duration / 4);
+      const dStart = cutAt - c.start;
+      if (dStart >= -0.12 && dStart < edge) {
+        const cand = { clip: c, at: c.start + edge, dist: Math.abs(dStart) };
+        if (!best || cand.dist < best.dist) best = cand;
+      }
+      const end = c.start + c.duration;
+      const dEnd = end - cutAt;
+      if (dEnd >= -0.12 && dEnd < edge) {
+        const cand = { clip: c, at: end - edge, dist: Math.abs(dEnd) };
+        if (!best || cand.dist < best.dist) best = cand;
+      }
+    }
+    return best ? { clip: best.clip, at: best.at } : null;
+  }
 
-    // 1) أولاً: قص فيديو 1 عند الخط الأحمر وافتح فراغاً للمونتاج
+  /** يقص المقطع تحت الخط الأحمر؛ على فيديو 1 يفتح فراغاً ويزحزح الصوت/الطبقات بعده */
+  function splitAtPlayhead() {
+    const rawCut = currentTime;
+    const INSERT_GAP = 3;
+
     const clips =
       mainClips.length > 0
         ? mainClips
-        : [
-            {
-              id: "main-1",
-              start: 0,
-              duration: Math.max(0.1, duration || trimOut - trimIn),
-              offset: 0,
-            } satisfies MainClip,
-          ];
-    const mainUnder = clips.find(
-      (c) => cutAt >= c.start + 0.08 && cutAt <= c.start + c.duration - 0.08,
-    );
-    if (mainUnder) {
+        : duration > 0
+          ? [
+              {
+                id: "main-1",
+                start: 0,
+                duration,
+                offset: 0,
+              } satisfies MainClip,
+            ]
+          : [];
+
+    // 1) فيديو 1 → قص + فراغ + مزامنة الصوت/الطبقات
+    const mainHit = resolveCutTime(clips, rawCut);
+    if (mainHit) {
+      const cutAt = mainHit.at;
+      const mainUnder = mainHit.clip;
       const local = cutAt - mainUnder.start;
-      const INSERT_GAP = 3; // فراغ جاهز لوضع صورة/فيديو بين اللقطتين
       const rightId = nextId(idCounterRef, "main");
       const left: MainClip = { ...mainUnder, duration: local };
       const right: MainClip = {
@@ -1111,102 +1155,185 @@ export function VideoEditorWorkspace({
         nextClips.reduce((m, c) => Math.max(m, c.start + c.duration), duration),
       );
 
-      // قص الصوت المرتبط بنفس النقطة مع نفس الفراغ
+      // طبقات: قص المتقاطع + إزاحة ما بعد نقطة القص بنفس الفراغ
+      setLayerClips((prev) =>
+        prev.flatMap((c) => {
+          const end = c.start + c.duration;
+          if (cutAt > c.start + 0.04 && cutAt < end - 0.04) {
+            const aLocal = cutAt - c.start;
+            const rightLayerId = nextId(idCounterRef, "lsplit");
+            return [
+              { ...c, duration: aLocal },
+              {
+                ...c,
+                id: rightLayerId,
+                name: `${c.name} (2)`,
+                start: c.start + aLocal + INSERT_GAP,
+                offset: c.offset + aLocal,
+                duration: c.duration - aLocal,
+              },
+            ];
+          }
+          if (c.start >= cutAt - 0.04) {
+            return [{ ...c, start: c.start + INSERT_GAP }];
+          }
+          return [c];
+        }),
+      );
+
+      // صوت: قص المتقاطع + إزاحة المقاطع بعد القص لتتوازن مع الفيديو
       setAudioTracks((prev) =>
         prev.flatMap((t) => {
-          if (
-            t.id !== "linked-audio" &&
-            !t.id.startsWith("detached-")
-          ) {
-            return [t];
-          }
           const absStart = t.start;
           const absEnd = absStart + t.duration;
-          if (cutAt <= absStart + 0.08 || cutAt >= absEnd - 0.08) return [t];
-          const aLocal = cutAt - absStart;
-          const rightAudioId = nextId(idCounterRef, "audio");
-          return [
-            { ...t, duration: aLocal },
-            {
-              ...t,
-              id: rightAudioId,
-              name: `${t.name} (2)`,
-              start: absStart + aLocal + INSERT_GAP,
-              offset: (t.offset || 0) + aLocal,
-              duration: t.duration - aLocal,
-            },
-          ];
+          if (cutAt > absStart + 0.04 && cutAt < absEnd - 0.04) {
+            const aLocal = cutAt - absStart;
+            const rightAudioId = nextId(idCounterRef, "audio");
+            return [
+              { ...t, duration: aLocal },
+              {
+                ...t,
+                id: rightAudioId,
+                name: `${t.name} (2)`,
+                start: absStart + aLocal + INSERT_GAP,
+                offset: (t.offset || 0) + aLocal,
+                duration: t.duration - aLocal,
+              },
+            ];
+          }
+          if (absStart >= cutAt - 0.04) {
+            return [{ ...t, start: absStart + INSERT_GAP }];
+          }
+          return [t];
         }),
       );
 
       setSelectedId("video");
+      setError(null);
       setStatus(
-        `تم القص عند ${formatTime(cutAt)} — فراغ 3 ثوانٍ جاهز: اسحب صورة/فيديو إلى الفراغ`,
+        `تم القص عند ${formatTime(cutAt)} — اضغط على الفراغ أو اسحب صورة/فيديو إليه`,
       );
-      setError(null);
       return;
     }
 
-    // 2) تقسيم طبقة مونتاج تحت الرأس
-    const selectedLayer = layerClips.find((c) => c.id === selectedId);
-    const layerUnder =
-      selectedLayer ||
-      layerClips.find(
-        (c) => cutAt >= c.start && cutAt < c.start + c.duration,
-      );
-    if (layerUnder) {
-      const local = cutAt - layerUnder.start;
-      if (local <= 0.12 || local >= layerUnder.duration - 0.12) {
-        setError("حرّك الخط الأحمر داخل المقطع ثم اضغط المقص");
-        return;
-      }
-      const rightId = nextId(idCounterRef, "lsplit");
-      setLayerClips((prev) => [
-        ...prev.filter((c) => c.id !== layerUnder.id),
-        { ...layerUnder, duration: local },
-        {
-          ...layerUnder,
-          id: rightId,
-          name: `${layerUnder.name} (2)`,
-          start: layerUnder.start + local,
-          offset: layerUnder.offset + local,
-          duration: layerUnder.duration - local,
-        },
-      ]);
-      setSelectedId(rightId);
-      setStatus(`تم تقسيم الطبقة عند ${formatTime(cutAt)}`);
+    // 2) طبقات المونتاج تحت/قرب الخط (صورة الثانية)
+    const layerHits = layerClips
+      .map((c) => resolveCutTime([c], rawCut))
+      .filter(Boolean) as { clip: LayerClip; at: number }[];
+    if (layerHits.length > 0) {
+      setLayerClips((prev) => {
+        let next = [...prev];
+        for (const hit of layerHits) {
+          const layerUnder = next.find((c) => c.id === hit.clip.id);
+          if (!layerUnder) continue;
+          const cutAt = hit.at;
+          const local = cutAt - layerUnder.start;
+          if (local <= 0.04 || local >= layerUnder.duration - 0.04) continue;
+          const rightId = nextId(idCounterRef, "lsplit");
+          next = [
+            ...next.filter((c) => c.id !== layerUnder.id),
+            { ...layerUnder, duration: local },
+            {
+              ...layerUnder,
+              id: rightId,
+              name: `${layerUnder.name} (2)`,
+              start: layerUnder.start + local,
+              offset: layerUnder.offset + local,
+              duration: layerUnder.duration - local,
+            },
+          ];
+        }
+        return next;
+      });
+      setSelectedId(layerHits[0]!.clip.id);
       setError(null);
+      setStatus(`تم تقسيم الطبقة عند ${formatTime(layerHits[0]!.at)}`);
       return;
     }
 
-    // 3) تقسيم مسار صوت محدد
-    const track = getSelectedAudioTrack();
-    if (track) {
-      const local = cutAt - trimIn - track.start;
-      if (local <= 0.15 || local >= track.duration - 0.15) {
-        setError("حرّك الخط الأحمر داخل مسار الصوت ثم اضغط المقص");
-        return;
-      }
-      const rightId = nextId(idCounterRef, "audio");
+    // 3) صوت تحت الخط
+    const audioHit = resolveCutTime(audioTracks, rawCut);
+    if (audioHit) {
+      const cutAt = audioHit.at;
+      const t = audioHit.clip;
+      const aLocal = cutAt - t.start;
+      const rightAudioId = nextId(idCounterRef, "audio");
       setAudioTracks((prev) => [
-        ...prev.filter((t) => t.id !== track.id),
-        { ...track, duration: local },
+        ...prev.filter((x) => x.id !== t.id),
+        { ...t, duration: aLocal },
         {
-          ...track,
-          id: rightId,
-          name: `${track.name} (2)`,
-          start: track.start + local,
-          offset: (track.offset || 0) + local,
-          duration: track.duration - local,
+          ...t,
+          id: rightAudioId,
+          name: `${t.name} (2)`,
+          start: t.start + aLocal,
+          offset: (t.offset || 0) + aLocal,
+          duration: t.duration - aLocal,
         },
       ]);
-      setSelectedId(rightId);
-      setStatus(`تم تقسيم الصوت عند ${formatTime(cutAt)}`);
+      setSelectedId(rightAudioId);
       setError(null);
+      setStatus(`تم تقسيم الصوت عند ${formatTime(cutAt)}`);
       return;
     }
 
-    setError("ضع الخط الأحمر داخل مقطع فيديو 1 ثم اضغط المقص");
+    if (findGapAt(rawCut)) {
+      setError(
+        "الخط الأحمر على الفراغ — حرّكه فوق مقطع فيديو/طبقة ثم اضغط المقص، أو اضغط على الفراغ لإضافة وسائط",
+      );
+      return;
+    }
+    setError("ضع الخط الأحمر فوق مقطع فيديو أو صوت ثم اضغط المقص");
+  }
+
+  async function insertMediaInGap(
+    gapStart: number,
+    _gapDur: number,
+    list?: FileList | null,
+    asset?: MediaAsset | null,
+  ) {
+    if (asset && asset.kind !== "audio") {
+      await placeAssetOnTimeline(asset, {
+        start: gapStart + 0.01,
+        newTrack: true,
+      });
+      setStatus("تم وضع المونتاج في الفراغ بين اللقطتين");
+      return;
+    }
+    if (list?.[0]) {
+      await placeFileAsLayer(list[0], {
+        newTrack: true,
+        start: gapStart + 0.01,
+      });
+      return;
+    }
+    // مكتبة المشروع: إن وُجدت وسائط غير صوت، ضع آخر صورة/فيديو
+    const lastVisual = [...mediaLibrary]
+      .reverse()
+      .find((a) => a.kind !== "audio");
+    if (lastVisual) {
+      await placeAssetOnTimeline(lastVisual, {
+        start: gapStart + 0.01,
+        newTrack: true,
+      });
+      setStatus(`وُضع «${lastVisual.name}» في الفراغ — أو اسحب ملفاً آخر`);
+      return;
+    }
+    layerTargetTrackRef.current = null;
+    const input = layerMediaRef.current;
+    if (!input) return;
+    const onChange = async () => {
+      input.removeEventListener("change", onChange);
+      const f = input.files?.[0];
+      if (f) {
+        await placeFileAsLayer(f, {
+          newTrack: true,
+          start: gapStart + 0.01,
+        });
+      }
+      input.value = "";
+    };
+    input.addEventListener("change", onChange);
+    input.click();
   }
 
   function copySelected() {
@@ -1980,7 +2107,9 @@ export function VideoEditorWorkspace({
     setTimelineDropTarget(null);
     const start = Math.max(0, timeFromClientX(e.clientX) - trimIn);
 
-    const assetId = e.dataTransfer.getData(MEDIA_DND_MIME);
+    const assetId =
+      e.dataTransfer.getData(MEDIA_DND_MIME) ||
+      e.dataTransfer.getData("text/plain");
     if (assetId) {
       const asset = mediaLibrary.find((a) => a.id === assetId);
       if (!asset) return;
@@ -2135,11 +2264,12 @@ export function VideoEditorWorkspace({
       drag.id
     ) {
       const el = timelineRef.current;
-      if (!el || !duration) return;
+      const d = projectEnd || duration;
+      if (!el || !d) return;
       const rect = el.getBoundingClientRect();
-      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * duration;
+      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * d;
       if (drag.kind === "audio-move") {
-        const maxStart = Math.max(0, duration - drag.ow);
+        const maxStart = Math.max(0, d - drag.ow);
         const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
         setAudioTracks((prev) =>
           prev.map((tr) =>
@@ -2179,11 +2309,12 @@ export function VideoEditorWorkspace({
       drag.id
     ) {
       const el = timelineRef.current;
-      if (!el || !duration) return;
+      const d = projectEnd || duration;
+      if (!el || !d) return;
       const rect = el.getBoundingClientRect();
-      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * duration;
+      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * d;
       if (drag.kind === "layer-move") {
-        const maxStart = Math.max(0, duration - drag.ow);
+        const maxStart = Math.max(0, d - drag.ow);
         const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
         const hoverTrack = resolveLayerTrackAtY(e.clientY);
         const dest =
@@ -2244,11 +2375,28 @@ export function VideoEditorWorkspace({
       const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * d;
       if (drag.kind === "main-move") {
         const nextStart = Math.max(0, drag.ox + dt);
+        const delta = nextStart - drag.ox;
         setMainClips((prev) =>
           prev.map((c) =>
             c.id === drag.id ? { ...c, start: nextStart } : c,
           ),
         );
+        // اسحب الصوت المتزامن مع نفس اللقطة ليتوازن تحتها
+        if (Math.abs(delta) > 0.001) {
+          setAudioTracks((prev) =>
+            prev.map((a) => {
+              const aligned =
+                Math.abs(a.start - drag.ox) < 0.12 &&
+                Math.abs(a.duration - drag.ow) < 0.25;
+              const overlaps =
+                a.start < drag.ox + drag.ow && a.start + a.duration > drag.ox;
+              if (aligned || (a.id === "linked-audio" && overlaps)) {
+                return { ...a, start: Math.max(0, a.start + delta) };
+              }
+              return a;
+            }),
+          );
+        }
       } else if (drag.kind === "main-trim-in") {
         const maxIn = Math.min(drag.ow - 0.15, drag.oy + drag.ow);
         const delta = Math.max(-drag.oy, Math.min(drag.ow - 0.15, dt));
@@ -2679,9 +2827,10 @@ export function VideoEditorWorkspace({
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData(MEDIA_DND_MIME, asset.id);
+                          e.dataTransfer.setData("text/plain", asset.id);
                           e.dataTransfer.effectAllowed = "copy";
                           setStatus(
-                            `اسحب «${asset.name}» وأفلته على الخط — يُضاف مسار في الأعلى`,
+                            `اسحب «${asset.name}» وأفلته على الفراغ أو مسار فيديو`,
                           );
                         }}
                         className="group relative cursor-grab overflow-hidden rounded-md border border-[#333] bg-[#141416] active:cursor-grabbing"
@@ -2689,9 +2838,13 @@ export function VideoEditorWorkspace({
                         <button
                           type="button"
                           title="إضافة كطبقة جديدة فوق الفيديو"
-                          onClick={() =>
-                            void placeAssetOnTimeline(asset, { newTrack: true })
-                          }
+                          onClick={() => {
+                            const gap = findGapAt(currentTime);
+                            void placeAssetOnTimeline(asset, {
+                              start: gap ? gap.start + 0.01 : undefined,
+                              newTrack: true,
+                            });
+                          }}
                           className="block w-full text-start"
                         >
                           <div className="relative aspect-video bg-[#0a0a0b]">
@@ -4511,12 +4664,26 @@ export function VideoEditorWorkspace({
                             return (
                               <div
                                 key={`gap-${clip.id}`}
-                                className={`absolute inset-y-0.5 flex items-center justify-center rounded border border-dashed text-[9px] font-semibold ${
+                                role="button"
+                                tabIndex={0}
+                                title="اضغط أو اسحب صورة/فيديو إلى الفراغ"
+                                className={`absolute inset-y-0.5 z-20 flex cursor-pointer items-center justify-center rounded border border-dashed text-[9px] font-semibold ${
                                   hot
                                     ? "border-[#f5c518] bg-[#f5c518]/25 text-[#f5c518]"
-                                    : "border-[#666] bg-[#2a2a2e]/80 text-[#aaa]"
+                                    : "border-[#666] bg-[#2a2a2e]/90 text-[#aaa] hover:border-[#f5c518] hover:text-[#f5c518]"
                                 }`}
                                 style={{ left: `${left}%`, width: `${width}%` }}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  void insertMediaInGap(gapStart, gapDur);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    void insertMediaInGap(gapStart, gapDur);
+                                  }
+                                }}
                                 onDragOver={(e) =>
                                   onTimelineDragOver(e, `gap-${clip.id}`)
                                 }
@@ -4530,15 +4697,18 @@ export function VideoEditorWorkspace({
                                   e.stopPropagation();
                                   setTimelineDropTarget(null);
                                   const assetId =
-                                    e.dataTransfer.getData(MEDIA_DND_MIME);
+                                    e.dataTransfer.getData(MEDIA_DND_MIME) ||
+                                    e.dataTransfer.getData("text/plain");
                                   const asset = mediaLibrary.find(
                                     (a) => a.id === assetId,
                                   );
                                   if (asset && asset.kind !== "audio") {
-                                    void placeAssetOnTimeline(asset, {
-                                      start: gapStart + 0.01,
-                                      newTrack: true,
-                                    });
+                                    void insertMediaInGap(
+                                      gapStart,
+                                      gapDur,
+                                      null,
+                                      asset,
+                                    );
                                     return;
                                   }
                                   const f = e.dataTransfer.files?.[0];
@@ -4554,7 +4724,9 @@ export function VideoEditorWorkspace({
                                   }
                                 }}
                               >
-                                {hot ? "أفلت المونتاج هنا" : "+ صورة / فيديو"}
+                                {hot
+                                  ? "أفلت المونتاج هنا"
+                                  : "+ صورة / فيديو"}
                               </div>
                             );
                           })}
@@ -4889,8 +5061,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              المقص يقص عند الخط الأحمر ويفتح فراغاً — اسحب صورة/فيديو إلى الفراغ
-              بين اللقطتين
+              المقص يقص عند الخط الأحمر ويفتح فراغاً — اضغط على الفراغ أو اسحب
+              صورة/فيديو إليه · اسحب الصوت يميناً/يساراً لموازنته مع الفيديو
             </p>
           </div>
         </div>
