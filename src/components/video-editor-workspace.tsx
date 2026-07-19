@@ -37,6 +37,7 @@ import {
   Upload,
   ZoomIn,
   ZoomOut,
+  Hand,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
@@ -326,6 +327,7 @@ export function VideoEditorWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(1); // 0.15 (بعيد) → 10 (قريب)
+  const [previewTool, setPreviewTool] = useState<"select" | "hand">("select");
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -2464,18 +2466,30 @@ export function VideoEditorWorkspace({
               ref={stageRef}
               className={`relative w-full max-w-4xl bg-black shadow-2xl ${
                 fullscreen ? "max-h-full" : "max-h-[48vh]"
-              }`}
+              } ${previewTool === "hand" ? "cursor-grab active:cursor-grabbing" : ""}`}
               style={{
                 aspectRatio: `${outSize.w} / ${outSize.h}`,
               }}
               onPointerMove={onStagePointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
-              onClick={() => setSelectedId("video")}
+              onPointerDown={(e) => {
+                if (previewTool === "hand") {
+                  setSelectedId("video");
+                  onVideoHandleDown(e, "video-move");
+                }
+              }}
+              onClick={() => {
+                if (previewTool === "select") setSelectedId("video");
+              }}
             >
               <div
                 className={`absolute overflow-hidden ${
                   selectedId === "video" ? "ring-2 ring-[#f5c518]" : ""
+                } ${
+                  previewTool === "hand"
+                    ? "cursor-grab active:cursor-grabbing"
+                    : "cursor-move"
                 }`}
                 style={{
                   left: `${videoBox.x * 100}%`,
@@ -2491,7 +2505,11 @@ export function VideoEditorWorkspace({
                     .filter(Boolean)
                     .join(" ") || undefined,
                 }}
-                onPointerDown={(e) => onVideoHandleDown(e, "video-move")}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setSelectedId("video");
+                  onVideoHandleDown(e, "video-move");
+                }}
               >
                 <video
                   ref={videoRef}
@@ -2572,6 +2590,20 @@ export function VideoEditorWorkspace({
 
           {/* Transport */}
           <div className="flex flex-wrap items-center gap-2 border-t border-[#2a2a2e] bg-[#141416] px-3 py-2">
+            <button
+              type="button"
+              onClick={() =>
+                setPreviewTool((t) => (t === "hand" ? "select" : "hand"))
+              }
+              className={`rounded border p-1.5 ${
+                previewTool === "hand"
+                  ? "border-[#f5c518] bg-[#f5c518]/20 text-[#f5c518]"
+                  : "border-[#333] hover:bg-[#222]"
+              }`}
+              title="أداة اليد — اسحب لتحريك الفيديو"
+            >
+              <Hand className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={splitAtPlayhead}
@@ -2694,17 +2726,17 @@ export function VideoEditorWorkspace({
               return (
                 <div
                   ref={timelineScrollRef}
+                  dir="ltr"
                   className="max-h-72 overflow-x-auto overflow-y-auto rounded-md border border-[#2a2a2e] bg-[#1a1a1d]"
                 >
                   <div
                     ref={timelineRef}
-                    className="relative"
+                    className="relative ms-0"
                     style={{
-                      // أقل من 100% = تصغير أكثر (ضغط الزمن)، أكبر = تكبير للتفاصيل
-                      width: `${Math.max(12, timelineZoom * 100)}%`,
+                      // zoom=1 يملأ العرض من البداية؛ <1 يصغّر مع إبقاء البداية؛ >1 يوسّع للتمرير
+                      width: `${Math.max(TIMELINE_ZOOM_MIN, timelineZoom) * 100}%`,
                       minWidth: timelineZoom >= 1 ? "100%" : undefined,
                       height: bodyH,
-                      marginInline: timelineZoom < 1 ? "auto" : undefined,
                     }}
                     onPointerMove={onTimelineMove}
                     onPointerUp={onPointerUp}
@@ -2731,7 +2763,7 @@ export function VideoEditorWorkspace({
                       )}
                     </div>
 
-                    {/* Video lane */}
+                    {/* Video lane — دائماً من بداية الخط الزمني (0) */}
                     <div
                       className="absolute inset-x-0"
                       style={{ top: RULER + 4, height: VIDEO_H }}
@@ -2880,8 +2912,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              كل صوت على طبقة منفصلة · عجلة الماوس للتكبير/التصغير · أضف مسارات
-              للمونتاج
+              المقاطع تبدأ من 0:00 · أداة اليد لتحريك الفيديو · عجلة الماوس
+              للتكبير
             </p>
           </div>
         </div>
