@@ -48,10 +48,10 @@ export function BrandLogo({
             />
           ) : (
             <span
-              className="mx-0.5 inline-block border-y-[2px] border-current px-[0.12em] text-[1.15em] leading-[0.9] tracking-normal"
+              className="mx-0.5 inline-block text-[1.22em] leading-none tracking-normal normal-case"
               aria-label="2"
             >
-              2
+              ➋
             </span>
           )}
           <span>day</span>
