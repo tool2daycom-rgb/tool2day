@@ -22,6 +22,36 @@ export const metadata: Metadata = {
   description:
     "الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات — مثل أدوات التحرير والتحويل أونلاين.",
   metadataBase: new URL("https://tool2day.com"),
+  alternates: {
+    canonical: "https://tool2day.com",
+    languages: {
+      ar: "https://tool2day.com",
+      "x-default": "https://tool2day.com",
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "ar_AR",
+    url: "https://tool2day.com",
+    siteName: "Tool2Day",
+    title: "Tool2Day | أدوات تحويل وتحرير الملفات",
+    description:
+      "أدوات أونلاين لتحرير الفيديو والصوت وPDF والملفات — سريعة ومجانية في المتصفح.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Tool2Day | أدوات تحويل وتحرير الملفات",
+    description:
+      "أدوات أونلاين لتحرير الفيديو والصوت وPDF والملفات — سريعة ومجانية في المتصفح.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
+  },
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "any" },
