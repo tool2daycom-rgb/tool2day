@@ -63,6 +63,15 @@ type Panel =
 type PropTab = "video" | "audio";
 type Aspect = "original" | "16:9" | "9:16" | "1:1";
 
+type MediaProfile = {
+  w: number;
+  h: number;
+  fps: number;
+};
+
+const SETTINGS_PROMPT_KEY = "tool2day-skip-media-settings-prompt";
+const DEFAULT_PROJECT: MediaProfile = { w: 1080, h: 1920, fps: 25 };
+
 type Overlay =
   | {
       id: string;
@@ -302,6 +311,14 @@ export function VideoEditorWorkspace({
   const [flipV, setFlipV] = useState(false);
   const [opacity, setOpacity] = useState(1);
   const [aspect, setAspect] = useState<Aspect>("original");
+  const [projectProfile, setProjectProfile] =
+    useState<MediaProfile>(DEFAULT_PROJECT);
+  const [lockProjectSize, setLockProjectSize] = useState(false);
+  const [mediaPrompt, setMediaPrompt] = useState<{
+    media: MediaProfile;
+    skipChecked: boolean;
+  } | null>(null);
+  const settingsPromptedRef = useRef<string | null>(null);
   const [videoBox, setVideoBox] = useState({
     x: 0.05,
     y: 0.05,
@@ -343,10 +360,15 @@ export function VideoEditorWorkspace({
     "none" | "crop" | "chroma" | "logo" | "speed"
   >("none");
 
-  const outSize = useMemo(
-    () => aspectSize(aspect, videoNatural.w, videoNatural.h),
-    [aspect, videoNatural],
-  );
+  const outSize = useMemo(() => {
+    if (lockProjectSize) {
+      return {
+        w: projectProfile.w,
+        h: projectProfile.h,
+      };
+    }
+    return aspectSize(aspect, videoNatural.w, videoNatural.h);
+  }, [aspect, videoNatural, lockProjectSize, projectProfile]);
 
   const clipDuration = Math.max(0.1, trimOut - trimIn);
 
@@ -551,6 +573,7 @@ export function VideoEditorWorkspace({
     setStatus(`تم تحميل: ${f.name}`);
     setPanel("files");
     setShowRecordStudio(false);
+    settingsPromptedRef.current = null;
     void analyzeWaveform(f, 240).then((peaks) => {
       setVideoPeaks(peaks);
       setAudioTracks((prev) =>
@@ -568,14 +591,13 @@ export function VideoEditorWorkspace({
     const v = videoRef.current;
     if (!v) return;
     const d = v.duration || 0;
+    const mw = v.videoWidth || 1280;
+    const mh = v.videoHeight || 720;
     setDuration(d);
     setTrimIn(0);
     setTrimOut(d);
     setCurrentTime(0);
-    setVideoNatural({
-      w: v.videoWidth || 1280,
-      h: v.videoHeight || 720,
-    });
+    setVideoNatural({ w: mw, h: mh });
     setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
     // Always create a movable blue audio lane under the video
     const liveFile = fileLiveRef.current;
@@ -599,6 +621,57 @@ export function VideoEditorWorkspace({
       setPanel("audio");
       setPropTab("audio");
     }
+
+    const media: MediaProfile = { w: mw, h: mh, fps: 30 };
+    const fileKey = liveFile ? `${liveFile.name}-${liveFile.size}-${mw}x${mh}` : null;
+    if (fileKey && settingsPromptedRef.current === fileKey) return;
+    if (fileKey) settingsPromptedRef.current = fileKey;
+
+    const skip =
+      typeof window !== "undefined" &&
+      window.localStorage.getItem(SETTINGS_PROMPT_KEY) === "1";
+    const differs =
+      media.w !== projectProfile.w ||
+      media.h !== projectProfile.h ||
+      media.fps !== projectProfile.fps;
+
+    if (skip) {
+      // Default: match media when user opted out of the prompt
+      applyMatchMedia(media);
+      return;
+    }
+    if (differs) {
+      setMediaPrompt({ media, skipChecked: false });
+    } else {
+      applyMatchMedia(media);
+    }
+  }
+
+  function applyMatchMedia(media: MediaProfile) {
+    setProjectProfile(media);
+    setLockProjectSize(false);
+    setAspect("original");
+    setVideoNatural({ w: media.w, h: media.h });
+    setStatus(`تمت مطابقة المشروع مع الوسائط: ${media.w}×${media.h} ${media.fps}fps`);
+    setMediaPrompt(null);
+  }
+
+  function applyKeepSettings() {
+    setLockProjectSize(true);
+    setAspect("original");
+    setStatus(
+      `تم الإبقاء على إعدادات المشروع: ${projectProfile.w}×${projectProfile.h} ${projectProfile.fps}fps`,
+    );
+    setMediaPrompt(null);
+  }
+
+  function confirmMediaPrompt(mode: "keep" | "match") {
+    if (!mediaPrompt) return;
+    if (mediaPrompt.skipChecked && typeof window !== "undefined") {
+      window.localStorage.setItem(SETTINGS_PROMPT_KEY, "1");
+    }
+    if (mode === "match") applyMatchMedia(mediaPrompt.media);
+    else applyKeepSettings();
   }
 
   function togglePlay() {
@@ -1803,6 +1876,11 @@ export function VideoEditorWorkspace({
           {panel === "canvas" && (
             <div className="space-y-3 text-sm">
               <p className="font-semibold text-[#f5c518]">القماش</p>
+              <div className="rounded-md border border-[#333] bg-[#101012] px-3 py-2 text-xs text-[#aaa]">
+                المشروع: {projectProfile.w}×{projectProfile.h}{" "}
+                {projectProfile.fps}fps
+                {lockProjectSize ? " · مقفل على الإعدادات" : ""}
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {(
                   [
@@ -1817,10 +1895,11 @@ export function VideoEditorWorkspace({
                     type="button"
                     onClick={() => {
                       setAspect(id);
+                      setLockProjectSize(false);
                       setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
                     }}
                     className={`rounded-md px-2 py-2 text-xs ${
-                      aspect === id
+                      aspect === id && !lockProjectSize
                         ? "bg-[#f5c518] font-bold text-[#111]"
                         : "border border-[#333] text-[#ccc]"
                     }`}
@@ -2930,6 +3009,66 @@ export function VideoEditorWorkspace({
           {error || status}
         </div>
       )}
+
+      {mediaPrompt &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="w-full max-w-md rounded-2xl border border-[#333] bg-[#1c1c1f] p-5 text-white shadow-2xl"
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <Clapperboard className="h-5 w-5 text-[#2dd4bf]" />
+                <h2 className="text-base font-bold">Tool2Day</h2>
+              </div>
+              <p className="text-sm leading-7 text-[#ccc]">
+                دقة أو معدل إطارات الفيديو لا يتطابق مع إعدادات المشروع. هل تريد
+                تحديث إعدادات المشروع لتطابق الوسائط؟
+              </p>
+              <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-[#aaa]">
+                <input
+                  type="checkbox"
+                  checked={mediaPrompt.skipChecked}
+                  onChange={(e) =>
+                    setMediaPrompt((p) =>
+                      p ? { ...p, skipChecked: e.target.checked } : p,
+                    )
+                  }
+                />
+                لا تعرض هذه مرة أخرى
+              </label>
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => confirmMediaPrompt("keep")}
+                  className="rounded-xl border border-[#444] bg-[#2a2a2e] px-3 py-3 text-center hover:bg-[#333]"
+                >
+                  <div className="text-sm font-semibold text-[#ddd]">
+                    احتفظ بالإعدادات الحالية
+                  </div>
+                  <div className="mt-1 text-xs text-[#888]">
+                    {projectProfile.w}×{projectProfile.h} {projectProfile.fps}
+                    fps
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmMediaPrompt("match")}
+                  className="rounded-xl bg-[#2dd4bf] px-3 py-3 text-center font-bold text-[#042f2e] hover:bg-[#5eead4]"
+                >
+                  <div className="text-sm">المطابقة مع الوسائط</div>
+                  <div className="mt-1 text-xs opacity-80">
+                    {mediaPrompt.media.w}×{mediaPrompt.media.h}{" "}
+                    {mediaPrompt.media.fps}fps
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {ctxMenu &&
         typeof document !== "undefined" &&
