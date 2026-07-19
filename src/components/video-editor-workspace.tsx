@@ -993,47 +993,115 @@ export function VideoEditorWorkspace({
   }
 
   async function detachAudio() {
-    if (!file) return;
-    if (audioTracks.some((t) => t.id.startsWith("detached-"))) {
-      setStatus("الصوت مفصول مسبقاً على مسار مستقل");
-      setMuted(true);
-      setVolume(0);
+    // فيديو طبقة محدد → افصل صوته إلى مسار مستقل
+    const selectedLayer = layerClips.find(
+      (c) => c.id === selectedId && c.kind === "video",
+    );
+    const sourceFile = selectedLayer?.file || file;
+    if (!sourceFile) {
+      setError("لا يوجد فيديو لفصل الصوت منه");
       return;
     }
+
+    const alreadyFromLayer = selectedLayer
+      ? audioTracks.some(
+          (t) =>
+            t.id.startsWith("detached-") &&
+            Math.abs(t.start - selectedLayer.start) < 0.08 &&
+            t.name.endsWith("(صوت)"),
+        )
+      : false;
+    if (selectedLayer && alreadyFromLayer) {
+      setStatus("صوت هذا المقطع مفصول مسبقاً — اسحب المسار الأزرق");
+      return;
+    }
+
+    // للفيديو الأساسي: إن وُجد linked فقط حوّله لمسار detached مستقل
+    if (!selectedLayer) {
+      const linked = audioTracks.find((t) => t.id === "linked-audio");
+      if (linked && !audioTracks.some((t) => t.id.startsWith("detached-"))) {
+        const id = nextId(idCounterRef, "detached");
+        setAudioTracks((prev) => [
+          ...prev.filter((t) => t.id !== "linked-audio"),
+          { ...linked, id, name: `${linked.name} (مفصول)` },
+        ]);
+        setMuted(true);
+        setVolume(0);
+        setSelectedId(id);
+        setStatus("تم فصل الصوت عن الفيديو — اسحب المسار الأزرق بحرية");
+        setPanel("audio");
+        setPropTab("audio");
+        return;
+      }
+      if (audioTracks.some((t) => t.id.startsWith("detached-")) && !selectedLayer) {
+        setMuted(true);
+        setVolume(0);
+        setStatus("الصوت مفصول — الفيديو صامت والمسار الأزرق مستقل");
+        return;
+      }
+    }
+
     setDetachBusy(true);
     setError(null);
-    setStatus("جاري فصل الصوت عن الفيديو…");
+    setStatus(
+      selectedLayer
+        ? `جاري فصل صوت «${selectedLayer.name}»…`
+        : "جاري فصل الصوت عن الفيديو…",
+    );
     try {
-      const audioFile = await extractAudioTrack(file, (r) =>
+      const audioFile = await extractAudioTrack(sourceFile, (r) =>
         setProgress(Math.round(r * 100)),
       );
       const audioUrl = URL.createObjectURL(audioFile);
-      const dur = (await loadMediaDuration(audioUrl)) || clipDuration;
-      const peaks =
-        videoPeaks.length > 0
-          ? videoPeaks
-          : await analyzeWaveform(audioFile, 180);
-      const linked = audioTracks.find((t) => t.id === "linked-audio");
+      const dur =
+        (await loadMediaDuration(audioUrl)) ||
+        selectedLayer?.sourceDuration ||
+        clipDuration;
+      const peaks = await analyzeWaveform(audioFile, 180);
       const id = nextId(idCounterRef, "detached");
-      setAudioTracks((prev) => [
-        ...prev.filter(
-          (t) => t.id !== "linked-audio" && !t.id.startsWith("detached-"),
-        ),
-        {
-          id,
-          name: file.name,
-          file: audioFile,
-          url: audioUrl,
-          start: linked?.start ?? 0,
-          volume: linked?.volume ?? (volume > 0 ? volume : 1),
-          duration: linked?.duration ?? dur,
-          offset: linked?.offset ?? 0,
-          sourceDuration: dur,
-          peaks,
-        },
-      ]);
-      setMuted(true);
-      setVolume(0);
+      const startAt = selectedLayer
+        ? selectedLayer.start
+        : (audioTracks.find((t) => t.id === "linked-audio")?.start ?? 0);
+      const playDur = selectedLayer
+        ? Math.min(dur, selectedLayer.duration)
+        : dur;
+
+      setAudioTracks((prev) => {
+        const withoutLinked = selectedLayer
+          ? prev
+          : prev.filter(
+              (t) => t.id !== "linked-audio" && !t.id.startsWith("detached-"),
+            );
+        return [
+          ...withoutLinked,
+          {
+            id,
+            name: selectedLayer
+              ? `${selectedLayer.name} (صوت)`
+              : sourceFile.name,
+            file: audioFile,
+            url: audioUrl,
+            start: startAt,
+            volume: 1,
+            duration: playDur,
+            offset: selectedLayer?.offset ?? 0,
+            sourceDuration: dur,
+            peaks,
+          },
+        ];
+      });
+
+      if (selectedLayer) {
+        // أبقِ طبقة الفيديو صامتة (الصوت على المسار الأزرق)
+        setVideoLayers((prev) =>
+          prev.map((t) =>
+            t.id === selectedLayer.trackId ? { ...t, muted: true } : t,
+          ),
+        );
+      } else {
+        setMuted(true);
+        setVolume(0);
+      }
       setSelectedId(id);
       setStatus("تم فصل الصوت — اسحب المسار الأزرق يمين/يسار");
       setPanel("audio");
@@ -1384,6 +1452,18 @@ export function VideoEditorWorkspace({
   }
   splitAtPlayheadRef.current = splitAtPlayhead;
 
+  /** مسار طبقة فارغ فوق فيديو 1، أو إنشاء مسار جديد */
+  function resolveTrackForGapPlacement(): {
+    trackId?: string;
+    newTrack: boolean;
+  } {
+    const empty = videoLayers.find(
+      (t) => !t.locked && !layerClips.some((c) => c.trackId === t.id),
+    );
+    if (empty) return { trackId: empty.id, newTrack: false };
+    return { newTrack: true };
+  }
+
   async function insertMediaInGap(
     gapStart: number,
     gapDur: number,
@@ -1391,52 +1471,68 @@ export function VideoEditorWorkspace({
     asset?: MediaAsset | null,
   ) {
     const gap = { start: gapStart, duration: gapDur };
+    const trackOpts = resolveTrackForGapPlacement();
+    const placeStart = gapStart - trimIn + 0.01;
 
     // إن كان مقطع طبقة محدداً — أنزله إلى الفراغ مباشرة
     const selectedLayer = layerClips.find((c) => c.id === selectedId);
     if (selectedLayer && !asset && !list?.[0]) {
-      snapLayerIntoGap(selectedLayer.id, gap);
+      snapLayerIntoGap(
+        selectedLayer.id,
+        { ...gap, leftId: findGapAt(gapStart + 0.01)?.leftId },
+        trackOpts.trackId || bottomLayerTrackId(),
+      );
       return;
     }
 
     if (asset && asset.kind !== "audio") {
       await placeAssetOnTimeline(asset, {
-        start: gapStart - trimIn + 0.01,
-        newTrack: true,
+        start: placeStart,
+        trackId: trackOpts.trackId,
+        newTrack: trackOpts.newTrack,
       });
       setStatus("تم وضع المونتاج في الفراغ بين اللقطتين");
       return;
     }
     if (list?.[0]) {
       await placeFileAsLayer(list[0], {
-        newTrack: true,
-        start: gapStart - trimIn + 0.01,
+        start: placeStart,
+        trackId: trackOpts.trackId,
+        newTrack: trackOpts.newTrack,
       });
       return;
     }
-    // مكتبة المشروع: ضع آخر صورة/فيديو
-    const lastVisual = [...mediaLibrary]
-      .reverse()
-      .find((a) => a.kind !== "audio");
-    if (lastVisual) {
-      await placeAssetOnTimeline(lastVisual, {
-        start: gapStart - trimIn + 0.01,
-        newTrack: true,
-      });
-      setStatus(`وُضع «${lastVisual.name}» في الفراغ بين اللقطتين`);
-      return;
-    }
-    layerTargetTrackRef.current = null;
+
+    // اضغط على الفراغ → افتح منتقي الملفات مباشرة (لا تعتمد على سحب قد يفشل)
+    layerTargetTrackRef.current = trackOpts.trackId || null;
     const input = layerMediaRef.current;
-    if (!input) return;
+    if (!input) {
+      // احتياطي: من المكتبة
+      const lastVisual = [...mediaLibrary]
+        .reverse()
+        .find((a) => a.kind !== "audio");
+      if (lastVisual) {
+        await placeAssetOnTimeline(lastVisual, {
+          start: placeStart,
+          trackId: trackOpts.trackId,
+          newTrack: trackOpts.newTrack,
+        });
+        setStatus(`وُضع «${lastVisual.name}» في الفراغ بين اللقطتين`);
+      } else {
+        setError("لا يوجد ملف — استورد فيديو/صورة من وسائط المشروع أولاً");
+      }
+      return;
+    }
     const onChange = async () => {
       input.removeEventListener("change", onChange);
       const f = input.files?.[0];
       if (f) {
         await placeFileAsLayer(f, {
-          newTrack: true,
-          start: gapStart - trimIn + 0.01,
+          start: placeStart,
+          trackId: trackOpts.trackId,
+          newTrack: trackOpts.newTrack,
         });
+        setStatus("تم وضع المونتاج في الفراغ بين اللقطتين");
       }
       input.value = "";
     };
@@ -3734,7 +3830,15 @@ export function VideoEditorWorkspace({
 
               <button
                 type="button"
-                disabled={detachBusy || !file}
+                disabled={
+                  detachBusy ||
+                  !(
+                    file ||
+                    layerClips.some(
+                      (c) => c.id === selectedId && c.kind === "video",
+                    )
+                  )
+                }
                 onClick={() => void detachAudio()}
                 className="w-full rounded-md border border-[#3b82f6] bg-[#1e3a5f]/40 px-2 py-2.5 text-xs font-semibold text-[#93c5fd] disabled:opacity-50"
               >
@@ -4062,7 +4166,15 @@ export function VideoEditorWorkspace({
                 </div>
                 <button
                   type="button"
-                  disabled={detachBusy || !file}
+                  disabled={
+                    detachBusy ||
+                    !(
+                      file ||
+                      layerClips.some(
+                        (c) => c.id === selectedId && c.kind === "video",
+                      )
+                    )
+                  }
                   onClick={() => void detachAudio()}
                   className="mt-1 w-full rounded-md border border-[#3b82f6] bg-[#1e3a5f]/40 px-2 py-2 text-xs font-semibold text-[#93c5fd] disabled:opacity-50"
                 >
@@ -4897,9 +5009,11 @@ export function VideoEditorWorkspace({
                               (f.type.startsWith("video/") ||
                                 f.type.startsWith("image/"))
                             ) {
+                              const trackOpts = resolveTrackForGapPlacement();
                               void placeFileAsLayer(f, {
-                                newTrack: true,
                                 start: gap.start - trimIn + 0.01,
+                                trackId: trackOpts.trackId,
+                                newTrack: trackOpts.newTrack,
                               });
                               setTimelineDropTarget(null);
                               return;
@@ -4940,6 +5054,10 @@ export function VideoEditorWorkspace({
                                     : "border-[#888] bg-[#2a2a2e]/95 text-[#ddd] hover:border-[#f5c518] hover:text-[#f5c518]"
                                 }`}
                                 style={{ left: `${left}%`, width: `${width}%` }}
+                                onPointerDown={(e) => {
+                                  // منع خط الزمن من preventDefault الذي يلغي النقر
+                                  e.stopPropagation();
+                                }}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -4952,18 +5070,24 @@ export function VideoEditorWorkspace({
                                   }
                                 }}
                                 onPointerUp={(e) => {
-                                  // إنهاء سحب طبقة فوق الفراغ
                                   const drag = dragRef.current;
                                   if (
                                     drag?.kind === "layer-move" &&
                                     drag.id
                                   ) {
+                                    e.preventDefault();
                                     e.stopPropagation();
-                                    snapLayerIntoGap(drag.id, {
-                                      start: gapStart,
-                                      duration: gapDur,
-                                    });
+                                    snapLayerIntoGap(
+                                      drag.id,
+                                      {
+                                        start: gapStart,
+                                        duration: gapDur,
+                                        leftId: clip.id,
+                                      },
+                                      bottomLayerTrackId(),
+                                    );
                                     dragRef.current = null;
+                                    setTimelineDropTarget(null);
                                   }
                                 }}
                                 onDragOver={(e) =>
@@ -4999,9 +5123,12 @@ export function VideoEditorWorkspace({
                                     (f.type.startsWith("video/") ||
                                       f.type.startsWith("image/"))
                                   ) {
+                                    const trackOpts =
+                                      resolveTrackForGapPlacement();
                                     void placeFileAsLayer(f, {
-                                      newTrack: true,
                                       start: gapStart - trimIn + 0.01,
+                                      trackId: trackOpts.trackId,
+                                      newTrack: trackOpts.newTrack,
                                     });
                                   }
                                 }}
@@ -5346,9 +5473,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              لإنزال فيديو/صورة بين مقطعين: اسحب المقطع إلى الفراغ المنقّط في
-              فيديو 1، أو اضغط «+ صورة / فيديو هنا»، أو اسحب من المكتبة إلى
-              الفراغ
+              اضغط على الفراغ المنقّط «+ صورة / فيديو هنا» لاختيار ملف يوضع بين
+              المقطعين · لفصل صوت فيديو مضاف: حدّده ثم «فصل الصوت»
             </p>
           </div>
         </div>
