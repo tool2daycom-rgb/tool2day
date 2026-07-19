@@ -16,13 +16,13 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#141414] text-white">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link
           href="/"
           className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight"
           aria-label="Tool2Day — الصفحة الرئيسية"
         >
-          <BrandLogo size="md" showWord />
+          <BrandLogo size="lg" showWord />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">

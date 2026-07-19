@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
-  <rect width="128" height="128" rx="28" fill="#141414"/>
-  <circle cx="28" cy="78" r="14" fill="#5B9BF5"/>
-  <circle cx="58" cy="66" r="20" fill="#F5C518"/>
-  <circle cx="96" cy="52" r="28" fill="#E8874A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="Tool2Day icon">
+  <!-- Transparent favicon · dots fill the frame -->
+  <circle cx="30" cy="82" r="22" fill="#5B9BF5"/>
+  <circle cx="62" cy="64" r="30" fill="#F5C518"/>
+  <circle cx="98" cy="44" r="38" fill="#E8874A"/>
 </svg>

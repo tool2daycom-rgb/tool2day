@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 100" fill="none" role="img" aria-label="Tool2Day sizes">
-  <circle cx="36" cy="64" r="20" fill="#5B9BF5"/>
-  <circle cx="110" cy="52" r="30" fill="#F5C518"/>
-  <circle cx="200" cy="40" r="40" fill="#E8874A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 88" fill="none" role="img" aria-label="Tool2Day">
+  <!-- Larger ascending dots · fully transparent -->
+  <circle cx="32" cy="56" r="24" fill="#5B9BF5"/>
+  <circle cx="96" cy="44" r="34" fill="#F5C518"/>
+  <circle cx="174" cy="34" r="44" fill="#E8874A"/>
 </svg>
