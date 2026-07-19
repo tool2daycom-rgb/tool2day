@@ -3036,12 +3036,13 @@ export function VideoEditorWorkspace({
 
               return (
                 <div
+                  dir="ltr"
                   className="flex max-h-72 overflow-hidden rounded-md border border-[#2a2a2e] bg-[#1a1a1d]"
                   style={{ minHeight: Math.min(bodyH + 4, 288) }}
                 >
-                  {/* Track headers — ثابتة عند بداية الخط الزمني */}
+                  {/* Track headers — يسار الخط عند 00:00 (بداية الفيديو) */}
                   <div
-                    className="flex shrink-0 flex-col border-e border-[#2a2a2e] bg-[#161618]"
+                    className="flex shrink-0 flex-col border-r border-[#2a2a2e] bg-[#161618]"
                     style={{ width: HEADER_W, height: bodyH }}
                     dir="rtl"
                   >
