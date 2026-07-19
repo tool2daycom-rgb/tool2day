@@ -648,14 +648,41 @@ export function VideoEditorWorkspace({
   >("none");
 
   const outSize = useMemo(() => {
-    if (lockProjectSize) {
-      return {
-        w: projectProfile.w,
-        h: projectProfile.h,
-      };
+    // نسب التواصل (9:16 وغيرها) تفرض أبعاد الإخراج دائماً — مثل تيك توك
+    const preset = ASPECT_PRESETS.find((p) => p.id === aspect);
+    if (preset && preset.w > 0 && preset.h > 0) {
+      return { w: preset.w, h: preset.h };
     }
-    return aspectSize(aspect, videoNatural.w, videoNatural.h, customSize);
+    if (aspect === "custom") {
+      return aspectSize("custom", videoNatural.w, videoNatural.h, customSize);
+    }
+    if (lockProjectSize) {
+      return { w: projectProfile.w, h: projectProfile.h };
+    }
+    return aspectSize("original", videoNatural.w, videoNatural.h, customSize);
   }, [aspect, videoNatural, lockProjectSize, projectProfile, customSize]);
+
+  const stageHostRef = useRef<HTMLDivElement>(null);
+  const [stagePx, setStagePx] = useState({ w: 270, h: 480 });
+
+  useLayoutEffect(() => {
+    const host = stageHostRef.current;
+    if (!host) return;
+    const update = () => {
+      const rw = host.clientWidth;
+      const rh = host.clientHeight;
+      if (rw < 4 || rh < 4) return;
+      const scale = Math.min(rw / outSize.w, rh / outSize.h);
+      setStagePx({
+        w: Math.max(2, Math.round(outSize.w * scale)),
+        h: Math.max(2, Math.round(outSize.h * scale)),
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [outSize.w, outSize.h, fullscreen]);
 
   const aspectLabel =
     aspect === "custom"
@@ -673,24 +700,27 @@ export function VideoEditorWorkspace({
       setCustomSize({ w: preset.w, h: preset.h });
       setProjectProfile((p) => ({ ...p, w: preset.w, h: preset.h }));
       nextOut = { w: preset.w, h: preset.h };
-    }
-    if (id === "custom") {
+      // املأ إطار التواصل بالكامل (مثل تيك توك) — يمكن التصغير بالمقابض لاحقاً
+      setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
+    } else if (id === "custom") {
       setProjectProfile((p) => ({
         ...p,
         w: customSize.w,
         h: customSize.h,
       }));
       nextOut = aspectSize("custom", videoNatural.w, videoNatural.h, customSize);
+      setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
+    } else {
+      setVideoBox(
+        fitVideoInCanvas(
+          nextOut.w,
+          nextOut.h,
+          videoNatural.w || nextOut.w,
+          videoNatural.h || nextOut.h,
+        ),
+      );
     }
-    setVideoBox(
-      fitVideoInCanvas(
-        nextOut.w,
-        nextOut.h,
-        videoNatural.w || nextOut.w,
-        videoNatural.h || nextOut.h,
-      ),
-    );
-    setStatus(`حجم القماش: ${nextOut.w}×${nextOut.h}`);
+    setStatus(`قماش ${id === "original" ? "أصلي" : id}: ${nextOut.w}×${nextOut.h}`);
     setAspectMenuOpen(false);
     setPanel("canvas");
     setPropTab("video");
@@ -4114,7 +4144,7 @@ export function VideoEditorWorkspace({
               </div>
               <div className="grid grid-cols-3 gap-1.5">
                 {ASPECT_PRESETS.map((p) => {
-                  const active = aspect === p.id && !lockProjectSize;
+                  const active = aspect === p.id;
                   return (
                     <button
                       key={p.id}
@@ -5067,24 +5097,21 @@ export function VideoEditorWorkspace({
         </aside>
 
         {/* Preview + timeline */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0a0a0b]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#121214]">
           <div
-            className={`flex flex-1 items-center justify-center overflow-hidden p-4 ${
+            ref={stageHostRef}
+            className={`flex min-h-[56vh] flex-1 items-center justify-center overflow-hidden p-3 ${
               fullscreen ? "min-h-0" : ""
             }`}
           >
             <div
               ref={stageRef}
-              className={`relative bg-black shadow-2xl ${
+              className={`relative shrink-0 overflow-hidden bg-black shadow-[0_0_0_1px_#3a3a40,0_12px_40px_rgba(0,0,0,0.55)] ${
                 previewTool === "hand" ? "cursor-grab active:cursor-grabbing" : ""
               }`}
               style={{
-                aspectRatio: `${outSize.w} / ${outSize.h}`,
-                width: fullscreen
-                  ? `min(100%, calc(85vh * ${outSize.w} / ${outSize.h}))`
-                  : `min(100%, calc(48vh * ${outSize.w} / ${outSize.h}))`,
-                maxHeight: fullscreen ? "100%" : "48vh",
-                height: "auto",
+                width: stagePx.w,
+                height: stagePx.h,
               }}
               onPointerMove={onStagePointerMove}
               onPointerUp={onPointerUp}
@@ -5099,6 +5126,9 @@ export function VideoEditorWorkspace({
                 if (previewTool === "select") setSelectedId("video");
               }}
             >
+              <div className="pointer-events-none absolute start-2 top-2 z-30 rounded bg-black/70 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-teal-300">
+                {aspectLabel} · {outSize.w}×{outSize.h}
+              </div>
               <div
                 className={`absolute z-10 overflow-visible ${
                   selectedId === "video" ? "outline outline-2 outline-[#f5c518]" : ""
@@ -5135,7 +5165,7 @@ export function VideoEditorWorkspace({
                 <video
                   ref={videoRef}
                   src={url}
-                  className="pointer-events-none h-full w-full object-fill"
+                  className="pointer-events-none h-full w-full object-cover"
                   onLoadedMetadata={onLoadedMeta}
                   playsInline
                   draggable={false}
@@ -5313,7 +5343,7 @@ export function VideoEditorWorkspace({
                   </div>
                   <div className="max-h-72 overflow-y-auto py-1">
                     {ASPECT_PRESETS.map((p) => {
-                      const active = aspect === p.id && !lockProjectSize;
+                      const active = aspect === p.id;
                       return (
                         <button
                           key={p.id}
