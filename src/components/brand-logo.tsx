@@ -25,14 +25,14 @@ export function BrandLogo({
       <BrandMarkAnimated size={markPx} />
       {showWord ? (
         <span
-          className={`inline-flex items-center font-[family-name:var(--font-display)] font-black uppercase tracking-[-0.02em] ${
+          className={`inline-flex items-center font-[family-name:var(--font-display)] font-extrabold uppercase tracking-[-0.02em] ${
             size === "lg"
               ? twoAsImage
                 ? "text-[2rem] leading-none sm:text-[2.4rem]"
                 : "text-[1.35rem] leading-none sm:text-[1.5rem]"
               : size === "sm"
                 ? "text-[0.95rem] leading-none"
-                : "text-[1.15rem] leading-none"
+                : "text-[1.2rem] leading-none tracking-[-0.03em]"
           } ${twoAsImage ? "text-[#111]" : "text-white"}`}
         >
           <span>tool</span>
