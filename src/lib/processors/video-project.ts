@@ -64,7 +64,7 @@ export type VideoProjectExport = {
   trimIn: number;
   trimOut: number;
   speed: number;
-  rotate: 0 | 90 | 180 | 270;
+  rotate: number;
   flipH: boolean;
   flipV: boolean;
   opacity: number;
@@ -81,6 +81,9 @@ export type VideoProjectExport = {
   videoY: number;
   videoW: number;
   videoH: number;
+  /** ضباب خلفية القماش (نسخة مموّهة من الفيديو) */
+  bgBlur?: { enabled: boolean; amount: number } | null;
+  canvasBg?: string;
   /** Bottom → top stacking order */
   videoLayers?: VideoLayerClip[];
   overlays: VideoProjectOverlay[];
@@ -185,6 +188,8 @@ export async function exportVideoProject(
     videoY,
     videoW,
     videoH,
+    bgBlur = null,
+    canvasBg = "#000000",
     videoLayers = [],
     overlays,
     audioTracks,
@@ -270,31 +275,35 @@ export async function exportVideoProject(
     args.push("-i", name);
   }
 
-  const rotateFilter =
-    rotate === 90
-      ? "transpose=1"
-      : rotate === 270
-        ? "transpose=2"
-        : rotate === 180
-          ? "transpose=1,transpose=1"
-          : null;
+  const rotDeg = ((Number(rotate) % 360) + 360) % 360;
+  const useFreeRotate =
+    Math.abs(rotDeg) > 0.05 &&
+    Math.abs(rotDeg - 90) >= 0.5 &&
+    Math.abs(rotDeg - 180) >= 0.5 &&
+    Math.abs(rotDeg - 270) >= 0.5 &&
+    Math.abs(rotDeg - 360) > 0.05;
 
   const pts = (1 / speed).toFixed(4);
   const vw = Math.max(2, Math.round(videoW / 2) * 2);
   const vh = Math.max(2, Math.round(videoH / 2) * 2);
-  const vx = Math.max(0, Math.round(videoX));
-  const vy = Math.max(0, Math.round(videoY));
+  const vx = Math.round(videoX);
+  const vy = Math.round(videoY);
   const ow = Math.max(2, Math.round(outW / 2) * 2);
   const oh = Math.max(2, Math.round(outH / 2) * 2);
+  const blurOn = Boolean(bgBlur?.enabled && (bgBlur.amount ?? 0) > 0);
+  const blurSigma = Math.max(
+    1,
+    Math.round(((bgBlur?.amount ?? 50) / 100) * 48),
+  );
+  const bgHex = (canvasBg || "#000000").replace("#", "");
 
-  const transforms: string[] = [];
+  const prep: string[] = [];
   if (crop && crop.w > 0.02 && crop.h > 0.02) {
-    // crop relative — applied after decode via crop filter with iw/ih
     const cx = Math.max(0, Math.min(0.98, crop.x));
     const cy = Math.max(0, Math.min(0.98, crop.y));
     const cw = Math.max(0.02, Math.min(1 - cx, crop.w));
     const ch = Math.max(0.02, Math.min(1 - cy, crop.h));
-    transforms.push(
+    prep.push(
       `crop=iw*${cw.toFixed(4)}:ih*${ch.toFixed(4)}:iw*${cx.toFixed(4)}:ih*${cy.toFixed(4)}`,
     );
   }
@@ -303,29 +312,58 @@ export async function exportVideoProject(
     const ly = Math.max(0, Math.round(removeLogo.y));
     const lw = Math.max(8, Math.round(removeLogo.w));
     const lh = Math.max(8, Math.round(removeLogo.h));
-    transforms.push(`delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}`);
+    prep.push(`delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}`);
   }
   if (chromaKey?.enabled) {
     const hex = (chromaKey.color || "#00ff00").replace("#", "");
     const sim = Math.max(0.01, Math.min(1, chromaKey.similarity / 100));
-    transforms.push(`chromakey=0x${hex}:${sim.toFixed(3)}:0.1`);
+    prep.push(`chromakey=0x${hex}:${sim.toFixed(3)}:0.1`);
   }
-  if (rotateFilter) transforms.push(rotateFilter);
-  if (flipH) transforms.push("hflip");
-  if (flipV) transforms.push("vflip");
-  transforms.push(
+  prep.push(
     `scale=${vw}:${vh}:force_original_aspect_ratio=decrease`,
     `pad=${vw}:${vh}:(ow-iw)/2:(oh-ih)/2`,
-    `setpts=${pts}*PTS`,
   );
+  if (Math.abs(rotDeg - 90) < 0.5) prep.push("transpose=1");
+  else if (Math.abs(rotDeg - 270) < 0.5) prep.push("transpose=2");
+  else if (Math.abs(rotDeg - 180) < 0.5) prep.push("transpose=1,transpose=1");
+  else if (useFreeRotate) {
+    prep.push(
+      `rotate=${(rotDeg * Math.PI) / 180}:ow=rotw(iw):oh=roth(ih):c=none@0`,
+    );
+  }
+  if (flipH) prep.push("hflip");
+  if (flipV) prep.push("vflip");
+  prep.push(`setpts=${pts}*PTS`);
   const op = Math.max(0.05, Math.min(1, opacity));
-  if (op < 0.999) {
-    transforms.push(`format=rgba,colorchannelmixer=aa=${op.toFixed(3)}`);
+  if (op < 0.999 || useFreeRotate) {
+    prep.push(`format=rgba`);
+    if (op < 0.999) {
+      prep.push(`colorchannelmixer=aa=${op.toFixed(3)}`);
+    }
   }
 
+  const overlayXY = useFreeRotate
+    ? `x=${vx}+(${vw}-overlay_w)/2:y=${vy}+(${vh}-overlay_h)/2`
+    : `x=${vx}:y=${vy}`;
+
   const fc: string[] = [];
-  fc.push(`[0:v]${transforms.join(",")}[scaled]`);
-  fc.push(`[scaled]pad=${ow}:${oh}:${vx}:${vy}:black[v0]`);
+  if (blurOn) {
+    fc.push(
+      `[0:v]split[srcfg][srcbg]`,
+      `[srcbg]scale=${ow}:${oh}:force_original_aspect_ratio=increase,crop=${ow}:${oh},gblur=sigma=${blurSigma},setsar=1[bg]`,
+      `[srcfg]${prep.join(",")}[scaled]`,
+      `[bg][scaled]overlay=${overlayXY}:format=auto[v0]`,
+    );
+  } else if (vx >= 0 && vy >= 0 && !useFreeRotate) {
+    fc.push(`[0:v]${prep.join(",")}[scaled]`);
+    fc.push(`[scaled]pad=${ow}:${oh}:${vx}:${vy}:0x${bgHex}[v0]`);
+  } else {
+    fc.push(`[0:v]${prep.join(",")}[scaled]`);
+    fc.push(`color=c=0x${bgHex}:s=${ow}x${oh}:d=3600[bg]`);
+    fc.push(
+      `[bg][scaled]overlay=${overlayXY}:shortest=1:format=auto[v0]`,
+    );
+  }
 
   let vlabel = "v0";
   // Video/image montage layers (timed), bottom → top
@@ -340,20 +378,20 @@ export async function exportVideoProject(
     const dur = Math.max(0.05, layer.duration);
     const end = start + dur;
     const next = `vl${i}`;
-    const prep: string[] = [];
+    const layerPrep: string[] = [];
     if (layer.kind === "video") {
       const off = Math.max(0, layer.offset || 0);
-      prep.push(
+      layerPrep.push(
         `trim=start=${off.toFixed(3)}:duration=${dur.toFixed(3)}`,
         "setpts=PTS-STARTPTS",
       );
     }
-    prep.push(`scale=${iw}:${ih}:force_original_aspect_ratio=decrease`);
-    prep.push(`pad=${iw}:${ih}:(ow-iw)/2:(oh-ih)/2`);
+    layerPrep.push(`scale=${iw}:${ih}:force_original_aspect_ratio=decrease`);
+    layerPrep.push(`pad=${iw}:${ih}:(ow-iw)/2:(oh-ih)/2`);
     if (a < 0.999) {
-      prep.push(`format=rgba,colorchannelmixer=aa=${a.toFixed(3)}`);
+      layerPrep.push(`format=rgba,colorchannelmixer=aa=${a.toFixed(3)}`);
     }
-    fc.push(`[${inputIdx}:v]${prep.join(",")}[lyr${i}]`);
+    fc.push(`[${inputIdx}:v]${layerPrep.join(",")}[lyr${i}]`);
     fc.push(
       `[${vlabel}][lyr${i}]overlay=${ox}:${oy}:enable='between(t\\,${start.toFixed(3)}\\,${end.toFixed(3)})'[${next}]`,
     );

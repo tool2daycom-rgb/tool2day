@@ -238,7 +238,7 @@ type EditorHistorySnapshot = {
   volume: number;
   muted: boolean;
   opacity: number;
-  rotate: 0 | 90 | 180 | 270;
+  rotate: number;
   flipH: boolean;
   flipV: boolean;
   speed: number;
@@ -501,6 +501,7 @@ export function VideoEditorWorkspace({
   const layerMediaRef = useRef<HTMLInputElement>(null);
   const importAllRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const blurVideoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineScrollRef = useRef<HTMLDivElement>(null);
@@ -520,6 +521,7 @@ export function VideoEditorWorkspace({
       | "playhead"
       | "video-move"
       | "video-resize"
+      | "video-rotate"
       | "audio-move"
       | "audio-trim-in"
       | "audio-trim-out"
@@ -567,7 +569,7 @@ export function VideoEditorWorkspace({
   const [videoPeaks, setVideoPeaks] = useState<number[]>([]);
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const audioClipboardRef = useRef<Omit<AudioTrack, "id"> | null>(null);
-  const [rotate, setRotate] = useState<0 | 90 | 180 | 270>(0);
+  const [rotate, setRotate] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
   const [opacity, setOpacity] = useState(1);
@@ -576,6 +578,9 @@ export function VideoEditorWorkspace({
   const [scaleLock, setScaleLock] = useState(true);
   const [aspectMenuOpen, setAspectMenuOpen] = useState(false);
   const aspectMenuRef = useRef<HTMLDivElement>(null);
+  const [bgBlurEnabled, setBgBlurEnabled] = useState(false);
+  const [bgBlurAmount, setBgBlurAmount] = useState(60);
+  const [canvasBg, setCanvasBg] = useState("#000000");
   const [projectProfile, setProjectProfile] =
     useState<MediaProfile>(DEFAULT_PROJECT);
   const [lockProjectSize, setLockProjectSize] = useState(false);
@@ -1020,11 +1025,23 @@ export function VideoEditorWorkspace({
     const clip = mainClipAt(t);
     if (!clip) {
       if (!v.paused) v.pause();
+      const blur = blurVideoRef.current;
+      if (blur && !blur.paused) blur.pause();
       return;
     }
     const mediaT = clip.offset + (t - clip.start);
     if (Math.abs(v.currentTime - mediaT) > 0.2) {
       v.currentTime = Math.max(0, mediaT);
+    }
+    const blur = blurVideoRef.current;
+    if (blur && bgBlurEnabled) {
+      if (Math.abs(blur.currentTime - mediaT) > 0.25) {
+        try {
+          blur.currentTime = Math.max(0, mediaT);
+        } catch {
+          /* ignore seek race */
+        }
+      }
     }
   }
 
@@ -1458,8 +1475,10 @@ export function VideoEditorWorkspace({
   function togglePlay() {
     const v = videoRef.current;
     if (!v) return;
+    const blur = blurVideoRef.current;
     if (playing) {
       v.pause();
+      blur?.pause();
       setPlaying(false);
       return;
     }
@@ -1470,7 +1489,10 @@ export function VideoEditorWorkspace({
       syncVideoToTimeline(currentTime);
     }
     const clip = mainClipAt(currentTime >= projectEnd - 0.05 ? 0 : currentTime);
-    if (clip) void v.play().catch(() => undefined);
+    if (clip) {
+      void v.play().catch(() => undefined);
+      if (bgBlurEnabled && blur) void blur.play().catch(() => undefined);
+    }
     setPlaying(true);
   }
 
@@ -2496,7 +2518,7 @@ export function VideoEditorWorkspace({
 
   function onVideoHandleDown(
     e: ReactPointerEvent,
-    kind: "video-move" | "video-resize",
+    kind: "video-move" | "video-resize" | "video-rotate",
     corner: VideoResizeCorner = "se",
   ) {
     e.preventDefault();
@@ -2508,13 +2530,20 @@ export function VideoEditorWorkspace({
     }
     setSelectedId("video");
     setPropTab("video");
+    let startAngle = 0;
+    if (kind === "video-rotate" && stageRef.current) {
+      const rect = stageRef.current.getBoundingClientRect();
+      const cx = rect.left + (videoBox.x + videoBox.w / 2) * rect.width;
+      const cy = rect.top + (videoBox.y + videoBox.h / 2) * rect.height;
+      startAngle = (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
+    }
     dragRef.current = {
       kind,
       corner,
       startX: e.clientX,
       startY: e.clientY,
-      ox: videoBox.x,
-      oy: videoBox.y,
+      ox: kind === "video-rotate" ? rotate : videoBox.x,
+      oy: kind === "video-rotate" ? startAngle : videoBox.y,
       ow: videoBox.w,
       oh: videoBox.h,
     };
@@ -2528,7 +2557,8 @@ export function VideoEditorWorkspace({
       window.removeEventListener("pointercancel", onUp);
       if (
         dragRef.current?.kind === "video-move" ||
-        dragRef.current?.kind === "video-resize"
+        dragRef.current?.kind === "video-resize" ||
+        dragRef.current?.kind === "video-rotate"
       ) {
         dragRef.current = null;
       }
@@ -2547,9 +2577,29 @@ export function VideoEditorWorkspace({
     const drag = dragRef.current;
     const stage = stageRef.current;
     if (!drag || !stage) return;
-    if (drag.kind !== "video-move" && drag.kind !== "video-resize") return;
+    if (
+      drag.kind !== "video-move" &&
+      drag.kind !== "video-resize" &&
+      drag.kind !== "video-rotate"
+    ) {
+      return;
+    }
     const rect = stage.getBoundingClientRect();
     if (rect.width < 2 || rect.height < 2) return;
+
+    if (drag.kind === "video-rotate") {
+      const centerX = rect.left + (videoBox.x + videoBox.w / 2) * rect.width;
+      const centerY = rect.top + (videoBox.y + videoBox.h / 2) * rect.height;
+      const ang =
+        (Math.atan2(clientY - centerY, clientX - centerX) * 180) / Math.PI;
+      let next = drag.ox + (ang - drag.oy);
+      const norm = ((next % 360) + 360) % 360;
+      const snapped = [0, 90, 180, 270].find((a) => Math.abs(norm - a) < 3);
+      if (snapped !== undefined) next = snapped;
+      setRotate(Math.round(next * 10) / 10);
+      return;
+    }
+
     const dx = (clientX - drag.startX) / rect.width;
     const dy = (clientY - drag.startY) / rect.height;
     const min = 0.08;
@@ -2611,7 +2661,11 @@ export function VideoEditorWorkspace({
     const drag = dragRef.current;
     const stage = stageRef.current;
     if (!drag || !stage) return;
-    if (drag.kind === "video-move" || drag.kind === "video-resize") {
+    if (
+      drag.kind === "video-move" ||
+      drag.kind === "video-resize" ||
+      drag.kind === "video-rotate"
+    ) {
       applyMainVideoDrag(e.clientX, e.clientY);
       return;
     }
@@ -3419,6 +3473,10 @@ export function VideoEditorWorkspace({
           videoY: videoBox.y * outSize.h,
           videoW: videoBox.w * outSize.w,
           videoH: videoBox.h * outSize.h,
+          bgBlur: bgBlurEnabled
+            ? { enabled: true, amount: bgBlurAmount }
+            : null,
+          canvasBg,
           videoLayers: videoLayers.flatMap((track) => {
             if (!track.visible) return [];
             return layerClips
@@ -4209,6 +4267,67 @@ export function VideoEditorWorkspace({
                 </div>
               )}
               <div className="space-y-2 rounded-md border border-[#333] bg-[#101012] p-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#ddd]">ضباب الخلفية</p>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={bgBlurEnabled}
+                    onClick={() => {
+                      setBgBlurEnabled((v) => {
+                        const next = !v;
+                        if (next) {
+                          const blur = blurVideoRef.current;
+                          const main = videoRef.current;
+                          if (blur && main) {
+                            try {
+                              blur.currentTime = main.currentTime;
+                            } catch {
+                              /* ignore */
+                            }
+                            if (playing) void blur.play().catch(() => undefined);
+                          }
+                        } else {
+                          blurVideoRef.current?.pause();
+                        }
+                        return next;
+                      });
+                    }}
+                    className={`relative h-6 w-11 rounded-full transition ${
+                      bgBlurEnabled ? "bg-[#f5c518]" : "bg-[#333]"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                        bgBlurEnabled ? "start-5" : "start-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {bgBlurEnabled && (
+                  <label className="block text-[11px] text-[#888]">
+                    قوة الضباب {bgBlurAmount}%
+                    <input
+                      type="range"
+                      min={5}
+                      max={100}
+                      value={bgBlurAmount}
+                      onChange={(e) => setBgBlurAmount(Number(e.target.value))}
+                      className="mt-1 w-full"
+                    />
+                  </label>
+                )}
+                <label className="flex items-center justify-between text-[11px] text-[#888]">
+                  لون الخلفية
+                  <input
+                    type="color"
+                    value={canvasBg}
+                    onChange={(e) => setCanvasBg(e.target.value)}
+                    className="h-7 w-10 cursor-pointer rounded border border-[#333] bg-transparent"
+                  />
+                </label>
+              </div>
+              <div className="space-y-2 rounded-md border border-[#333] bg-[#101012] p-2">
                 <p className="text-xs font-semibold text-[#ddd]">تحويل</p>
                 <div className="flex items-center gap-2">
                   <label className="flex-1 text-[11px] text-[#888]">
@@ -4307,7 +4426,18 @@ export function VideoEditorWorkspace({
                   </button>
                 </div>
                 <label className="block text-[11px] text-[#888]">
-                  استدارة
+                  استدارة {Math.round(rotate)}°
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    value={(() => {
+                      const n = ((rotate % 360) + 360) % 360;
+                      return n > 180 ? n - 360 : n;
+                    })()}
+                    onChange={(e) => setRotate(Number(e.target.value))}
+                    className="mt-1 w-full"
+                  />
                   <div className="mt-1 grid grid-cols-4 gap-1">
                     {([0, 90, 180, 270] as const).map((r) => (
                       <button
@@ -4315,7 +4445,7 @@ export function VideoEditorWorkspace({
                         type="button"
                         onClick={() => setRotate(r)}
                         className={`rounded py-1 text-[11px] ${
-                          rotate === r
+                          Math.abs((((rotate % 360) + 360) % 360) - r) < 0.5
                             ? "bg-[#f5c518] font-bold text-[#111]"
                             : "border border-[#333] text-[#ccc]"
                         }`}
@@ -5063,7 +5193,20 @@ export function VideoEditorWorkspace({
                   onChange={(e) => setOpacity(Number(e.target.value) / 100)}
                   className="w-full"
                 />
-                <label className="text-[#888]">تدوير</label>
+                <label className="text-[#888]">
+                  تدوير {Math.round(rotate)}°
+                </label>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  value={(() => {
+                    const n = ((rotate % 360) + 360) % 360;
+                    return n > 180 ? n - 360 : n;
+                  })()}
+                  onChange={(e) => setRotate(Number(e.target.value))}
+                  className="w-full"
+                />
                 <div className="grid grid-cols-4 gap-1">
                   {([0, 90, 180, 270] as const).map((r) => (
                     <button
@@ -5071,7 +5214,7 @@ export function VideoEditorWorkspace({
                       type="button"
                       onClick={() => setRotate(r)}
                       className={`rounded py-1 ${
-                        rotate === r
+                        Math.abs((((rotate % 360) + 360) % 360) - r) < 0.5
                           ? "bg-[#f5c518] font-bold text-[#111]"
                           : "border border-[#333]"
                       }`}
@@ -5134,10 +5277,30 @@ export function VideoEditorWorkspace({
               <div className="pointer-events-none absolute start-2 top-2 z-30 rounded bg-black/70 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-teal-300">
                 {aspectLabel} · {outSize.w}×{outSize.h}
               </div>
+              {/* ضباب خلفية القماش */}
+              <div
+                className="absolute inset-0 z-0"
+                style={{ background: canvasBg }}
+              />
+              {bgBlurEnabled && url && (
+                <video
+                  ref={blurVideoRef}
+                  src={url}
+                  muted
+                  playsInline
+                  draggable={false}
+                  className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover"
+                  style={{
+                    filter: `blur(${Math.max(4, (bgBlurAmount / 100) * 36)}px)`,
+                    transform: "scale(1.18)",
+                    opacity: videoLane.visible && mainClipAt(currentTime) ? 1 : 0,
+                  }}
+                />
+              )}
               <div
                 className={`absolute z-10 ${
                   selectedId === "video"
-                    ? "outline outline-2 outline-dashed outline-teal-400"
+                    ? "outline outline-2 outline-[#f5c518]"
                     : ""
                 } ${
                   previewTool === "hand"
@@ -5161,6 +5324,7 @@ export function VideoEditorWorkspace({
                   ]
                     .filter(Boolean)
                     .join(" ") || undefined,
+                  transformOrigin: "center center",
                   touchAction: "none",
                 }}
                 onPointerDown={(e) => {
@@ -5179,20 +5343,30 @@ export function VideoEditorWorkspace({
                 />
                 {selectedId === "video" && (
                   <>
-                    {/* نقطة التثبيت / مقبض التحريك في الوسط — مثل Filmora */}
+                    {/* مقبض الاستدارة أعلى الإطار — مثل 123apps */}
+                    <div className="pointer-events-none absolute left-1/2 top-0 z-30 flex -translate-x-1/2 -translate-y-full flex-col items-center">
+                      <div
+                        className="pointer-events-auto h-3.5 w-3.5 cursor-grab rounded-full border-2 border-[#f5c518] bg-white shadow active:cursor-grabbing"
+                        title="اسحب للتدوير"
+                        onPointerDown={(e) =>
+                          onVideoHandleDown(e, "video-rotate")
+                        }
+                      />
+                      <div className="h-4 w-px bg-[#f5c518]" />
+                    </div>
                     <button
                       type="button"
                       title="اسحب لتحريك الفيديو"
-                      className="absolute left-1/2 top-1/2 z-30 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move items-center justify-center rounded-full border-2 border-teal-300 bg-black/50 text-teal-300 shadow-lg"
+                      className="absolute left-1/2 top-1/2 z-30 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move items-center justify-center rounded-full border-2 border-[#f5c518] bg-black/50 text-[#f5c518] shadow-lg"
                       onPointerDown={(e) => {
                         e.stopPropagation();
                         onVideoHandleDown(e, "video-move");
                       }}
                     >
                       <span className="relative block h-3 w-3">
-                        <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-teal-300" />
-                        <span className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-teal-300" />
-                        <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-teal-300" />
+                        <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#f5c518]" />
+                        <span className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-[#f5c518]" />
+                        <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f5c518]" />
                       </span>
                     </button>
                     {(
@@ -5209,7 +5383,7 @@ export function VideoEditorWorkspace({
                     ).map(([corner, pos]) => (
                       <div
                         key={corner}
-                        className={`absolute z-20 h-3.5 w-3.5 rounded-full border-2 border-teal-500 bg-white shadow ${pos}`}
+                        className={`absolute z-20 h-3.5 w-3.5 rounded-full border-2 border-[#111] bg-white shadow ${pos}`}
                         onPointerDown={(e) =>
                           onVideoHandleDown(e, "video-resize", corner)
                         }
