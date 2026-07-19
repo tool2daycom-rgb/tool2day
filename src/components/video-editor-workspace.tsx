@@ -22,6 +22,7 @@ import {
   Music,
   Pause,
   Play,
+  Plus,
   Ratio,
   Scissors,
   SkipBack,
@@ -29,10 +30,13 @@ import {
   Sticker,
   Trash2,
   Type,
+  UnfoldHorizontal,
   Volume2,
   VolumeX,
   Download,
   Upload,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
@@ -245,6 +249,7 @@ export function VideoEditorWorkspace({
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineScrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     kind:
       | "move"
@@ -320,7 +325,7 @@ export function VideoEditorWorkspace({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [timelineZoom, setTimelineZoom] = useState(1);
+  const [timelineZoom, setTimelineZoom] = useState(1); // 1–8
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -442,6 +447,31 @@ export function VideoEditorWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [ctxMenu]);
 
+  useEffect(() => {
+    const scroll = timelineScrollRef.current;
+    if (!scroll) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const dir = e.deltaY > 0 ? -1 : 1;
+      setTimelineZoom((z) => {
+        const next = Math.round((z + dir * 0.25) * 100) / 100;
+        return Math.min(8, Math.max(1, next));
+      });
+    }
+    scroll.addEventListener("wheel", onWheel, { passive: false });
+    return () => scroll.removeEventListener("wheel", onWheel);
+  }, [file, url]);
+
+  function bumpTimelineZoom(delta: number) {
+    setTimelineZoom((z) =>
+      Math.min(8, Math.max(1, Math.round((z + delta) * 100) / 100)),
+    );
+  }
+
+  function fitTimelineZoom() {
+    setTimelineZoom(1);
+    timelineScrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+  }
   useEffect(() => {
     if (!file) return;
     function onKey(e: KeyboardEvent) {
@@ -2598,212 +2628,248 @@ export function VideoEditorWorkspace({
                 {formatTime(currentTime)}
               </span>
             </div>
-            <label className="flex items-center gap-2 text-[11px] text-[#888]">
-              تكبير
+            <div className="flex items-center gap-1.5" title="تكبير التايملاين">
+              <button
+                type="button"
+                onClick={() => bumpTimelineZoom(-0.5)}
+                className="rounded border border-[#333] p-1.5 text-[#ccc] hover:bg-[#222]"
+                title="تكبير للخارج"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
               <input
                 type="range"
                 min={1}
-                max={4}
+                max={8}
                 step={0.1}
                 value={timelineZoom}
                 onChange={(e) => setTimelineZoom(Number(e.target.value))}
+                className="w-24 accent-[#888]"
+                aria-label="تكبير التايملاين"
               />
-            </label>
+              <button
+                type="button"
+                onClick={() => bumpTimelineZoom(0.5)}
+                className="rounded border border-[#333] p-1.5 text-[#ccc] hover:bg-[#222]"
+                title="تكبير للداخل"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={fitTimelineZoom}
+                className="rounded border border-[#333] p-1.5 text-[#ccc] hover:bg-[#222]"
+                title="ملاءمة العرض"
+              >
+                <UnfoldHorizontal className="h-3.5 w-3.5" />
+              </button>
+              <span className="min-w-8 text-[10px] text-[#666]">
+                {timelineZoom.toFixed(1)}×
+              </span>
+            </div>
           </div>
 
-          {/* Timeline */}
+          {/* Multi-lane timeline */}
           <div className="shrink-0 border-t border-[#2a2a2e] bg-[#121214] p-3">
-            <div
-              ref={timelineRef}
-              className="relative h-36 overflow-hidden rounded-md bg-[#1a1a1d]"
-              style={{
-                transform: `scaleX(${timelineZoom})`,
-                transformOrigin: "right center",
-              }}
-              onPointerMove={onTimelineMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setCtxMenu(clampMenuPos(e.clientX, e.clientY));
-              }}
-            >
-              {/* Ruler ticks */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 flex h-4 justify-between px-1 text-[9px] text-[#666]">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <span key={i}>{formatTime((duration * i) / 5)}</span>
-                ))}
-              </div>
-
-              {/* Video clip */}
-              <div
-                className="absolute top-5 h-8 overflow-hidden rounded border-2 border-amber-400"
-                style={{
-                  left: `${timelinePct(trimIn)}%`,
-                  width: `${Math.max(1, timelinePct(trimOut) - timelinePct(trimIn))}%`,
-                  background: "linear-gradient(to left, #5a3a10, #3a2810)",
-                }}
-              >
-                <div className="flex h-full items-center px-2 text-[10px] font-semibold text-amber-400">
-                  {file.name}
-                </div>
+            {(() => {
+              const RULER = 22;
+              const VIDEO_H = 36;
+              const LANE_H = 48;
+              const LANE_GAP = 6;
+              const ADD_H = 32;
+              const lanes = audioTracks;
+              const bodyH =
+                RULER +
+                VIDEO_H +
+                8 +
+                Math.max(1, lanes.length) * (LANE_H + LANE_GAP) +
+                ADD_H +
+                8;
+              return (
                 <div
-                  className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-amber-400"
-                  onPointerDown={(e) => onTimelinePointerDown(e, "trim-in")}
-                />
-                <div
-                  className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-amber-400"
-                  onPointerDown={(e) => onTimelinePointerDown(e, "trim-out")}
-                />
-              </div>
-
-              {/* Blue audio lane — drag left/right + edge trim (like 123apps) */}
-              {audioTracks
-                .filter(
-                  (t) =>
-                    t.id === "linked-audio" ||
-                    t.id.startsWith("detached-") ||
-                    t.id.startsWith("audio-"),
-                )
-                .map((t) => {
-                  const left = timelinePct(trimIn + t.start);
-                  const width = duration
-                    ? Math.max(1.2, (t.duration / duration) * 100)
-                    : 1;
-                  const peaks = peaksForClip(
-                    t.peaks?.length ? t.peaks : videoPeaks,
-                    t.offset || 0,
-                    t.duration,
-                    t.sourceDuration || duration || 1,
-                  );
-                  const selected =
-                    selectedId === t.id || selectedId === "audio";
-                  return (
-                    <div
-                      key={t.id}
-                      role="button"
-                      tabIndex={0}
-                      className={`absolute top-[3.35rem] h-[3.25rem] cursor-grab overflow-hidden rounded-[3px] border active:cursor-grabbing ${
-                        selected
-                          ? "border-[#7dd3fc] ring-1 ring-[#7dd3fc]/40"
-                          : "border-[#0e4d73]"
-                      } bg-[#0c5f8f]`}
-                      style={{ left: `${left}%`, width: `${width}%` }}
-                      title="سحب · قص الحواف · كليك يمين للقائمة"
-                      onPointerDown={(e) =>
-                        onAudioClipPointerDown(e, t.id, "audio-move")
-                      }
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setSelectedId(t.id);
-                        setPanel("audio");
-                        setCtxMenu(clampMenuPos(e.clientX, e.clientY));
-                      }}
-                    >
-                      <div className="pointer-events-none absolute start-1 top-0.5 z-10 max-w-[70%] truncate rounded bg-[#083a58]/90 px-1.5 py-[1px] text-[9px] font-semibold text-white">
-                        {t.name}
-                      </div>
-                      <div className="pointer-events-none absolute inset-x-0 bottom-1.5 top-4">
-                        <WaveformBars peaks={peaks} dimmed={t.volume <= 0} />
-                      </div>
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1.5 bg-[#062a40]/85" />
-                      <div
-                        className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize bg-[#e8f7ff]"
-                        onPointerDown={(e) =>
-                          onAudioClipPointerDown(e, t.id, "audio-trim-in")
-                        }
-                      />
-                      <div
-                        className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize bg-[#e8f7ff]"
-                        onPointerDown={(e) =>
-                          onAudioClipPointerDown(e, t.id, "audio-trim-out")
-                        }
-                      />
+                  ref={timelineScrollRef}
+                  className="max-h-72 overflow-x-auto overflow-y-auto rounded-md border border-[#2a2a2e] bg-[#1a1a1d]"
+                >
+                  <div
+                    ref={timelineRef}
+                    className="relative"
+                    style={{
+                      width: `${Math.max(100, timelineZoom * 100)}%`,
+                      minWidth: "100%",
+                      height: bodyH,
+                    }}
+                    onPointerMove={onTimelineMove}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerUp}
+                    onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCtxMenu(clampMenuPos(e.clientX, e.clientY));
+                    }}
+                  >
+                    {/* Ruler */}
+                    <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[22px] items-end justify-between border-b border-[#2a2a2e] px-1 pb-0.5 text-[9px] text-[#777]">
+                      {Array.from({ length: Math.max(6, Math.round(timelineZoom * 6)) }).map(
+                        (_, i, arr) => (
+                          <span key={i}>
+                            {formatTime((duration * i) / Math.max(1, arr.length - 1))}
+                          </span>
+                        ),
+                      )}
                     </div>
-                  );
-                })}
 
-              {/* Extra audio tracks (music / TTS) */}
-              {audioTracks.filter(
-                (t) =>
-                  t.id !== "linked-audio" &&
-                  !t.id.startsWith("detached-") &&
-                  !t.id.startsWith("audio-"),
-              ).length > 0 && (
-                <div className="absolute inset-x-0 top-[6.85rem] h-6">
-                  {audioTracks
-                    .filter(
-                      (t) =>
-                        t.id !== "linked-audio" &&
-                        !t.id.startsWith("detached-") &&
-                        !t.id.startsWith("audio-"),
-                    )
-                    .map((t) => {
-                      const isTts = t.id.startsWith("tts-");
+                    {/* Video lane */}
+                    <div
+                      className="absolute inset-x-0"
+                      style={{ top: RULER + 4, height: VIDEO_H }}
+                    >
+                      <div
+                        className="absolute h-full overflow-hidden rounded border-2 border-amber-400"
+                        style={{
+                          left: `${timelinePct(trimIn)}%`,
+                          width: `${Math.max(1, timelinePct(trimOut) - timelinePct(trimIn))}%`,
+                          background:
+                            "linear-gradient(to left, #5a3a10, #3a2810)",
+                        }}
+                      >
+                        <div className="flex h-full items-center px-2 text-[10px] font-semibold text-amber-400">
+                          {file.name}
+                        </div>
+                        <div
+                          className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-amber-400"
+                          onPointerDown={(e) =>
+                            onTimelinePointerDown(e, "trim-in")
+                          }
+                        />
+                        <div
+                          className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-amber-400"
+                          onPointerDown={(e) =>
+                            onTimelinePointerDown(e, "trim-out")
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    {/* Stacked audio lanes (montage) */}
+                    {lanes.map((t, i) => {
+                      const top =
+                        RULER + VIDEO_H + 12 + i * (LANE_H + LANE_GAP);
                       const left = timelinePct(trimIn + t.start);
                       const width = duration
-                        ? Math.max(1, (t.duration / duration) * 100)
+                        ? Math.max(1.2, (t.duration / duration) * 100)
                         : 1;
+                      const peaks = peaksForClip(
+                        t.peaks?.length ? t.peaks : videoPeaks,
+                        t.offset || 0,
+                        t.duration,
+                        t.sourceDuration || duration || 1,
+                      );
+                      const selected =
+                        selectedId === t.id || selectedId === "audio";
+                      const isTts = t.id.startsWith("tts-");
                       return (
                         <div
                           key={t.id}
-                          className={`absolute h-6 cursor-grab overflow-hidden rounded border active:cursor-grabbing ${
-                            isTts
-                              ? "border-emerald-600 bg-emerald-700"
-                              : "border-amber-500 bg-amber-600"
-                          }`}
-                          style={{ left: `${left}%`, width: `${width}%` }}
-                          title={t.name}
-                          onPointerDown={(e) =>
-                            onAudioClipPointerDown(e, t.id, "audio-move")
-                          }
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setSelectedId(t.id);
-                            setCtxMenu(clampMenuPos(e.clientX, e.clientY));
-                          }}
+                          className="absolute inset-x-0"
+                          style={{ top, height: LANE_H }}
                         >
-                          <WaveformBars
-                            peaks={peaksForClip(
-                              t.peaks,
-                              t.offset || 0,
-                              t.duration,
-                              t.sourceDuration || t.duration,
-                            )}
-                          />
+                          <div className="pointer-events-none absolute inset-y-0 start-0 w-full border-t border-[#252528]" />
                           <div
-                            className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-ew-resize bg-white/80"
+                            role="button"
+                            tabIndex={0}
+                            className={`absolute h-full cursor-grab overflow-hidden rounded-[3px] border active:cursor-grabbing ${
+                              selected
+                                ? "border-[#7dd3fc] ring-1 ring-[#7dd3fc]/40"
+                                : isTts
+                                  ? "border-emerald-700"
+                                  : "border-[#0e4d73]"
+                            } ${isTts ? "bg-emerald-800" : "bg-[#0c5f8f]"}`}
+                            style={{ left: `${left}%`, width: `${width}%` }}
+                            title="اسحب الطبقة · قص الحواف · كليك يمين"
                             onPointerDown={(e) =>
-                              onAudioClipPointerDown(e, t.id, "audio-trim-in")
+                              onAudioClipPointerDown(e, t.id, "audio-move")
                             }
-                          />
-                          <div
-                            className="absolute inset-y-0 right-0 z-20 w-1.5 cursor-ew-resize bg-white/80"
-                            onPointerDown={(e) =>
-                              onAudioClipPointerDown(e, t.id, "audio-trim-out")
-                            }
-                          />
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setSelectedId(t.id);
+                              setPanel("audio");
+                              setCtxMenu(clampMenuPos(e.clientX, e.clientY));
+                            }}
+                          >
+                            <div className="pointer-events-none absolute start-1 top-0.5 z-10 max-w-[70%] truncate rounded bg-black/35 px-1.5 py-[1px] text-[9px] font-semibold text-white">
+                              {t.name}
+                            </div>
+                            <div className="pointer-events-none absolute inset-x-0 bottom-1.5 top-4">
+                              <WaveformBars
+                                peaks={peaks}
+                                dimmed={t.volume <= 0}
+                              />
+                            </div>
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1.5 bg-black/35" />
+                            <div
+                              className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize rounded-s-[2px] bg-white/90"
+                              onPointerDown={(e) =>
+                                onAudioClipPointerDown(e, t.id, "audio-trim-in")
+                              }
+                            />
+                            <div
+                              className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize rounded-e-[2px] bg-white/90"
+                              onPointerDown={(e) =>
+                                onAudioClipPointerDown(
+                                  e,
+                                  t.id,
+                                  "audio-trim-out",
+                                )
+                              }
+                            />
+                          </div>
                         </div>
                       );
                     })}
-                </div>
-              )}
 
-              {/* Playhead */}
-              <div
-                className="absolute top-0 z-20 h-full w-0.5 bg-[#ff4d2e]"
-                style={{ left: `${timelinePct(currentTime)}%` }}
-              >
-                <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff4d2e]" />
-              </div>
-            </div>
+                    {/* Empty placeholder lane + add button */}
+                    <div
+                      className="absolute inset-x-2 flex items-center justify-center gap-2 rounded border border-dashed border-[#333] text-[11px] text-[#666]"
+                      style={{
+                        top:
+                          RULER +
+                          VIDEO_H +
+                          12 +
+                          Math.max(1, lanes.length) * (LANE_H + LANE_GAP),
+                        height: ADD_H,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          musicRef.current?.click();
+                          setPanel("media");
+                        }}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#444] bg-[#222] px-2 py-0.5 text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        أضف مسار صوت
+                      </button>
+                      <span>ضع الملفات هنا أو اضغط للرفع</span>
+                    </div>
+
+                    {/* Playhead */}
+                    <div
+                      className="pointer-events-none absolute top-0 z-30 h-full w-0.5 bg-[#ff4d2e]"
+                      style={{ left: `${timelinePct(currentTime)}%` }}
+                    >
+                      <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff4d2e]" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              اسحب المسار الأزرق · قص من الحواف · تقسيم / نسخ / تكرار / حذف من
-              الشريط أو كليك يمين
+              كل صوت على طبقة منفصلة · عجلة الماوس للتكبير/التصغير · أضف مسارات
+              للمونتاج
             </p>
           </div>
         </div>
