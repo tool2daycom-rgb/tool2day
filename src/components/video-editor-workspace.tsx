@@ -30,7 +30,7 @@ import {
   Sticker,
   Trash2,
   Type,
-  UnfoldHorizontal,
+  Maximize2,
   Volume2,
   VolumeX,
   Download,
@@ -500,7 +500,9 @@ export function VideoEditorWorkspace({
 
   function fitTimelineZoom() {
     setTimelineZoom(1);
-    timelineScrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
+    const el = timelineScrollRef.current;
+    if (el) el.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+    setStatus("تكبير لتناسب الخط الزمني");
   }
   useEffect(() => {
     if (!file) return;
@@ -525,6 +527,9 @@ export function VideoEditorWorkspace({
       } else if (e.key === "m" || e.key === "M") {
         e.preventDefault();
         setPrimaryAudioVolume(muted || volume <= 0 ? 1 : 0);
+      } else if ((e.key === "z" || e.key === "Z") && e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        fitTimelineZoom();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -2778,10 +2783,17 @@ export function VideoEditorWorkspace({
               <button
                 type="button"
                 onClick={fitTimelineZoom}
-                className="rounded p-1 text-[#aaa] hover:bg-[#2a2a2e] hover:text-white"
-                title="ملاءمة العرض"
+                className="group relative rounded p-1 text-[#aaa] hover:bg-[#2a2a2e] hover:text-white"
+                title="تكبير لتناسب الخط الزمني (Shift+Z)"
+                aria-label="تكبير لتناسب الخط الزمني"
               >
-                <UnfoldHorizontal className="h-3.5 w-3.5" />
+                <Maximize2 className="h-3.5 w-3.5" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[#555] bg-[#2c2c30] px-2.5 py-1.5 text-[11px] text-white shadow-xl group-hover:block">
+                  <span className="me-2 inline-flex items-center gap-0.5 rounded border border-[#777] bg-[#1a1a1d] px-1 py-0.5 font-mono text-[9px] text-[#ddd]">
+                    ⇧Z
+                  </span>
+                  تكبير لتناسب الخط الزمني
+                </span>
               </button>
             </div>
           </div>
