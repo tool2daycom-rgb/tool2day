@@ -106,17 +106,17 @@ a {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.07);
+    transform: scale(1.04);
   }
 }
 
 @keyframes brand-sway {
   0%,
   100% {
-    transform: rotate(-7deg);
+    transform: rotate(-4deg);
   }
   50% {
-    transform: rotate(7deg);
+    transform: rotate(4deg);
   }
 }
 

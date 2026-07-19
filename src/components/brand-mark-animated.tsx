@@ -1,7 +1,7 @@
-/** شعار المثلث المتحرك — أصفر / أزرق / برتقالي */
+/** شعار المثلث — بنفس أسلوب 123apps (نقاط صغيرة + حركة خفيفة) */
 export function BrandMarkAnimated({
   className = "",
-  size = 40,
+  size = 22,
 }: {
   className?: string;
   size?: number;
@@ -21,6 +21,7 @@ export function BrandMarkAnimated({
         aria-label="Tool2Day"
       >
         <g className="brand-mark-sway">
+          {/* أصفر أعلى · برتقالي يسار · أزرق يمين — مثل 123apps */}
           <circle
             className="brand-dot brand-dot-a"
             cx="100"
@@ -33,14 +34,14 @@ export function BrandMarkAnimated({
             cx="58"
             cy="128"
             r="36"
-            fill="#5B9BF5"
+            fill="#E8874A"
           />
           <circle
             className="brand-dot brand-dot-c"
             cx="142"
             cy="128"
             r="36"
-            fill="#E8874A"
+            fill="#5B9BF5"
           />
         </g>
       </svg>

@@ -58,7 +58,11 @@ export function HomeDirectory() {
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-12 text-center sm:mb-16">
         <div className="flex justify-center">
-          <BrandLogo size="lg" showWord className="text-4xl text-[#111] sm:text-5xl" />
+          <BrandLogo
+            size="lg"
+            showWord
+            className="[&_span:last-child]:text-[#111]"
+          />
         </div>
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
           الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات

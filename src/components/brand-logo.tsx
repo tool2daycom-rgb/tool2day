@@ -1,48 +1,35 @@
-import Image from "next/image";
 import Link from "next/link";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 
-/** شعار Tool2Day — مثلث النقاط (متحرك في الواجهة) */
+/** شعار Tool2Day بأسلوب 123apps: أيقونة مثلث صغيرة + اسم عريض */
 export function BrandLogo({
   className = "",
   showWord = true,
   size = "md",
-  animated = true,
 }: {
   className?: string;
   showWord?: boolean;
   size?: "sm" | "md" | "lg";
-  animated?: boolean;
 }) {
-  const markPx = size === "lg" ? 48 : size === "sm" ? 28 : 36;
+  const markPx = size === "lg" ? 28 : size === "sm" ? 18 : 22;
 
   return (
-    <span className={`inline-flex items-center gap-2.5 ${className}`}>
-      {animated ? (
-        <BrandMarkAnimated size={markPx} />
-      ) : (
-        <Image
-          src="/brand/logo-mark-triangle.svg"
-          alt=""
-          width={markPx}
-          height={Math.round(markPx * 0.9)}
-          className="h-auto w-auto shrink-0"
-          style={{ width: markPx, height: "auto" }}
-          unoptimized
-          priority
-        />
-      )}
+    <span
+      className={`inline-flex items-center gap-2 ${className}`}
+      style={{ flexDirection: "row" }}
+    >
+      <BrandMarkAnimated size={markPx} />
       {showWord ? (
         <span
-          className={`font-[family-name:var(--font-display)] font-bold tracking-tight ${
+          className={`font-[family-name:var(--font-display)] font-extrabold uppercase tracking-[-0.02em] text-white ${
             size === "lg"
-              ? "text-2xl sm:text-3xl"
+              ? "text-[1.35rem] leading-none sm:text-[1.5rem]"
               : size === "sm"
-                ? "text-base"
-                : "text-lg"
+                ? "text-[0.95rem] leading-none"
+                : "text-[1.15rem] leading-none"
           }`}
         >
-          Tool2Day
+          tool2day
         </span>
       ) : null}
     </span>
