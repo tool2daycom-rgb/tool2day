@@ -371,6 +371,8 @@ export function VideoEditorWorkspace({
   const layerTargetTrackRef = useRef<string | null>(null);
   const layerVideoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const splitAtPlayheadRef = useRef<() => void>(() => {});
+  /** معرّف وسائط المكتبة أثناء السحب (HTML5) — احتياطي إن فشل getData */
+  const draggingAssetIdRef = useRef<string | null>(null);
   const dragRef = useRef<{
     kind:
       | "move"
@@ -1143,8 +1145,8 @@ export function VideoEditorWorkspace({
     return null;
   }
 
-  /** هل المؤشر فوق مسار فيديو 1 أو أسفل الطبقات (منطقة الإنزال للفراغ)؟ */
-  function isPointerOverBaseVideo(clientY: number): boolean {
+  /** هل المؤشر فوق مسارات الفيديو (طبقات أو فيديو 1) لإفلات الفراغ؟ */
+  function isPointerOverVideoArea(clientY: number): boolean {
     const el = timelineRef.current;
     const scroll = timelineScrollRef.current;
     if (!el) return false;
@@ -1153,11 +1155,15 @@ export function VideoEditorWorkspace({
     const RULER = 22;
     const VIDEO_H = 36;
     const layerH = VIDEO_H + 4;
-    const baseTop = RULER + 2 + videoLayers.length * layerH;
-    // يشمل النصف السفلي لآخر طبقة فوق فيديو 1 لتسهيل الإنزال
-    const easeTop =
-      videoLayers.length > 0 ? baseTop - layerH * 0.55 : baseTop - 10;
-    return y >= easeTop && y <= baseTop + VIDEO_H + 24;
+    const top = RULER;
+    const bottom =
+      RULER + 2 + videoLayers.length * layerH + VIDEO_H + 28;
+    return y >= top && y <= bottom;
+  }
+
+  /** هل المؤشر فوق مسار فيديو 1 أو أسفل الطبقات (منطقة الإنزال للفراغ)؟ */
+  function isPointerOverBaseVideo(clientY: number): boolean {
+    return isPointerOverVideoArea(clientY);
   }
 
   /** أقرب مسار طبقة لفيديو 1 (الأسفل) */
@@ -1512,10 +1518,14 @@ export function VideoEditorWorkspace({
     setMediaDragActive(false);
     const assetId =
       e.dataTransfer.getData(MEDIA_DND_MIME) ||
-      e.dataTransfer.getData("text/plain");
+      e.dataTransfer.getData("text/plain") ||
+      draggingAssetIdRef.current ||
+      "";
+    draggingAssetIdRef.current = null;
     const asset = mediaLibrary.find((a) => a.id === assetId);
     if (asset && asset.kind !== "audio") {
       await insertMediaInGap(gapStart, gapDur, null, asset);
+      setStatus("تم وضع المقطع فوق الفراغ بين اللقطتين");
       return;
     }
     const f = e.dataTransfer.files?.[0];
@@ -1529,7 +1539,44 @@ export function VideoEditorWorkspace({
       setStatus("تم وضع المقطع فوق الفراغ بين اللقطتين");
       return;
     }
+    // حتى بدون بيانات السحب: إن وُجدت وسائط بصرية ضع آخرها
+    const lastVisual = [...mediaLibrary]
+      .reverse()
+      .find((a) => a.kind !== "audio");
+    if (lastVisual) {
+      await insertMediaInGap(gapStart, gapDur, null, lastVisual);
+      return;
+    }
     await insertMediaInGap(gapStart, gapDur);
+  }
+
+  function finalizeLayerPointerDrag() {
+    const drag = dragRef.current;
+    if (!drag || drag.kind !== "layer-move" || !drag.id) {
+      dragRef.current = null;
+      setTimelineDropTarget(null);
+      return;
+    }
+    const destTrack = bottomLayerTrackId() || drag.laneId;
+    if (drag.gapSnap) {
+      snapLayerIntoGap(drag.id, drag.gapSnap, destTrack);
+      setStatus("تم إنزال المقطع فوق الفراغ بين اللقطتين");
+    } else if (drag.laneId) {
+      const dest = drag.laneId;
+      setLayerClips((prev) =>
+        prev.map((c) =>
+          c.id === drag.id && c.trackId !== dest
+            ? { ...c, trackId: dest }
+            : c,
+        ),
+      );
+    }
+    dragRef.current = null;
+    setTimelineDropTarget(null);
+  }
+
+  function onPointerUp() {
+    finalizeLayerPointerDrag();
   }
 
   async function insertMediaInGap(
@@ -2032,27 +2079,6 @@ export function VideoEditorWorkspace({
     }
   }
 
-  function onPointerUp() {
-    const drag = dragRef.current;
-    if (drag?.kind === "layer-move" && drag.id) {
-      if (drag.gapSnap) {
-        snapLayerIntoGap(drag.id, drag.gapSnap, drag.laneId);
-      } else if (drag.laneId) {
-        // إنزال/رفع المسار عند الإفلات فقط حتى لا يُفقد السحب
-        const dest = drag.laneId;
-        setLayerClips((prev) =>
-          prev.map((c) =>
-            c.id === drag.id && c.trackId !== dest
-              ? { ...c, trackId: dest }
-              : c,
-          ),
-        );
-      }
-    }
-    dragRef.current = null;
-    setTimelineDropTarget(null);
-  }
-
   function timelinePct(t: number) {
     const d = projectEnd || duration;
     if (!d) return 0;
@@ -2534,8 +2560,15 @@ export function VideoEditorWorkspace({
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     if (kind === "layer-move") {
       setStatus(
-        "اسحب للأسفل إلى الفراغ بين المقطعين · أو يميناً/يساراً للوقت",
+        "اسحب فوق الفراغ ثم أفلت زر الماوس — المقطع ينزل إلى فيديو 2",
       );
+      const onWinUp = () => {
+        window.removeEventListener("pointerup", onWinUp);
+        window.removeEventListener("pointercancel", onWinUp);
+        finalizeLayerPointerDrag();
+      };
+      window.addEventListener("pointerup", onWinUp);
+      window.addEventListener("pointercancel", onWinUp);
     }
   }
 
@@ -2616,19 +2649,19 @@ export function VideoEditorWorkspace({
       const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * d;
       if (drag.kind === "layer-move") {
         const absTime = timeFromClientX(e.clientX);
-        const overBase = isPointerOverBaseVideo(e.clientY);
-        const gapAtPointer = overBase
-          ? nearestGapToTime(absTime)
-          : findGapAt(absTime);
+        const inVideoArea = isPointerOverVideoArea(e.clientY);
         const destBottom = bottomLayerTrackId();
+        // أي فراغ تحت المؤشر أفقياً طالما داخل منطقة الفيديو
+        const gapAtPointer = inVideoArea
+          ? findGapAt(absTime) || nearestGapToTime(absTime)
+          : findGapAt(absTime);
 
-        if (gapAtPointer && overBase && drag.id) {
+        if (gapAtPointer && inVideoArea && drag.id) {
           const relStart = Math.max(0, gapAtPointer.start - trimIn);
           const playDur = Math.max(
             0.15,
-            Math.min(drag.ow, gapAtPointer.duration),
+            Math.min(drag.oh || drag.ow, gapAtPointer.duration),
           );
-          // لا تغيّر trackId أثناء السحب (يفكّ pointer capture) — عند الإفلات فقط
           drag.ox = relStart;
           drag.ow = playDur;
           drag.startX = e.clientX;
@@ -2647,7 +2680,7 @@ export function VideoEditorWorkspace({
             ),
           );
           setTimelineDropTarget(`gap-${gapAtPointer.leftId}`);
-          setStatus("أفلت — ينزل المقطع إلى الفراغ بين المقطعين");
+          setStatus("أفلت الآن — ينزل المقطع فوق الفراغ");
           return;
         }
 
@@ -2655,7 +2688,7 @@ export function VideoEditorWorkspace({
         const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
         const hoverTrack = resolveLayerTrackAtY(e.clientY);
         const dest =
-          overBase &&
+          inVideoArea &&
           destBottom &&
           !videoLayers.find((t) => t.id === destBottom)?.locked
             ? destBottom
@@ -2664,36 +2697,20 @@ export function VideoEditorWorkspace({
               ? hoverTrack
               : drag.laneId;
 
-        const gapWhileOnLayer = !overBase ? findGapAt(absTime) : null;
-        if (gapWhileOnLayer && drag.id) {
-          const relStart = Math.max(0, gapWhileOnLayer.start - trimIn);
-          const playDur = Math.max(
-            0.15,
-            Math.min(drag.oh || drag.ow, gapWhileOnLayer.duration),
-          );
-          drag.ox = relStart;
-          drag.ow = playDur;
-          drag.startX = e.clientX;
-          drag.laneId = destBottom || dest || drag.laneId;
-          drag.gapSnap = gapWhileOnLayer;
-          setLayerClips((prev) =>
-            prev.map((c) =>
-              c.id === drag.id
-                ? {
-                    ...c,
-                    start: relStart,
-                    duration: playDur,
-                    offset: 0,
-                  }
-                : c,
-            ),
-          );
-          setTimelineDropTarget(`gap-${gapWhileOnLayer.leftId}`);
-          setStatus("أفلت — يوضع بين المقطعين في الفراغ");
-          return;
+        // لا تمسح gapSnap إلا إذا ابتعد المؤشر زمنياً عن الفراغ
+        if (drag.gapSnap) {
+          const mid =
+            drag.gapSnap.start + drag.gapSnap.duration / 2;
+          if (Math.abs(absTime - mid) > drag.gapSnap.duration * 0.75) {
+            drag.gapSnap = undefined;
+          } else {
+            // أبقِ المقطع فوق الفراغ حتى الإفلات
+            setTimelineDropTarget(`gap-${drag.gapSnap.leftId}`);
+            setStatus("أفلت الآن — ينزل المقطع فوق الفراغ");
+            return;
+          }
         }
 
-        drag.gapSnap = undefined;
         setLayerClips((prev) =>
           prev.map((c) =>
             c.id === drag.id ? { ...c, start: nextStart } : c,
@@ -2702,9 +2719,6 @@ export function VideoEditorWorkspace({
         if (dest) {
           drag.laneId = dest;
           setTimelineDropTarget(dest);
-        }
-        if (overBase) {
-          setStatus("اسحب إلى الفراغ المنقّط بين المقطعين ثم أفلت");
         }
       } else if (drag.kind === "layer-trim-in") {
         const maxIn = Math.min(drag.ow - 0.15, drag.oh - drag.oy - 0.15);
@@ -3199,6 +3213,7 @@ export function VideoEditorWorkspace({
                             e.preventDefault();
                             return;
                           }
+                          draggingAssetIdRef.current = asset.id;
                           e.dataTransfer.setData(MEDIA_DND_MIME, asset.id);
                           e.dataTransfer.setData("text/plain", asset.id);
                           e.dataTransfer.setData(
@@ -3208,10 +3223,14 @@ export function VideoEditorWorkspace({
                           e.dataTransfer.effectAllowed = "copyMove";
                           setMediaDragActive(true);
                           setStatus(
-                            `أسقط «${asset.name}» فوق الفراغ المنقّط بين المقطعين`,
+                            `أسقط «${asset.name}» على المنطقة الصفراء فوق الفراغ ثم أفلت`,
                           );
                         }}
                         onDragEnd={() => {
+                          // لا تمسح المعرف فوراً — onDrop قد يقرأ بعده بلحظة
+                          setTimeout(() => {
+                            draggingAssetIdRef.current = null;
+                          }, 50);
                           setMediaDragActive(false);
                           setTimelineDropTarget(null);
                         }}
@@ -4887,6 +4906,36 @@ export function VideoEditorWorkspace({
                       onPointerUp={onPointerUp}
                       onPointerCancel={onPointerUp}
                       onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
+                      onDragOver={(e) => {
+                        if (
+                          mediaDragActive ||
+                          draggingAssetIdRef.current ||
+                          e.dataTransfer.types.includes("Files") ||
+                          e.dataTransfer.types.includes("text/plain")
+                        ) {
+                          e.preventDefault();
+                          const gap =
+                            findGapAt(timeFromClientX(e.clientX)) ||
+                            nearestGapToTime(timeFromClientX(e.clientX));
+                          if (gap) {
+                            onTimelineDragOver(e, `gap-${gap.leftId}`);
+                          }
+                        }
+                      }}
+                      onDrop={(e) => {
+                        const gap =
+                          findGapAt(timeFromClientX(e.clientX)) ||
+                          nearestGapToTime(timeFromClientX(e.clientX)) ||
+                          listMainGaps()[0];
+                        if (
+                          gap &&
+                          (mediaDragActive ||
+                            draggingAssetIdRef.current ||
+                            e.dataTransfer.files?.length)
+                        ) {
+                          void handleGapDrop(e, gap.start, gap.duration);
+                        }
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -5057,6 +5106,9 @@ export function VideoEditorWorkspace({
                                       "layer-move",
                                     )
                                   }
+                                  onPointerMove={onTimelineMove}
+                                  onPointerUp={onPointerUp}
+                                  onPointerCancel={onPointerUp}
                                   onContextMenu={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
