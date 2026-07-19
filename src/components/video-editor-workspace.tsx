@@ -174,6 +174,16 @@ type LayerClip = {
   locked?: boolean;
 };
 
+/** مقاطع مسار فيديو 1 بعد القص (للمونتاج بين اللقطات) */
+type MainClip = {
+  id: string;
+  /** موضع على الخط الزمني من بداية المشروع */
+  start: number;
+  duration: number;
+  /** موضع داخل ملف المصدر */
+  offset: number;
+};
+
 /** ملف مستورد في مكتبة وسائط المشروع (مثل Filmora) */
 type MediaAsset = {
   id: string;
@@ -374,7 +384,10 @@ export function VideoEditorWorkspace({
       | "audio-trim-out"
       | "layer-move"
       | "layer-trim-in"
-      | "layer-trim-out";
+      | "layer-trim-out"
+      | "main-move"
+      | "main-trim-in"
+      | "main-trim-out";
     id?: string;
     corner?: "se";
     startX: number;
@@ -458,6 +471,7 @@ export function VideoEditorWorkspace({
   });
   const [videoLayers, setVideoLayers] = useState<VideoLayerTrack[]>([]);
   const [layerClips, setLayerClips] = useState<LayerClip[]>([]);
+  const [mainClips, setMainClips] = useState<MainClip[]>([]);
   const [mediaLibrary, setMediaLibrary] = useState<MediaAsset[]>([]);
   const [mediaImportBusy, setMediaImportBusy] = useState(false);
   const [timelineDropTarget, setTimelineDropTarget] = useState<string | null>(
@@ -490,6 +504,44 @@ export function VideoEditorWorkspace({
 
   const clipDuration = Math.max(0.1, trimOut - trimIn);
 
+  const projectEnd = useMemo(() => {
+    const mainEnd = mainClips.reduce(
+      (m, c) => Math.max(m, c.start + c.duration),
+      0,
+    );
+    const layerEnd = layerClips.reduce(
+      (m, c) => Math.max(m, c.start + c.duration),
+      0,
+    );
+    const audioEnd = audioTracks.reduce(
+      (m, c) => Math.max(m, c.start + c.duration),
+      0,
+    );
+    return Math.max(duration, mainEnd, layerEnd, audioEnd, 0.1);
+  }, [mainClips, layerClips, audioTracks, duration]);
+
+  function mainClipAt(t: number) {
+    return (
+      mainClips.find(
+        (c) => t >= c.start - 0.001 && t < c.start + c.duration,
+      ) ?? null
+    );
+  }
+
+  function syncVideoToTimeline(t: number) {
+    const v = videoRef.current;
+    if (!v) return;
+    const clip = mainClipAt(t);
+    if (!clip) {
+      if (!v.paused) v.pause();
+      return;
+    }
+    const mediaT = clip.offset + (t - clip.start);
+    if (Math.abs(v.currentTime - mediaT) > 0.2) {
+      v.currentTime = Math.max(0, mediaT);
+    }
+  }
+
   useEffect(() => {
     return () => {
       if (url) URL.revokeObjectURL(url);
@@ -521,19 +573,28 @@ export function VideoEditorWorkspace({
   }, [speed, volume, muted, audioTracks, videoLane]);
 
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v || !playing) return;
+    if (!playing) return;
     const id = window.setInterval(() => {
-      setCurrentTime(v.currentTime);
-      if (v.currentTime >= trimOut - 0.04) {
-        v.pause();
-        v.currentTime = trimIn;
-        setPlaying(false);
-        setCurrentTime(trimIn);
-      }
+      setCurrentTime((prev) => {
+        const next = Math.min(projectEnd, prev + 0.04 * speed);
+        if (next >= projectEnd - 0.04) {
+          const v = videoRef.current;
+          if (v) v.pause();
+          setPlaying(false);
+          syncVideoToTimeline(0);
+          return 0;
+        }
+        syncVideoToTimeline(next);
+        const v = videoRef.current;
+        const clip = mainClipAt(next);
+        if (clip && v && v.paused) void v.play().catch(() => undefined);
+        if (!clip && v && !v.paused) v.pause();
+        return next;
+      });
     }, 40);
     return () => clearInterval(id);
-  }, [playing, trimIn, trimOut]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, projectEnd, speed, mainClips]);
 
   // Keep audio-lane elements in sync with the playhead (supports left/right offset)
   useEffect(() => {
@@ -702,6 +763,9 @@ export function VideoEditorWorkspace({
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         deleteSelected();
+      } else if ((e.key === "b" || e.key === "B") && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        splitAtPlayhead();
       } else if (e.key === "s" || e.key === "S") {
         e.preventDefault();
         splitAtPlayhead();
@@ -757,6 +821,7 @@ export function VideoEditorWorkspace({
       return [];
     });
     setVideoLayers([]);
+    setMainClips([]);
     setMediaLibrary((prev) => {
       prev.forEach((a) => URL.revokeObjectURL(a.url));
       return [];
@@ -803,6 +868,14 @@ export function VideoEditorWorkspace({
     setCurrentTime(0);
     setVideoNatural({ w: mw, h: mh });
     setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
+    setMainClips([
+      {
+        id: nextId(idCounterRef, "main"),
+        start: 0,
+        duration: d,
+        offset: 0,
+      },
+    ]);
     // Always create a movable blue audio lane under the video
     const liveFile = fileLiveRef.current;
     const liveUrl = urlLiveRef.current;
@@ -886,18 +959,21 @@ export function VideoEditorWorkspace({
       setPlaying(false);
       return;
     }
-    if (v.currentTime < trimIn || v.currentTime >= trimOut) {
-      v.currentTime = trimIn;
+    if (currentTime >= projectEnd - 0.05) {
+      setCurrentTime(0);
+      syncVideoToTimeline(0);
+    } else {
+      syncVideoToTimeline(currentTime);
     }
-    void v.play();
+    const clip = mainClipAt(currentTime >= projectEnd - 0.05 ? 0 : currentTime);
+    if (clip) void v.play().catch(() => undefined);
     setPlaying(true);
   }
 
   function seekTo(t: number) {
-    const v = videoRef.current;
-    const clamped = Math.min(trimOut, Math.max(trimIn, t));
-    if (v) v.currentTime = clamped;
+    const clamped = Math.min(projectEnd, Math.max(0, t));
     setCurrentTime(clamped);
+    syncVideoToTimeline(clamped);
   }
 
   function setPrimaryAudioVolume(next: number) {
@@ -982,6 +1058,41 @@ export function VideoEditorWorkspace({
   }
 
   function splitAtPlayhead() {
+    // 1) تقسيم طبقة مونتاج محددة أو تحت رأس التشغيل
+    const selectedLayer = layerClips.find((c) => c.id === selectedId);
+    const layerUnder =
+      selectedLayer ||
+      layerClips.find(
+        (c) =>
+          currentTime >= c.start &&
+          currentTime < c.start + c.duration,
+      );
+    if (layerUnder) {
+      const local = currentTime - layerUnder.start;
+      if (local <= 0.12 || local >= layerUnder.duration - 0.12) {
+        setError("حرّك رأس التشغيل داخل المقطع ثم اقسم");
+        return;
+      }
+      const rightId = nextId(idCounterRef, "lsplit");
+      setLayerClips((prev) => [
+        ...prev.filter((c) => c.id !== layerUnder.id),
+        { ...layerUnder, duration: local },
+        {
+          ...layerUnder,
+          id: rightId,
+          name: `${layerUnder.name} (2)`,
+          start: layerUnder.start + local,
+          offset: layerUnder.offset + local,
+          duration: layerUnder.duration - local,
+        },
+      ]);
+      setSelectedId(rightId);
+      setStatus(`تم تقسيم الطبقة عند ${formatTime(currentTime)} — اسحب الجزء لفتح فجوة للمونتاج`);
+      setError(null);
+      return;
+    }
+
+    // 2) تقسيم مسار الصوت
     const track = getSelectedAudioTrack();
     if (track) {
       const local = currentTime - trimIn - track.start;
@@ -1017,12 +1128,52 @@ export function VideoEditorWorkspace({
       return;
     }
 
-    if (currentTime <= trimIn + 0.1 || currentTime >= trimOut - 0.1) {
-      setError("حرّك رأس التشغيل داخل المقطع ثم اقسم");
+    // 3) تقسيم فيديو 1 إلى مقطعين (لوضع مونتاج بينهما)
+    const clips =
+      mainClips.length > 0
+        ? mainClips
+        : [
+            {
+              id: "main-1",
+              start: trimIn,
+              duration: Math.max(0.1, trimOut - trimIn),
+              offset: trimIn,
+            } satisfies MainClip,
+          ];
+    const clip =
+      clips.find(
+        (c) =>
+          currentTime >= c.start + 0.12 &&
+          currentTime <= c.start + c.duration - 0.12,
+      ) ?? null;
+    if (!clip) {
+      setError("حرّك رأس التشغيل داخل مقطع الفيديو ثم انقر المقص");
       return;
     }
-    setTrimOut(currentTime);
-    setStatus(`تم قص الفيديو عند ${formatTime(currentTime)}`);
+    const local = currentTime - clip.start;
+    const rightId = nextId(idCounterRef, "main");
+    const left: MainClip = { ...clip, duration: local };
+    const right: MainClip = {
+      id: rightId,
+      start: clip.start + local,
+      offset: clip.offset + local,
+      duration: clip.duration - local,
+    };
+    const nextClips = [
+      ...clips.filter((c) => c.id !== clip.id),
+      left,
+      right,
+    ].sort((a, b) => a.start - b.start);
+    setMainClips(nextClips);
+    setTrimIn(0);
+    setTrimOut(
+      nextClips.reduce((m, c) => Math.max(m, c.start + c.duration), duration),
+    );
+    setSelectedId("video");
+    setStatus(
+      `تم القص عند ${formatTime(currentTime)} — اسحب الجزء الأيمن لفتح فراغ وضع فيه المونتاج`,
+    );
+    setError(null);
   }
 
   function copySelected() {
@@ -1455,16 +1606,18 @@ export function VideoEditorWorkspace({
   }
 
   function timelinePct(t: number) {
-    if (!duration) return 0;
-    return (t / duration) * 100;
+    const d = projectEnd || duration;
+    if (!d) return 0;
+    return (t / d) * 100;
   }
 
   function timeFromClientX(clientX: number) {
     const el = timelineRef.current;
-    if (!el || !duration) return 0;
+    const d = projectEnd || duration;
+    if (!el || !d) return 0;
     const rect = el.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    return ratio * duration;
+    return ratio * d;
   }
 
   function onTimelinePointerDown(e: ReactPointerEvent, kind: "playhead" | "trim-in" | "trim-out") {
@@ -2031,6 +2184,49 @@ export function VideoEditorWorkspace({
         );
       }
     }
+    if (
+      (drag.kind === "main-move" ||
+        drag.kind === "main-trim-in" ||
+        drag.kind === "main-trim-out") &&
+      drag.id
+    ) {
+      const el = timelineRef.current;
+      const d = projectEnd || duration;
+      if (!el || !d) return;
+      const rect = el.getBoundingClientRect();
+      const dt = ((e.clientX - drag.startX) / Math.max(1, rect.width)) * d;
+      if (drag.kind === "main-move") {
+        const nextStart = Math.max(0, drag.ox + dt);
+        setMainClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id ? { ...c, start: nextStart } : c,
+          ),
+        );
+      } else if (drag.kind === "main-trim-in") {
+        const maxIn = Math.min(drag.ow - 0.15, drag.oy + drag.ow);
+        const delta = Math.max(-drag.oy, Math.min(drag.ow - 0.15, dt));
+        setMainClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id
+              ? {
+                  ...c,
+                  start: Math.max(0, drag.ox + delta),
+                  offset: drag.oy + delta,
+                  duration: Math.max(0.15, drag.ow - delta),
+                }
+              : c,
+          ),
+        );
+      } else if (drag.kind === "main-trim-out") {
+        const maxDur = Math.max(0.15, drag.oh - drag.oy);
+        const nextDur = Math.max(0.15, Math.min(maxDur, drag.ow + dt));
+        setMainClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id ? { ...c, duration: nextDur } : c,
+          ),
+        );
+      }
+    }
   }
 
   async function onExport() {
@@ -2040,11 +2236,25 @@ export function VideoEditorWorkspace({
     setProgress(0);
     setStatus("جاري التصدير… قد يستغرق دقيقة حسب حجم الملف");
     try {
+      const sortedMain = [...mainClips].sort((a, b) => a.start - b.start);
+      const exportTrimIn =
+        sortedMain.length === 1
+          ? sortedMain[0]!.offset
+          : sortedMain.length > 1
+            ? sortedMain[0]!.offset
+            : trimIn;
+      const exportTrimOut =
+        sortedMain.length === 1
+          ? sortedMain[0]!.offset + sortedMain[0]!.duration
+          : sortedMain.length > 1
+            ? sortedMain[sortedMain.length - 1]!.offset +
+              sortedMain[sortedMain.length - 1]!.duration
+            : trimOut;
       await exportVideoProject(
         {
           file,
-          trimIn,
-          trimOut,
+          trimIn: exportTrimIn,
+          trimOut: exportTrimOut,
           speed,
           rotate,
           flipH,
@@ -3499,8 +3709,11 @@ export function VideoEditorWorkspace({
                   top: `${videoBox.y * 100}%`,
                   width: `${videoBox.w * 100}%`,
                   height: `${videoBox.h * 100}%`,
-                  opacity: videoLane.visible ? opacity : 0,
-                  visibility: videoLane.visible ? "visible" : "hidden",
+                  opacity: videoLane.visible && mainClipAt(currentTime) ? opacity : 0,
+                  visibility:
+                    videoLane.visible && mainClipAt(currentTime)
+                      ? "visible"
+                      : "hidden",
                   transform: [
                     rotate ? `rotate(${rotate}deg)` : "",
                     flipH ? "scaleX(-1)" : "",
@@ -3677,7 +3890,7 @@ export function VideoEditorWorkspace({
               type="button"
               onClick={splitAtPlayhead}
               className="rounded border border-[#333] p-1.5 hover:bg-[#222]"
-              title="تقسيم الصوت/الفيديو (S)"
+              title="تقسيم عند رأس التشغيل — مقص (B / S)"
             >
               <Scissors className="h-4 w-4" />
             </button>
@@ -4070,7 +4283,7 @@ export function VideoEditorWorkspace({
                         }).map((_, i, arr) => (
                           <span key={i}>
                             {formatTime(
-                              (duration * i) / Math.max(1, arr.length - 1),
+                              (projectEnd * i) / Math.max(1, arr.length - 1),
                             )}
                           </span>
                         ))}
@@ -4208,7 +4421,7 @@ export function VideoEditorWorkspace({
                         );
                       })}
 
-                      {/* Video 1 base lane — الإفلات يضيف طبقة جديدة فوقه */}
+                      {/* Video 1 base lane — مقاطع بعد القص + إفلات طبقة جديدة */}
                       <div
                         className={`absolute inset-x-0 ${
                           timelineDropTarget === "base-video"
@@ -4231,43 +4444,124 @@ export function VideoEditorWorkspace({
                           void dropMediaOnTimeline(e, { type: "new-layer" })
                         }
                       >
-                        <div
-                          className={`absolute h-full overflow-hidden rounded border-2 border-amber-400 ${
-                            !videoLane.visible ? "opacity-35" : ""
-                          } ${videoLane.locked ? "cursor-not-allowed" : ""}`}
-                          style={{
-                            left: `${timelinePct(trimIn)}%`,
-                            width: `${Math.max(1, timelinePct(trimOut) - timelinePct(trimIn))}%`,
-                            background:
-                              "linear-gradient(to left, #5a3a10, #3a2810)",
-                          }}
-                        >
-                          <div className="flex h-full items-center gap-1 px-2 text-[10px] font-semibold text-amber-400">
-                            {videoLane.locked && (
-                              <Lock className="h-3 w-3 shrink-0" />
-                            )}
-                            <span className="truncate">{file.name}</span>
-                            {videoLane.muted && (
-                              <VolumeX className="ms-auto h-3 w-3 shrink-0 opacity-80" />
-                            )}
-                          </div>
-                          {!videoLane.locked && (
-                            <>
-                              <div
-                                className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-amber-400"
-                                onPointerDown={(e) =>
-                                  onTimelinePointerDown(e, "trim-in")
-                                }
-                              />
-                              <div
-                                className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-amber-400"
-                                onPointerDown={(e) =>
-                                  onTimelinePointerDown(e, "trim-out")
-                                }
-                              />
-                            </>
-                          )}
-                        </div>
+                        <div className="pointer-events-none absolute inset-y-0 w-full border-t border-[#252528]" />
+                        {(mainClips.length > 0
+                          ? mainClips
+                          : [
+                              {
+                                id: "main-fallback",
+                                start: trimIn,
+                                duration: Math.max(0.1, trimOut - trimIn),
+                                offset: trimIn,
+                              },
+                            ]
+                        ).map((clip) => {
+                          const left = timelinePct(clip.start);
+                          const width = Math.max(
+                            1.2,
+                            timelinePct(clip.start + clip.duration) - left,
+                          );
+                          const selected =
+                            selectedId === "video" || selectedId === clip.id;
+                          return (
+                            <div
+                              key={clip.id}
+                              className={`absolute h-full overflow-hidden rounded border-2 border-amber-400 ${
+                                !videoLane.visible ? "opacity-35" : ""
+                              } ${
+                                videoLane.locked
+                                  ? "cursor-not-allowed"
+                                  : "cursor-grab active:cursor-grabbing"
+                              } ${
+                                selected
+                                  ? "ring-1 ring-[#f5c518]/50"
+                                  : ""
+                              }`}
+                              style={{
+                                left: `${left}%`,
+                                width: `${width}%`,
+                                background:
+                                  "linear-gradient(to left, #5a3a10, #3a2810)",
+                              }}
+                              title="اسحب يميناً/يساراً · مقص رأس التشغيل للقص"
+                              onPointerDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (videoLane.locked) return;
+                                setSelectedId(clip.id);
+                                dragRef.current = {
+                                  kind: "main-move",
+                                  id: clip.id,
+                                  startX: e.clientX,
+                                  startY: e.clientY,
+                                  ox: clip.start,
+                                  oy: clip.offset,
+                                  ow: clip.duration,
+                                  oh: duration || clip.duration,
+                                };
+                                (e.currentTarget as HTMLElement).setPointerCapture(
+                                  e.pointerId,
+                                );
+                              }}
+                            >
+                              <div className="flex h-full items-center gap-1 px-2 text-[10px] font-semibold text-amber-400">
+                                {videoLane.locked && (
+                                  <Lock className="h-3 w-3 shrink-0" />
+                                )}
+                                <span className="truncate">{file.name}</span>
+                                {videoLane.muted && (
+                                  <VolumeX className="ms-auto h-3 w-3 shrink-0 opacity-80" />
+                                )}
+                              </div>
+                              {!videoLane.locked && (
+                                <>
+                                  <div
+                                    className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-amber-400"
+                                    onPointerDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setSelectedId(clip.id);
+                                      dragRef.current = {
+                                        kind: "main-trim-in",
+                                        id: clip.id,
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        ox: clip.start,
+                                        oy: clip.offset,
+                                        ow: clip.duration,
+                                        oh: duration || clip.duration,
+                                      };
+                                      (
+                                        e.currentTarget as HTMLElement
+                                      ).setPointerCapture(e.pointerId);
+                                    }}
+                                  />
+                                  <div
+                                    className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-amber-400"
+                                    onPointerDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setSelectedId(clip.id);
+                                      dragRef.current = {
+                                        kind: "main-trim-out",
+                                        id: clip.id,
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        ox: clip.start,
+                                        oy: clip.offset,
+                                        ow: clip.duration,
+                                        oh: duration || clip.duration,
+                                      };
+                                      (
+                                        e.currentTarget as HTMLElement
+                                      ).setPointerCapture(e.pointerId);
+                                    }}
+                                  />
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
 
                       {/* Audio lanes */}
@@ -4280,8 +4574,8 @@ export function VideoEditorWorkspace({
                           8 +
                           i * (LANE_H + LANE_GAP);
                         const left = timelinePct(trimIn + t.start);
-                        const width = duration
-                          ? Math.max(1.2, (t.duration / duration) * 100)
+                        const width = projectEnd
+                          ? Math.max(1.2, (t.duration / projectEnd) * 100)
                           : 1;
                         const peaks = peaksForClip(
                           t.peaks?.length ? t.peaks : videoPeaks,
@@ -4445,10 +4739,36 @@ export function VideoEditorWorkspace({
                       </div>
 
                       <div
-                        className="pointer-events-none absolute top-0 z-30 h-full w-0.5 bg-[#ff4d2e]"
+                        className="absolute top-0 z-40 h-full"
                         style={{ left: `${timelinePct(currentTime)}%` }}
                       >
-                        <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff4d2e]" />
+                        <button
+                          type="button"
+                          title="انقر للتقسيم (B)"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            splitAtPlayhead();
+                          }}
+                          className="group absolute -top-1 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center"
+                        >
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#111] bg-[#ff6a00] text-white shadow-lg hover:scale-105 hover:bg-[#ff8124]">
+                            <Scissors className="h-3.5 w-3.5" strokeWidth={2.5} />
+                          </span>
+                          <span className="pointer-events-none absolute bottom-full mb-1 hidden whitespace-nowrap rounded bg-black/90 px-2 py-1 text-center text-[10px] leading-4 text-white group-hover:block">
+                            انقر للتقسيم (B)
+                            <br />
+                            اسحب الخط لتحريك الرأس
+                          </span>
+                        </button>
+                        <div
+                          className="absolute top-7 bottom-0 left-1/2 w-3 -translate-x-1/2 cursor-ew-resize"
+                          onPointerDown={(e) =>
+                            onTimelinePointerDown(e, "playhead")
+                          }
+                        >
+                          <div className="mx-auto h-full w-0.5 bg-[#ff4d2e]" />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -4456,8 +4776,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              اسحب المقطع يميناً/يساراً للوقت · أعلى/أسفل بين المسارات · ▲▼ لترتيب
-              الطبقات
+              مقص رأس التشغيل (B) يقص المقطع لمقطعين — اسحب الجزء لفتح فراغ وضع
+              فيه المونتاج
             </p>
           </div>
         </div>
