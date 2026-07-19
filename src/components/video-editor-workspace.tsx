@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -38,6 +39,10 @@ import {
   ZoomIn,
   ZoomOut,
   Hand,
+  Eye,
+  EyeOff,
+  Lock,
+  LockOpen,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
@@ -122,6 +127,18 @@ type AudioTrack = {
   /** Full source media duration */
   sourceDuration: number;
   peaks?: number[];
+  visible?: boolean;
+  locked?: boolean;
+  muted?: boolean;
+  /** عند التفعيل يُعزف هذا المسار وحده */
+  solo?: boolean;
+};
+
+type VideoLaneState = {
+  visible: boolean;
+  locked: boolean;
+  muted: boolean;
+  solo: boolean;
 };
 
 type AudioSection =
@@ -134,6 +151,40 @@ type AudioSection =
   | "pitch"
   | "eq"
   | null;
+
+function TrackCtrlBtn({
+  active,
+  danger,
+  title,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  danger?: boolean;
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`inline-flex h-6 w-6 items-center justify-center rounded transition ${
+        danger
+          ? "text-red-400 hover:bg-white/10"
+          : active
+            ? "bg-[#f5c518]/20 text-[#f5c518]"
+            : "text-[#bbb] hover:bg-white/10 hover:text-white"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function WaveformBars({
   peaks,
@@ -345,6 +396,12 @@ export function VideoEditorWorkspace({
   const [status, setStatus] = useState<string | null>(null);
   const [timelineZoom, setTimelineZoom] = useState(1); // 0.15 (بعيد) → 10 (قريب)
   const [previewTool, setPreviewTool] = useState<"select" | "hand">("select");
+  const [videoLane, setVideoLane] = useState<VideoLaneState>({
+    visible: true,
+    locked: false,
+    muted: false,
+    solo: false,
+  });
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -386,14 +443,21 @@ export function VideoEditorWorkspace({
     const hasAudioLane = audioTracks.some(
       (t) => t.id === "linked-audio" || t.id.startsWith("detached-"),
     );
+    const anySolo =
+      videoLane.solo || audioTracks.some((t) => t.solo);
     if (hasAudioLane) {
       v.muted = true;
       v.volume = 0;
     } else {
-      v.volume = muted ? 0 : volume;
-      v.muted = muted;
+      const silent =
+        muted ||
+        videoLane.muted ||
+        !videoLane.visible ||
+        (anySolo && !videoLane.solo);
+      v.volume = silent ? 0 : volume;
+      v.muted = silent;
     }
-  }, [speed, volume, muted, audioTracks]);
+  }, [speed, volume, muted, audioTracks, videoLane]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -414,6 +478,8 @@ export function VideoEditorWorkspace({
   useEffect(() => {
     const map = audioElsRef.current;
     const liveIds = new Set(audioTracks.map((t) => t.id));
+    const anySolo =
+      videoLane.solo || audioTracks.some((t) => t.solo);
     for (const [id, el] of map) {
       if (!liveIds.has(id)) {
         el.pause();
@@ -428,9 +494,19 @@ export function VideoEditorWorkspace({
         el.preload = "auto";
         map.set(t.id, el);
       }
-      el.volume = Math.max(0, Math.min(1, t.volume));
+      const silencedBySolo = anySolo && !t.solo;
+      const silent =
+        t.muted ||
+        t.visible === false ||
+        t.volume <= 0 ||
+        silencedBySolo;
+      el.volume = silent ? 0 : Math.max(0, Math.min(1, t.volume));
       const timelineLocal = currentTime - trimIn - t.start;
-      if (timelineLocal >= 0 && timelineLocal < t.duration - 0.02) {
+      if (
+        t.visible !== false &&
+        timelineLocal >= 0 &&
+        timelineLocal < t.duration - 0.02
+      ) {
         const mediaTime = (t.offset || 0) + timelineLocal;
         if (Math.abs(el.currentTime - mediaTime) > 0.3) {
           el.currentTime = Math.max(0, mediaTime);
@@ -441,7 +517,7 @@ export function VideoEditorWorkspace({
         el.pause();
       }
     }
-  }, [audioTracks, currentTime, playing, trimIn]);
+  }, [audioTracks, currentTime, playing, trimIn, videoLane.solo]);
 
   useEffect(() => {
     return () => {
@@ -1165,6 +1241,11 @@ export function VideoEditorWorkspace({
   ) {
     e.preventDefault();
     e.stopPropagation();
+    if (videoLane.locked) {
+      setStatus("مسار الفيديو مقفل — افتح القفل للتعديل");
+      setSelectedId("video");
+      return;
+    }
     setSelectedId("video");
     setPropTab("video");
     dragRef.current = {
@@ -1243,6 +1324,14 @@ export function VideoEditorWorkspace({
   function onTimelinePointerDown(e: ReactPointerEvent, kind: "playhead" | "trim-in" | "trim-out") {
     e.preventDefault();
     e.stopPropagation();
+    if (
+      (kind === "trim-in" || kind === "trim-out") &&
+      videoLane.locked
+    ) {
+      setStatus("مسار الفيديو مقفل — افتح القفل للتعديل");
+      setSelectedId("video");
+      return;
+    }
     dragRef.current = {
       kind,
       startX: e.clientX,
@@ -1265,6 +1354,11 @@ export function VideoEditorWorkspace({
     e.stopPropagation();
     const track = audioTracks.find((t) => t.id === id);
     if (!track) return;
+    if (track.locked) {
+      setStatus("المسار مقفل — افتح القفل للتعديل");
+      setSelectedId(id);
+      return;
+    }
     setSelectedId(id);
     setPanel("audio");
     setPropTab("audio");
@@ -1279,6 +1373,54 @@ export function VideoEditorWorkspace({
       oh: track.sourceDuration || track.duration,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function patchAudioTrack(
+    id: string,
+    patch: Partial<
+      Pick<AudioTrack, "visible" | "locked" | "muted" | "volume" | "solo">
+    >,
+  ) {
+    setAudioTracks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    );
+  }
+
+  function toggleVideoLane(key: keyof VideoLaneState) {
+    setVideoLane((v) => {
+      const next = { ...v, [key]: !v[key] };
+      if (key === "muted" && next.muted) {
+        setMuted(true);
+        setVolume(0);
+      }
+      if (key === "muted" && !next.muted) {
+        setMuted(false);
+        setVolume(1);
+      }
+      return next;
+    });
+  }
+
+  function toggleAudioSolo(id: string) {
+    setAudioTracks((prev) =>
+      prev.map((t) =>
+        t.id === id ? { ...t, solo: !t.solo } : t,
+      ),
+    );
+    // عزل الصوت يلغي عزل مسار الفيديو
+    setVideoLane((v) => (v.solo ? { ...v, solo: false } : v));
+  }
+
+  function toggleVideoSolo() {
+    setVideoLane((v) => {
+      const nextSolo = !v.solo;
+      if (nextSolo) {
+        setAudioTracks((prev) =>
+          prev.map((t) => (t.solo ? { ...t, solo: false } : t)),
+        );
+      }
+      return { ...v, solo: nextSolo };
+    });
   }
 
   function onTimelineMove(e: ReactPointerEvent) {
@@ -1354,9 +1496,9 @@ export function VideoEditorWorkspace({
           rotate,
           flipH,
           flipV,
-          opacity,
+          opacity: videoLane.visible ? opacity : 0,
           volume,
-          muted,
+          muted: muted || videoLane.muted || (videoLane.solo === false && audioTracks.some((a) => a.solo)),
           fadeIn,
           fadeOut,
           audioPitch,
@@ -1401,14 +1543,22 @@ export function VideoEditorWorkspace({
               opacity: o.opacity,
             };
           }),
-          audioTracks: audioTracks.map((t) => ({
-            file: t.file,
-            start: t.start,
-            volume: t.volume,
-            offset: t.offset || 0,
-            duration: t.duration,
-            linked: t.id === "linked-audio",
-          })),
+          audioTracks: audioTracks
+            .filter((t) => t.visible !== false)
+            .map((t) => {
+              const anySolo =
+                videoLane.solo || audioTracks.some((a) => a.solo);
+              const silenced =
+                t.muted || t.volume <= 0 || (anySolo && !t.solo);
+              return {
+                file: t.file,
+                start: t.start,
+                volume: silenced ? 0 : t.volume,
+                offset: t.offset || 0,
+                duration: t.duration,
+                linked: t.id === "linked-audio",
+              };
+            }),
           crop: cropEnabled ? crop : null,
           chromaKey: chromaEnabled
             ? {
@@ -2580,7 +2730,8 @@ export function VideoEditorWorkspace({
                   top: `${videoBox.y * 100}%`,
                   width: `${videoBox.w * 100}%`,
                   height: `${videoBox.h * 100}%`,
-                  opacity,
+                  opacity: videoLane.visible ? opacity : 0,
+                  visibility: videoLane.visible ? "visible" : "hidden",
                   transform: [
                     rotate ? `rotate(${rotate}deg)` : "",
                     flipH ? "scaleX(-1)" : "",
@@ -2798,7 +2949,7 @@ export function VideoEditorWorkspace({
             </div>
           </div>
 
-          {/* Multi-lane timeline */}
+          {/* Multi-lane timeline + Filmora-style track headers */}
           <div className="shrink-0 border-t border-[#2a2a2e] bg-[#121214] p-3">
             {(() => {
               const RULER = 22;
@@ -2806,6 +2957,7 @@ export function VideoEditorWorkspace({
               const LANE_H = 48;
               const LANE_GAP = 6;
               const ADD_H = 32;
+              const HEADER_W = 118;
               const lanes = audioTracks;
               const bodyH =
                 RULER +
@@ -2814,197 +2966,383 @@ export function VideoEditorWorkspace({
                 Math.max(1, lanes.length) * (LANE_H + LANE_GAP) +
                 ADD_H +
                 8;
+
+              const laneHeader = (
+                label: string,
+                opts: {
+                  visible: boolean;
+                  muted: boolean;
+                  locked: boolean;
+                  solo: boolean;
+                  onToggleVisible: () => void;
+                  onToggleMute: () => void;
+                  onToggleLock: () => void;
+                  onToggleSolo: () => void;
+                },
+              ) => (
+                <div
+                  className={`flex h-full flex-col justify-center gap-0.5 border-b border-[#2a2a2e] px-1.5 ${
+                    !opts.visible ? "opacity-45" : ""
+                  }`}
+                >
+                  <div className="truncate text-end text-[11px] font-medium text-[#ddd]">
+                    {label}
+                  </div>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <TrackCtrlBtn
+                      title={opts.visible ? "إخفاء المسار" : "إظهار المسار"}
+                      active={!opts.visible}
+                      onClick={opts.onToggleVisible}
+                    >
+                      {opts.visible ? (
+                        <Eye className="h-3.5 w-3.5" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      )}
+                    </TrackCtrlBtn>
+                    <TrackCtrlBtn
+                      title={opts.solo ? "إلغاء العزل" : "عزل المسار (Solo)"}
+                      active={opts.solo}
+                      onClick={opts.onToggleSolo}
+                    >
+                      <Mic className="h-3.5 w-3.5" />
+                    </TrackCtrlBtn>
+                    <TrackCtrlBtn
+                      title={opts.muted ? "إلغاء الكتم" : "كتم الصوت"}
+                      danger={opts.muted}
+                      active={opts.muted}
+                      onClick={opts.onToggleMute}
+                    >
+                      {opts.muted ? (
+                        <VolumeX className="h-3.5 w-3.5" />
+                      ) : (
+                        <Volume2 className="h-3.5 w-3.5" />
+                      )}
+                    </TrackCtrlBtn>
+                    <TrackCtrlBtn
+                      title={opts.locked ? "فتح القفل" : "قفل المسار"}
+                      active={opts.locked}
+                      onClick={opts.onToggleLock}
+                    >
+                      {opts.locked ? (
+                        <Lock className="h-3.5 w-3.5" />
+                      ) : (
+                        <LockOpen className="h-3.5 w-3.5" />
+                      )}
+                    </TrackCtrlBtn>
+                  </div>
+                </div>
+              );
+
               return (
                 <div
-                  ref={timelineScrollRef}
-                  dir="ltr"
-                  className="max-h-72 overflow-x-auto overflow-y-auto rounded-md border border-[#2a2a2e] bg-[#1a1a1d]"
+                  className="flex max-h-72 overflow-hidden rounded-md border border-[#2a2a2e] bg-[#1a1a1d]"
+                  style={{ minHeight: Math.min(bodyH + 4, 288) }}
                 >
+                  {/* Track headers — ثابتة عند بداية الخط الزمني */}
                   <div
-                    ref={timelineRef}
-                    className="relative ms-0"
-                    style={{
-                      // zoom=1 يملأ العرض من البداية؛ <1 يصغّر مع إبقاء البداية؛ >1 يوسّع للتمرير
-                      width: `${Math.max(TIMELINE_ZOOM_MIN, timelineZoom) * 100}%`,
-                      minWidth: timelineZoom >= 1 ? "100%" : undefined,
-                      height: bodyH,
-                    }}
-                    onPointerMove={onTimelineMove}
-                    onPointerUp={onPointerUp}
-                    onPointerCancel={onPointerUp}
-                    onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setCtxMenu(clampMenuPos(e.clientX, e.clientY));
-                    }}
+                    className="flex shrink-0 flex-col border-e border-[#2a2a2e] bg-[#161618]"
+                    style={{ width: HEADER_W, height: bodyH }}
+                    dir="rtl"
                   >
-                    {/* Ruler */}
-                    <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[22px] items-end justify-between border-b border-[#2a2a2e] px-1 pb-0.5 text-[9px] text-[#777]">
-                      {Array.from({
-                        length: Math.max(
-                          4,
-                          Math.round(Math.max(timelineZoom, 0.4) * 8),
-                        ),
-                      }).map((_, i, arr) => (
-                          <span key={i}>
-                            {formatTime((duration * i) / Math.max(1, arr.length - 1))}
-                          </span>
-                        ),
-                      )}
-                    </div>
-
-                    {/* Video lane — دائماً من بداية الخط الزمني (0) */}
                     <div
-                      className="absolute inset-x-0"
-                      style={{ top: RULER + 4, height: VIDEO_H }}
+                      className="shrink-0 border-b border-[#2a2a2e] px-2 text-[9px] text-[#666]"
+                      style={{ height: RULER }}
                     >
+                      <span className="flex h-full items-end pb-0.5">المسارات</span>
+                    </div>
+                    <div style={{ height: VIDEO_H + 8, paddingTop: 4 }}>
+                      {laneHeader("فيديو 1", {
+                        visible: videoLane.visible,
+                        muted: videoLane.muted,
+                        locked: videoLane.locked,
+                        solo: videoLane.solo,
+                        onToggleVisible: () => toggleVideoLane("visible"),
+                        onToggleMute: () => toggleVideoLane("muted"),
+                        onToggleLock: () => toggleVideoLane("locked"),
+                        onToggleSolo: toggleVideoSolo,
+                      })}
+                    </div>
+                    {lanes.map((t, i) => (
                       <div
-                        className="absolute h-full overflow-hidden rounded border-2 border-amber-400"
+                        key={t.id}
                         style={{
-                          left: `${timelinePct(trimIn)}%`,
-                          width: `${Math.max(1, timelinePct(trimOut) - timelinePct(trimIn))}%`,
-                          background:
-                            "linear-gradient(to left, #5a3a10, #3a2810)",
+                          height: LANE_H + LANE_GAP,
+                          paddingTop: i === 0 ? 4 : 0,
                         }}
                       >
-                        <div className="flex h-full items-center px-2 text-[10px] font-semibold text-amber-400">
-                          {file.name}
-                        </div>
-                        <div
-                          className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-amber-400"
-                          onPointerDown={(e) =>
-                            onTimelinePointerDown(e, "trim-in")
-                          }
-                        />
-                        <div
-                          className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-amber-400"
-                          onPointerDown={(e) =>
-                            onTimelinePointerDown(e, "trim-out")
-                          }
-                        />
+                        {laneHeader(`صوت ${i + 1}`, {
+                          visible: t.visible !== false,
+                          muted: !!t.muted || t.volume <= 0,
+                          locked: !!t.locked,
+                          solo: !!t.solo,
+                          onToggleVisible: () =>
+                            patchAudioTrack(t.id, {
+                              visible: t.visible === false,
+                            }),
+                          onToggleMute: () => {
+                            const nextMuted = !(t.muted || t.volume <= 0);
+                            patchAudioTrack(t.id, {
+                              muted: nextMuted,
+                              volume: nextMuted ? 0 : t.volume <= 0 ? 1 : t.volume,
+                            });
+                          },
+                          onToggleLock: () =>
+                            patchAudioTrack(t.id, { locked: !t.locked }),
+                          onToggleSolo: () => toggleAudioSolo(t.id),
+                        })}
                       </div>
-                    </div>
-
-                    {/* Stacked audio lanes (montage) */}
-                    {lanes.map((t, i) => {
-                      const top =
-                        RULER + VIDEO_H + 12 + i * (LANE_H + LANE_GAP);
-                      const left = timelinePct(trimIn + t.start);
-                      const width = duration
-                        ? Math.max(1.2, (t.duration / duration) * 100)
-                        : 1;
-                      const peaks = peaksForClip(
-                        t.peaks?.length ? t.peaks : videoPeaks,
-                        t.offset || 0,
-                        t.duration,
-                        t.sourceDuration || duration || 1,
-                      );
-                      const selected =
-                        selectedId === t.id || selectedId === "audio";
-                      const isTts = t.id.startsWith("tts-");
-                      return (
-                        <div
-                          key={t.id}
-                          className="absolute inset-x-0"
-                          style={{ top, height: LANE_H }}
-                        >
-                          <div className="pointer-events-none absolute inset-y-0 start-0 w-full border-t border-[#252528]" />
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            className={`absolute h-full cursor-grab overflow-hidden rounded-[3px] border active:cursor-grabbing ${
-                              selected
-                                ? "border-[#7dd3fc] ring-1 ring-[#7dd3fc]/40"
-                                : isTts
-                                  ? "border-emerald-700"
-                                  : "border-[#0e4d73]"
-                            } ${isTts ? "bg-emerald-800" : "bg-[#0c5f8f]"}`}
-                            style={{ left: `${left}%`, width: `${width}%` }}
-                            title="اسحب الطبقة · قص الحواف · كليك يمين"
-                            onPointerDown={(e) =>
-                              onAudioClipPointerDown(e, t.id, "audio-move")
-                            }
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setSelectedId(t.id);
-                              setPanel("audio");
-                              setCtxMenu(clampMenuPos(e.clientX, e.clientY));
-                            }}
-                          >
-                            <div className="pointer-events-none absolute start-1 top-0.5 z-10 max-w-[70%] truncate rounded bg-black/35 px-1.5 py-[1px] text-[9px] font-semibold text-white">
-                              {t.name}
-                            </div>
-                            <div className="pointer-events-none absolute inset-x-0 bottom-1.5 top-4">
-                              <WaveformBars
-                                peaks={peaks}
-                                dimmed={t.volume <= 0}
-                              />
-                            </div>
-                            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1.5 bg-black/35" />
-                            <div
-                              className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize rounded-s-[2px] bg-white/90"
-                              onPointerDown={(e) =>
-                                onAudioClipPointerDown(e, t.id, "audio-trim-in")
-                              }
-                            />
-                            <div
-                              className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize rounded-e-[2px] bg-white/90"
-                              onPointerDown={(e) =>
-                                onAudioClipPointerDown(
-                                  e,
-                                  t.id,
-                                  "audio-trim-out",
-                                )
-                              }
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Empty placeholder lane + add button */}
+                    ))}
+                    {lanes.length === 0 && (
+                      <div
+                        className="border-b border-[#2a2a2e]"
+                        style={{ height: LANE_H + LANE_GAP }}
+                      />
+                    )}
                     <div
-                      className="absolute inset-x-2 flex items-center justify-center gap-2 rounded border border-dashed border-[#333] text-[11px] text-[#666]"
-                      style={{
-                        top:
-                          RULER +
-                          VIDEO_H +
-                          12 +
-                          Math.max(1, lanes.length) * (LANE_H + LANE_GAP),
-                        height: ADD_H,
-                      }}
+                      className="flex items-center justify-center"
+                      style={{ height: ADD_H + 8 }}
                     >
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        title="إضافة مسار صوت"
+                        onClick={() => {
                           musicRef.current?.click();
                           setPanel("media");
                         }}
-                        className="inline-flex items-center gap-1 rounded-full border border-[#444] bg-[#222] px-2 py-0.5 text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded border border-[#444] bg-[#222] text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                        أضف مسار صوت
+                        <Plus className="h-4 w-4" />
                       </button>
-                      <span>ضع الملفات هنا أو اضغط للرفع</span>
                     </div>
+                  </div>
 
-                    {/* Playhead */}
+                  <div
+                    ref={timelineScrollRef}
+                    dir="ltr"
+                    className="min-w-0 flex-1 overflow-x-auto overflow-y-auto"
+                  >
                     <div
-                      className="pointer-events-none absolute top-0 z-30 h-full w-0.5 bg-[#ff4d2e]"
-                      style={{ left: `${timelinePct(currentTime)}%` }}
+                      ref={timelineRef}
+                      className="relative ms-0"
+                      style={{
+                        width: `${Math.max(TIMELINE_ZOOM_MIN, timelineZoom) * 100}%`,
+                        minWidth: timelineZoom >= 1 ? "100%" : undefined,
+                        height: bodyH,
+                      }}
+                      onPointerMove={onTimelineMove}
+                      onPointerUp={onPointerUp}
+                      onPointerCancel={onPointerUp}
+                      onPointerDown={(e) => onTimelinePointerDown(e, "playhead")}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCtxMenu(clampMenuPos(e.clientX, e.clientY));
+                      }}
                     >
-                      <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff4d2e]" />
+                      {/* Ruler */}
+                      <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[22px] items-end justify-between border-b border-[#2a2a2e] px-1 pb-0.5 text-[9px] text-[#777]">
+                        {Array.from({
+                          length: Math.max(
+                            4,
+                            Math.round(Math.max(timelineZoom, 0.4) * 8),
+                          ),
+                        }).map((_, i, arr) => (
+                          <span key={i}>
+                            {formatTime(
+                              (duration * i) / Math.max(1, arr.length - 1),
+                            )}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Video lane */}
+                      <div
+                        className="absolute inset-x-0"
+                        style={{ top: RULER + 4, height: VIDEO_H }}
+                      >
+                        <div
+                          className={`absolute h-full overflow-hidden rounded border-2 border-amber-400 ${
+                            !videoLane.visible ? "opacity-35" : ""
+                          } ${videoLane.locked ? "cursor-not-allowed" : ""}`}
+                          style={{
+                            left: `${timelinePct(trimIn)}%`,
+                            width: `${Math.max(1, timelinePct(trimOut) - timelinePct(trimIn))}%`,
+                            background:
+                              "linear-gradient(to left, #5a3a10, #3a2810)",
+                          }}
+                        >
+                          <div className="flex h-full items-center gap-1 px-2 text-[10px] font-semibold text-amber-400">
+                            {videoLane.locked && (
+                              <Lock className="h-3 w-3 shrink-0" />
+                            )}
+                            <span className="truncate">{file.name}</span>
+                            {videoLane.muted && (
+                              <VolumeX className="ms-auto h-3 w-3 shrink-0 opacity-80" />
+                            )}
+                          </div>
+                          {!videoLane.locked && (
+                            <>
+                              <div
+                                className="absolute inset-y-0 left-0 w-2 cursor-ew-resize bg-amber-400"
+                                onPointerDown={(e) =>
+                                  onTimelinePointerDown(e, "trim-in")
+                                }
+                              />
+                              <div
+                                className="absolute inset-y-0 right-0 w-2 cursor-ew-resize bg-amber-400"
+                                onPointerDown={(e) =>
+                                  onTimelinePointerDown(e, "trim-out")
+                                }
+                              />
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Stacked audio lanes */}
+                      {lanes.map((t, i) => {
+                        const top =
+                          RULER + VIDEO_H + 12 + i * (LANE_H + LANE_GAP);
+                        const left = timelinePct(trimIn + t.start);
+                        const width = duration
+                          ? Math.max(1.2, (t.duration / duration) * 100)
+                          : 1;
+                        const peaks = peaksForClip(
+                          t.peaks?.length ? t.peaks : videoPeaks,
+                          t.offset || 0,
+                          t.duration,
+                          t.sourceDuration || duration || 1,
+                        );
+                        const selected =
+                          selectedId === t.id || selectedId === "audio";
+                        const isTts = t.id.startsWith("tts-");
+                        const hidden = t.visible === false;
+                        const locked = !!t.locked;
+                        return (
+                          <div
+                            key={t.id}
+                            className="absolute inset-x-0"
+                            style={{ top, height: LANE_H }}
+                          >
+                            <div className="pointer-events-none absolute inset-y-0 start-0 w-full border-t border-[#252528]" />
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className={`absolute h-full overflow-hidden rounded-[3px] border ${
+                                locked
+                                  ? "cursor-not-allowed"
+                                  : "cursor-grab active:cursor-grabbing"
+                              } ${
+                                selected
+                                  ? "border-[#7dd3fc] ring-1 ring-[#7dd3fc]/40"
+                                  : isTts
+                                    ? "border-emerald-700"
+                                    : "border-[#0e4d73]"
+                              } ${isTts ? "bg-emerald-800" : "bg-[#0c5f8f]"} ${
+                                hidden ? "opacity-35" : ""
+                              }`}
+                              style={{ left: `${left}%`, width: `${width}%` }}
+                              title={
+                                locked
+                                  ? "المسار مقفل"
+                                  : "اسحب الطبقة · قص الحواف · كليك يمين"
+                              }
+                              onPointerDown={(e) =>
+                                onAudioClipPointerDown(e, t.id, "audio-move")
+                              }
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSelectedId(t.id);
+                                setPanel("audio");
+                                setCtxMenu(clampMenuPos(e.clientX, e.clientY));
+                              }}
+                            >
+                              <div className="pointer-events-none absolute start-1 top-0.5 z-10 flex max-w-[70%] items-center gap-1 truncate rounded bg-black/35 px-1.5 py-[1px] text-[9px] font-semibold text-white">
+                                {locked && <Lock className="h-2.5 w-2.5" />}
+                                <span className="truncate">{t.name}</span>
+                              </div>
+                              <div className="pointer-events-none absolute inset-x-0 bottom-1.5 top-4">
+                                <WaveformBars
+                                  peaks={peaks}
+                                  dimmed={
+                                    t.volume <= 0 || !!t.muted || hidden
+                                  }
+                                />
+                              </div>
+                              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1.5 bg-black/35" />
+                              {!locked && (
+                                <>
+                                  <div
+                                    className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize rounded-s-[2px] bg-white/90"
+                                    onPointerDown={(e) =>
+                                      onAudioClipPointerDown(
+                                        e,
+                                        t.id,
+                                        "audio-trim-in",
+                                      )
+                                    }
+                                  />
+                                  <div
+                                    className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize rounded-e-[2px] bg-white/90"
+                                    onPointerDown={(e) =>
+                                      onAudioClipPointerDown(
+                                        e,
+                                        t.id,
+                                        "audio-trim-out",
+                                      )
+                                    }
+                                  />
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Empty placeholder lane */}
+                      <div
+                        className="absolute inset-x-2 flex items-center justify-center gap-2 rounded border border-dashed border-[#333] text-[11px] text-[#666]"
+                        style={{
+                          top:
+                            RULER +
+                            VIDEO_H +
+                            12 +
+                            Math.max(1, lanes.length) * (LANE_H + LANE_GAP),
+                          height: ADD_H,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            musicRef.current?.click();
+                            setPanel("media");
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-[#444] bg-[#222] px-2 py-0.5 text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          أضف مسار صوت
+                        </button>
+                        <span>ضع الملفات هنا أو اضغط للرفع</span>
+                      </div>
+
+                      {/* Playhead */}
+                      <div
+                        className="pointer-events-none absolute top-0 z-30 h-full w-0.5 bg-[#ff4d2e]"
+                        style={{ left: `${timelinePct(currentTime)}%` }}
+                      >
+                        <div className="absolute -top-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-sm bg-[#ff4d2e]" />
+                      </div>
                     </div>
                   </div>
                 </div>
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              المقاطع تبدأ من 0:00 · أداة اليد لتحريك الفيديو · عجلة الماوس
-              للتكبير
+              عين = إظهار · ميك = عزل · سماعة = كتم · قفل = منع التعديل · + =
+              مسار جديد
             </p>
           </div>
         </div>
