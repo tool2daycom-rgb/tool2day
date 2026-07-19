@@ -399,6 +399,8 @@ export function VideoEditorWorkspace({
     oh: number;
     /** مسار الطبقة أثناء السحب العمودي */
     laneId?: string;
+    /** فراغ جاهز للتثبيت عند الإفلات */
+    gapSnap?: { start: number; duration: number; leftId: string };
   } | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -1072,7 +1074,7 @@ export function VideoEditorWorkspace({
     return null;
   }
 
-  /** هل المؤشر فوق مسار فيديو 1 (حيث فراغ المونتاج)؟ */
+  /** هل المؤشر فوق مسار فيديو 1 أو أسفل الطبقات (منطقة الإنزال للفراغ)؟ */
   function isPointerOverBaseVideo(clientY: number): boolean {
     const el = timelineRef.current;
     const scroll = timelineScrollRef.current;
@@ -1081,16 +1083,27 @@ export function VideoEditorWorkspace({
     const y = clientY - rect.top + (scroll?.scrollTop || 0);
     const RULER = 22;
     const VIDEO_H = 36;
-    const baseTop = RULER + 2 + videoLayers.length * (VIDEO_H + 4);
-    return y >= baseTop - 10 && y <= baseTop + VIDEO_H + 14;
+    const layerH = VIDEO_H + 4;
+    const baseTop = RULER + 2 + videoLayers.length * layerH;
+    // يشمل النصف السفلي لآخر طبقة فوق فيديو 1 لتسهيل الإنزال
+    const easeTop =
+      videoLayers.length > 0 ? baseTop - layerH * 0.55 : baseTop - 10;
+    return y >= easeTop && y <= baseTop + VIDEO_H + 24;
   }
 
-  /** ثبّت طبقة موجودة داخل فراغ بين مقطعي فيديو 1 */
+  /** أقرب مسار طبقة لفيديو 1 (الأسفل) */
+  function bottomLayerTrackId(): string | null {
+    return videoLayers[0]?.id ?? null;
+  }
+
+  /** ثبّت طبقة موجودة داخل فراغ بين مقطعي فيديو 1 وأنزلها للمسار الأسفل */
   function snapLayerIntoGap(
     clipId: string,
-    gap: { start: number; duration: number },
+    gap: { start: number; duration: number; leftId?: string },
+    trackId?: string | null,
   ) {
     const relStart = Math.max(0, gap.start - trimIn);
+    const destTrack = trackId || bottomLayerTrackId();
     setLayerClips((prev) =>
       prev.map((c) => {
         if (c.id !== clipId) return c;
@@ -1103,14 +1116,44 @@ export function VideoEditorWorkspace({
           start: relStart,
           duration: playDur,
           offset: 0,
+          trackId: destTrack || c.trackId,
         };
       }),
     );
-    setTimelineDropTarget(`gap-${gap.start}`);
+    setTimelineDropTarget(
+      gap.leftId ? `gap-${gap.leftId}` : `gap-${gap.start}`,
+    );
     setStatus(
-      `وُضع المونتاج في الفراغ (${formatTime(gap.duration)}) بين اللقطتين`,
+      `تم إنزال المونتاج إلى الفراغ (${formatTime(gap.duration)}) بين اللقطتين`,
     );
     setError(null);
+  }
+
+  function nearestGapToTime(absTime: number): {
+    start: number;
+    duration: number;
+    leftId: string;
+  } | null {
+    const exact = findGapAt(absTime);
+    if (exact) return exact;
+    const sorted = [...mainClips].sort((a, b) => a.start - b.start);
+    let best: { start: number; duration: number; leftId: string } | null =
+      null;
+    let bestDist = Infinity;
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const left = sorted[i]!;
+      const right = sorted[i + 1]!;
+      const gs = left.start + left.duration;
+      const ge = right.start;
+      if (ge - gs < 0.15) continue;
+      const mid = (gs + ge) / 2;
+      const dist = Math.abs(absTime - mid);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { start: gs, duration: ge - gs, leftId: left.id };
+      }
+    }
+    return best;
   }
 
   /** يجد مقطعاً قابلاً للقص تحت/قرب الخط الأحمر (حتى عند الحافة) */
@@ -1826,6 +1869,22 @@ export function VideoEditorWorkspace({
   }
 
   function onPointerUp() {
+    const drag = dragRef.current;
+    if (drag?.kind === "layer-move" && drag.id) {
+      if (drag.gapSnap) {
+        snapLayerIntoGap(drag.id, drag.gapSnap, drag.laneId);
+      } else if (drag.laneId) {
+        // إنزال/رفع المسار عند الإفلات فقط حتى لا يُفقد السحب
+        const dest = drag.laneId;
+        setLayerClips((prev) =>
+          prev.map((c) =>
+            c.id === drag.id && c.trackId !== dest
+              ? { ...c, trackId: dest }
+              : c,
+          ),
+        );
+      }
+    }
     dragRef.current = null;
     setTimelineDropTarget(null);
   }
@@ -2395,55 +2454,36 @@ export function VideoEditorWorkspace({
         const absTime = timeFromClientX(e.clientX);
         const overBase = isPointerOverBaseVideo(e.clientY);
         const gapAtPointer = overBase
-          ? (() => {
-              const exact = findGapAt(absTime);
-              if (exact) return exact;
-              const sorted = [...mainClips].sort((a, b) => a.start - b.start);
-              // أسقط فوق فيديو 1 → أقرب فراغ بين المقطعين
-              let best: {
-                start: number;
-                duration: number;
-                leftId: string;
-              } | null = null;
-              let bestDist = Infinity;
-              for (let i = 0; i < sorted.length - 1; i++) {
-                const left = sorted[i]!;
-                const right = sorted[i + 1]!;
-                const gs = left.start + left.duration;
-                const ge = right.start;
-                if (ge - gs < 0.15) continue;
-                const mid = (gs + ge) / 2;
-                const dist = Math.abs(absTime - mid);
-                if (dist < bestDist) {
-                  bestDist = dist;
-                  best = {
-                    start: gs,
-                    duration: ge - gs,
-                    leftId: left.id,
-                  };
-                }
-              }
-              return best;
-            })()
+          ? nearestGapToTime(absTime)
           : findGapAt(absTime);
+        const destBottom = bottomLayerTrackId();
 
         if (gapAtPointer && overBase && drag.id) {
           const relStart = Math.max(0, gapAtPointer.start - trimIn);
-          const playDur = Math.min(drag.ow, gapAtPointer.duration);
+          const playDur = Math.max(
+            0.15,
+            Math.min(drag.ow, gapAtPointer.duration),
+          );
+          // لا تغيّر trackId أثناء السحب (يفكّ pointer capture) — عند الإفلات فقط
+          drag.ox = relStart;
+          drag.ow = playDur;
+          drag.startX = e.clientX;
+          drag.laneId = destBottom || drag.laneId;
+          drag.gapSnap = gapAtPointer;
           setLayerClips((prev) =>
             prev.map((c) =>
               c.id === drag.id
                 ? {
                     ...c,
                     start: relStart,
-                    duration: Math.max(0.15, playDur),
+                    duration: playDur,
                     offset: 0,
                   }
                 : c,
             ),
           );
           setTimelineDropTarget(`gap-${gapAtPointer.leftId}`);
-          setStatus("أفلت هنا — المونتاج بين المقطعين");
+          setStatus("أفلت — ينزل المقطع إلى الفراغ بين المقطعين");
           return;
         }
 
@@ -2451,52 +2491,56 @@ export function VideoEditorWorkspace({
         const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
         const hoverTrack = resolveLayerTrackAtY(e.clientY);
         const dest =
-          hoverTrack &&
-          !videoLayers.find((t) => t.id === hoverTrack)?.locked
-            ? hoverTrack
-            : drag.laneId;
-        // إن كان الزمن على فراغ حتى على مسار علوي — ثبّت في الفراغ
+          overBase &&
+          destBottom &&
+          !videoLayers.find((t) => t.id === destBottom)?.locked
+            ? destBottom
+            : hoverTrack &&
+                !videoLayers.find((t) => t.id === hoverTrack)?.locked
+              ? hoverTrack
+              : drag.laneId;
+
         const gapWhileOnLayer = !overBase ? findGapAt(absTime) : null;
         if (gapWhileOnLayer && drag.id) {
           const relStart = Math.max(0, gapWhileOnLayer.start - trimIn);
+          const playDur = Math.max(
+            0.15,
+            Math.min(drag.oh || drag.ow, gapWhileOnLayer.duration),
+          );
+          drag.ox = relStart;
+          drag.ow = playDur;
+          drag.startX = e.clientX;
+          drag.laneId = destBottom || dest || drag.laneId;
+          drag.gapSnap = gapWhileOnLayer;
           setLayerClips((prev) =>
             prev.map((c) =>
               c.id === drag.id
                 ? {
                     ...c,
                     start: relStart,
-                    duration: Math.max(
-                      0.15,
-                      Math.min(
-                        c.sourceDuration || drag.ow,
-                        gapWhileOnLayer.duration,
-                      ),
-                    ),
+                    duration: playDur,
                     offset: 0,
-                    trackId: dest || c.trackId,
                   }
                 : c,
             ),
           );
-          if (dest) drag.laneId = dest;
           setTimelineDropTarget(`gap-${gapWhileOnLayer.leftId}`);
           setStatus("أفلت — يوضع بين المقطعين في الفراغ");
           return;
         }
+
+        drag.gapSnap = undefined;
         setLayerClips((prev) =>
           prev.map((c) =>
-            c.id === drag.id
-              ? {
-                  ...c,
-                  start: nextStart,
-                  trackId: dest || c.trackId,
-                }
-              : c,
+            c.id === drag.id ? { ...c, start: nextStart } : c,
           ),
         );
         if (dest) {
           drag.laneId = dest;
           setTimelineDropTarget(dest);
+        }
+        if (overBase) {
+          setStatus("اسحب إلى الفراغ المنقّط بين المقطعين ثم أفلت");
         }
       } else if (drag.kind === "layer-trim-in") {
         const maxIn = Math.min(drag.ow - 0.15, drag.oh - drag.oy - 0.15);
