@@ -170,6 +170,16 @@ type LayerClip = {
   locked?: boolean;
 };
 
+/** ملف مستورد في مكتبة وسائط المشروع (مثل Filmora) */
+type MediaAsset = {
+  id: string;
+  kind: "video" | "image" | "audio";
+  name: string;
+  file: File;
+  url: string;
+  duration: number;
+};
+
 type AudioSection =
   | "volume"
   | "fade"
@@ -337,6 +347,7 @@ export function VideoEditorWorkspace({
   const musicRef = useRef<HTMLInputElement>(null);
   const videoSwapRef = useRef<HTMLInputElement>(null);
   const layerMediaRef = useRef<HTMLInputElement>(null);
+  const importAllRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -441,6 +452,8 @@ export function VideoEditorWorkspace({
   });
   const [videoLayers, setVideoLayers] = useState<VideoLayerTrack[]>([]);
   const [layerClips, setLayerClips] = useState<LayerClip[]>([]);
+  const [mediaLibrary, setMediaLibrary] = useState<MediaAsset[]>([]);
+  const [mediaImportBusy, setMediaImportBusy] = useState(false);
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -735,6 +748,10 @@ export function VideoEditorWorkspace({
       return [];
     });
     setVideoLayers([]);
+    setMediaLibrary((prev) => {
+      prev.forEach((a) => URL.revokeObjectURL(a.url));
+      return [];
+    });
     setVideoPeaks([]);
     setMuted(false);
     setVolume(1);
@@ -1576,8 +1593,15 @@ export function VideoEditorWorkspace({
   async function addLayerMedia(list: FileList | null, trackId?: string) {
     const f = list?.[0];
     if (!f) return;
+    await placeFileAsLayer(f, trackId);
+  }
+
+  async function placeFileAsLayer(f: File, trackId?: string) {
+    if (!f.type.startsWith("video/") && !f.type.startsWith("image/")) {
+      setError("الملف يجب أن يكون فيديو أو صورة");
+      return;
+    }
     const tid = trackId || layerTargetTrackRef.current || ensureTopVideoLayer();
-    // Ensure track exists if ensureTop queued a setState
     setVideoLayers((prev) =>
       prev.some((t) => t.id === tid)
         ? prev
@@ -1649,6 +1673,87 @@ export function VideoEditorWorkspace({
         : "تمت إضافة صورة كطبقة مونتاج — اسحبها وحرّكها في المعاينة",
     );
     layerTargetTrackRef.current = null;
+  }
+
+  async function importMediaFiles(list: FileList | null) {
+    if (!list?.length) return;
+    setMediaImportBusy(true);
+    setError(null);
+    try {
+      const added: MediaAsset[] = [];
+      for (const f of Array.from(list)) {
+        let kind: MediaAsset["kind"] | null = null;
+        if (f.type.startsWith("video/")) kind = "video";
+        else if (f.type.startsWith("image/")) kind = "image";
+        else if (f.type.startsWith("audio/")) kind = "audio";
+        else {
+          const n = f.name.toLowerCase();
+          if (/\.(mp4|webm|mov|mkv|m4v)$/.test(n)) kind = "video";
+          else if (/\.(png|jpe?g|gif|webp|bmp)$/.test(n)) kind = "image";
+          else if (/\.(mp3|wav|m4a|aac|ogg)$/.test(n)) kind = "audio";
+        }
+        if (!kind) continue;
+        const assetUrl = URL.createObjectURL(f);
+        let duration = Math.max(3, clipDuration || 5);
+        if (kind === "video" || kind === "audio") {
+          duration = (await loadMediaDuration(assetUrl)) || duration;
+        }
+        added.push({
+          id: nextId(idCounterRef, "asset"),
+          kind,
+          name: f.name,
+          file: f,
+          url: assetUrl,
+          duration,
+        });
+      }
+      if (added.length === 0) {
+        setError("لم يتم التعرف على ملفات صالحة (فيديو / صورة / صوت)");
+        return;
+      }
+      setMediaLibrary((prev) => [...prev, ...added]);
+      setStatus(`تم استيراد ${added.length} ملف إلى وسائط المشروع`);
+      setPanel("media");
+    } finally {
+      setMediaImportBusy(false);
+    }
+  }
+
+  async function placeAssetOnTimeline(asset: MediaAsset) {
+    if (asset.kind === "audio") {
+      const peaks = await analyzeWaveform(asset.file, 120);
+      const id = nextId(idCounterRef, "music");
+      // نسخ URL جديد حتى لا يُلغى مع حذف الأصل من المكتبة
+      const trackUrl = URL.createObjectURL(asset.file);
+      setAudioTracks((prev) => [
+        ...prev,
+        {
+          id,
+          name: asset.name,
+          file: asset.file,
+          url: trackUrl,
+          start: Math.max(0, currentTime - trimIn),
+          volume: 1,
+          duration: asset.duration || 5,
+          offset: 0,
+          sourceDuration: asset.duration || 5,
+          peaks,
+        },
+      ]);
+      setSelectedId(id);
+      setPanel("audio");
+      setStatus(`تمت إضافة الصوت إلى الخط الزمني: ${asset.name}`);
+      return;
+    }
+    await placeFileAsLayer(asset.file);
+  }
+
+  function removeMediaAsset(id: string) {
+    setMediaLibrary((prev) => {
+      const victim = prev.find((a) => a.id === id);
+      if (victim) URL.revokeObjectURL(victim.url);
+      return prev.filter((a) => a.id !== id);
+    });
   }
 
   function onLayerClipPointerDown(
@@ -2064,7 +2169,7 @@ export function VideoEditorWorkspace({
         {/* Icon rail */}
         <aside className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-[#2a2a2e] bg-[#141416] p-1 lg:flex-col lg:border-b-0 lg:border-e">
           {navBtn("files", "ملفاتي", FileVideo)}
-          {navBtn("media", "وسائط", ImageIcon)}
+          {navBtn("media", "استيراد", Upload)}
           {navBtn("stickers", "ملصقات", Sticker)}
           {navBtn("text", "النص", Type)}
           {navBtn("canvas", "قماش", Ratio)}
@@ -2087,48 +2192,177 @@ export function VideoEditorWorkspace({
                 المدة: {formatTime(duration)} · المقطع: {formatTime(clipDuration)}
               </p>
               <p className="text-[11px] leading-5 text-[#666]">
-                استخدم تبويب &quot;وسائط&quot; لإضافة صور أو موسيقى أو استبدال
-                الفيديو، و&quot;ملصقات&quot; للإيموجي والعبارات الجاهزة.
+                من تبويب &quot;وسائط&quot; استورد صوراً وفيديوهات وأصواتاً، ثم اضغط
+                الملف لإضافته فوق الفيديو أو كمسار صوت.
               </p>
             </div>
           )}
 
           {panel === "media" && (
             <div className="space-y-3 text-sm">
-              <p className="font-semibold text-[#f5c518]">الوسائط</p>
-              <p className="text-[11px] leading-5 text-[#777]">
-                أضف فيديو أو صورة كطبقة فوق الفيديو الأساسي للمونتاج (مسارات
-                فيديو 2، 3…). عجلة الماوس تمرّر؛ Ctrl+عجلة للتكبير.
-              </p>
-              <div className="grid grid-cols-1 gap-2">
+              <p className="font-semibold text-[#f5c518]">وسائط المشروع</p>
+
+              {/* Filmora-style import dropzone */}
+              <button
+                type="button"
+                disabled={mediaImportBusy}
+                onClick={() => importAllRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void importMediaFiles(e.dataTransfer.files);
+                }}
+                className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#555] bg-[#1a1a1d] px-3 py-6 text-center transition hover:border-[#f5c518] hover:bg-[#222218] disabled:opacity-50"
+              >
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#f5c518]/50 bg-[#f5c518]/10 text-[#f5c518]">
+                  <Plus className="h-5 w-5" />
+                </span>
+                <span className="text-sm font-semibold text-white">
+                  {mediaImportBusy ? "جاري الاستيراد…" : "استيراد الوسائط"}
+                </span>
+                <span className="text-[11px] leading-5 text-[#888]">
+                  صور · فيديو · صوت — اضغط أو اسحب الملفات هنا
+                </span>
+              </button>
+
+              <input
+                ref={importAllRef}
+                type="file"
+                multiple
+                accept="video/*,image/*,audio/*"
+                className="hidden"
+                onChange={(e) => {
+                  void importMediaFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => importAllRef.current?.click()}
+                  className="flex flex-col items-center gap-1 rounded-md border border-[#333] px-1 py-2 text-[10px] text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  صور
+                </button>
+                <button
+                  type="button"
+                  onClick={() => importAllRef.current?.click()}
+                  className="flex flex-col items-center gap-1 rounded-md border border-[#333] px-1 py-2 text-[10px] text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                >
+                  <FileVideo className="h-4 w-4" />
+                  فيديو
+                </button>
+                <button
+                  type="button"
+                  onClick={() => importAllRef.current?.click()}
+                  className="flex flex-col items-center gap-1 rounded-md border border-[#333] px-1 py-2 text-[10px] text-[#ccc] hover:border-[#f5c518] hover:text-[#f5c518]"
+                >
+                  <Music className="h-4 w-4" />
+                  صوت
+                </button>
+              </div>
+
+              {mediaLibrary.length > 0 ? (
+                <div className="space-y-2 border-t border-[#2a2a2e] pt-2">
+                  <p className="text-[11px] text-[#888]">
+                    المكتبة ({mediaLibrary.length}) — اضغط للإضافة للخط الزمني
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {mediaLibrary.map((asset) => (
+                      <div
+                        key={asset.id}
+                        className="group relative overflow-hidden rounded-md border border-[#333] bg-[#141416]"
+                      >
+                        <button
+                          type="button"
+                          title="إضافة إلى الخط الزمني"
+                          onClick={() => void placeAssetOnTimeline(asset)}
+                          className="block w-full text-start"
+                        >
+                          <div className="relative aspect-video bg-[#0a0a0b]">
+                            {asset.kind === "image" ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={asset.url}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : asset.kind === "video" ? (
+                              <video
+                                src={asset.url}
+                                muted
+                                preload="metadata"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center bg-[#0c5f8f]/30">
+                                <Music className="h-7 w-7 text-[#7dd3fc]" />
+                              </div>
+                            )}
+                            <span className="absolute start-1 top-1 rounded bg-black/70 px-1 py-0.5 text-[9px] text-white">
+                              {asset.kind === "video"
+                                ? "فيديو"
+                                : asset.kind === "image"
+                                  ? "صورة"
+                                  : "صوت"}
+                            </span>
+                            {asset.duration > 0 && asset.kind !== "image" && (
+                              <span className="absolute bottom-1 end-1 rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
+                                {formatTime(asset.duration)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="truncate px-1.5 py-1 text-[10px] text-[#bbb]">
+                            {asset.name}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          title="حذف من المكتبة"
+                          onClick={() => removeMediaAsset(asset.id)}
+                          className="absolute end-1 top-1 rounded bg-black/70 p-0.5 text-red-400 opacity-0 transition group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-[11px] text-[#666]">
+                  لا توجد ملفات بعد — استورد صوراً أو فيديوهات أو أصواتاً
+                </p>
+              )}
+
+              <div className="space-y-1.5 border-t border-[#2a2a2e] pt-2">
+                <p className="text-[11px] text-[#888]">إجراءات سريعة</p>
                 <button
                   type="button"
                   onClick={() => {
                     layerTargetTrackRef.current = null;
                     layerMediaRef.current?.click();
                   }}
-                  className="flex items-center justify-center gap-2 rounded-md border border-[#f5c518]/40 bg-[#f5c518]/10 px-3 py-2 text-xs text-[#f5c518] hover:bg-[#f5c518]/20"
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
                 >
                   <ImagePlus className="h-4 w-4" />
-                  فيديو / صورة فوق الفيديو
-                </button>
-                <button
-                  type="button"
-                  onClick={() => musicRef.current?.click()}
-                  className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
-                >
-                  <Music className="h-4 w-4" />
-                  رفع موسيقى
+                  إضافة مباشرة كطبقة مونتاج
                 </button>
                 <button
                   type="button"
                   onClick={() => videoSwapRef.current?.click()}
-                  className="flex items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
+                  className="flex w-full items-center justify-center gap-2 rounded-md border border-[#333] px-3 py-2 text-xs hover:bg-[#222]"
                 >
                   <FileVideo className="h-4 w-4" />
                   استبدال الفيديو الأساسي
                 </button>
               </div>
+
               <input
                 ref={layerMediaRef}
                 type="file"
@@ -2151,7 +2385,10 @@ export function VideoEditorWorkspace({
                 type="file"
                 accept="audio/*"
                 className="hidden"
-                onChange={(e) => void uploadMusic(e.target.files)}
+                onChange={(e) => {
+                  void importMediaFiles(e.target.files);
+                  e.target.value = "";
+                }}
               />
               <input
                 ref={videoSwapRef}
@@ -2160,33 +2397,6 @@ export function VideoEditorWorkspace({
                 className="hidden"
                 onChange={(e) => void onPick(e.target.files)}
               />
-              <p className="text-[11px] leading-5 text-[#777]">
-                تظهر الموسيقى في المخطط الزمني بالأصفر، والتعليق الصوتي (تحويل
-                النص إلى كلام) بالأخضر.
-              </p>
-              {audioTracks.filter((t) => !t.id.startsWith("tts-")).length >
-                0 && (
-                <div className="space-y-1 border-t border-[#2a2a2e] pt-2">
-                  <p className="text-[11px] text-[#888]">الموسيقى المضافة</p>
-                  {audioTracks
-                    .filter((t) => !t.id.startsWith("tts-"))
-                    .map((t) => (
-                      <div
-                        key={t.id}
-                        className="flex items-center justify-between gap-2 rounded border border-[#333] px-2 py-1 text-[11px]"
-                      >
-                        <span className="truncate">{t.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeAudioTrack(t.id)}
-                          className="text-red-400 hover:text-red-300"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              )}
             </div>
           )}
 
