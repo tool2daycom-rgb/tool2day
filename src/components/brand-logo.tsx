@@ -15,19 +15,20 @@ export function BrandLogo({
   size?: "sm" | "md" | "lg";
   twoAsImage?: boolean;
 }) {
-  const markPx = size === "lg" ? 28 : size === "sm" ? 18 : 22;
+  const markPx =
+    size === "lg" ? (twoAsImage ? 44 : 28) : size === "sm" ? 18 : 22;
 
   return (
     <span
       dir="ltr"
-      className={`inline-flex items-center gap-2 ${className}`}
+      className={`inline-flex items-center ${twoAsImage ? "gap-3" : "gap-2"} ${className}`}
     >
       {showWord ? (
         <span
           className={`inline-flex items-center font-[family-name:var(--font-display)] font-extrabold uppercase tracking-[-0.02em] ${
             size === "lg"
               ? twoAsImage
-                ? "text-[2rem] leading-none sm:text-[2.4rem]"
+                ? "text-[2.75rem] leading-none sm:text-[3.5rem]"
                 : "text-[1.35rem] leading-none sm:text-[1.5rem]"
               : size === "sm"
                 ? "text-[0.95rem] leading-none"
@@ -39,9 +40,9 @@ export function BrandLogo({
             <Image
               src="/pngegg.png"
               alt="2"
-              width={64}
-              height={92}
-              className="mx-1 inline-block h-[1.7em] w-auto translate-y-[-0.08em] object-contain"
+              width={96}
+              height={138}
+              className="mx-1.5 inline-block h-[1.85em] w-auto translate-y-[-0.08em] object-contain"
               unoptimized
               priority
             />
