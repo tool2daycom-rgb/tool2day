@@ -22,7 +22,6 @@ export function BrandLogo({
       dir="ltr"
       className={`inline-flex items-center gap-2 ${className}`}
     >
-      <BrandMarkAnimated size={markPx} />
       {showWord ? (
         <span
           className={`inline-flex items-center font-[family-name:var(--font-display)] font-extrabold uppercase tracking-[-0.02em] ${
@@ -52,6 +51,7 @@ export function BrandLogo({
           <span>day</span>
         </span>
       ) : null}
+      <BrandMarkAnimated size={markPx} />
     </span>
   );
 }
