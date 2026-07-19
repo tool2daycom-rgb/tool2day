@@ -1635,45 +1635,21 @@ export function VideoEditorWorkspace({
     const mediaUrl = URL.createObjectURL(f);
     const isVideo = f.type.startsWith("video/");
     let sourceDuration = 5;
-    let w = 0.45;
-    let h = 0.45;
     if (isVideo) {
       sourceDuration = (await loadMediaDuration(mediaUrl)) || 5;
-      const dims = await new Promise<{ w: number; h: number }>((resolve) => {
-        const v = document.createElement("video");
-        v.preload = "metadata";
-        v.onloadedmetadata = () =>
-          resolve({
-            w: v.videoWidth || 1280,
-            h: v.videoHeight || 720,
-          });
-        v.onerror = () => resolve({ w: 1280, h: 720 });
-        v.src = mediaUrl;
-      });
-      const ar = dims.w / Math.max(1, dims.h);
-      w = 0.5;
-      h = Math.min(0.7, w / ar / (outSize.w / Math.max(1, outSize.h)));
     } else {
-      const dims = await new Promise<{ w: number; h: number }>((resolve, reject) => {
-        const el = new Image();
-        el.onload = () => resolve({ w: el.naturalWidth, h: el.naturalHeight });
-        el.onerror = () => reject(new Error("فشل قراءة الصورة"));
-        el.src = mediaUrl;
-      });
-      const ar = dims.w / Math.max(1, dims.h);
-      w = 0.4;
-      h = Math.min(0.6, w / ar / (outSize.w / Math.max(1, outSize.h)));
       sourceDuration = Math.max(3, clipDuration);
     }
     const startAt = Math.max(
       0,
       opts?.start ?? Math.max(0, currentTime - trimIn),
     );
+    // يغطي مدة كافية فوق الفيديو الأساسي (مثل Filmora)
+    const remain = Math.max(0.5, clipDuration - startAt);
     const playDur = Math.min(
-      sourceDuration,
-      Math.max(1, Math.max(clipDuration, sourceDuration) - startAt),
+      isVideo ? sourceDuration : remain,
+      remain,
     );
-    const stagger = (stackIndex % 5) * 0.06;
     const id = nextId(idCounterRef, isVideo ? "lvid" : "limg");
     setLayerClips((prev) => [
       ...prev,
@@ -1688,10 +1664,11 @@ export function VideoEditorWorkspace({
         duration: playDur,
         offset: 0,
         sourceDuration,
-        x: Math.min(0.55, 0.18 + stagger),
-        y: Math.min(0.5, 0.14 + stagger),
-        w,
-        h,
+        // ملء الإطار كاملاً فوق الطبقة السفلى (مثل Filmora)
+        x: 0,
+        y: 0,
+        w: 1,
+        h: 1,
         opacity: 1,
       },
     ]);
@@ -1699,8 +1676,8 @@ export function VideoEditorWorkspace({
     setPropTab("video");
     setStatus(
       isVideo
-        ? "تمت إضافة فيديو فوق الطبقات — اسحبه على المسار أو في المعاينة"
-        : "تمت إضافة صورة فوق الطبقات — اسحبها في المعاينة أو على المسار",
+        ? `فيديو ${stackIndex + 2}: يغطي الطبقة السفلى — صغّره من الزاوية لصورة داخل صورة`
+        : `صورة على فيديو ${stackIndex + 2}: فوق الطبقة السفلى — اسحب الزاوية للتصغير`,
     );
     layerTargetTrackRef.current = null;
   }
@@ -2120,6 +2097,8 @@ export function VideoEditorWorkspace({
   }
 
   const selectedOverlay = overlays.find((o) => o.id === selectedId) ?? null;
+  const selectedLayer =
+    layerClips.find((c) => c.id === selectedId) ?? null;
 
   const navBtn = (id: Panel, label: string, Icon: typeof FileVideo) => (
     <button
@@ -3140,6 +3119,68 @@ export function VideoEditorWorkspace({
             </div>
             {propTab === "video" && (
               <div className="space-y-2 text-xs">
+                {selectedLayer && (
+                  <div className="space-y-2 rounded-md border border-[#f5c518]/35 bg-[#1c1a12] p-2">
+                    <p className="truncate font-semibold text-[#f5c518]">
+                      طبقة فوق الفيديو · {selectedLayer.name}
+                    </p>
+                    <p className="text-[10px] leading-4 text-[#888]">
+                      الطبقة الأعلى تغطي التي تحتها. صغّر الحجم لصورة داخل صورة.
+                    </p>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLayerClips((prev) =>
+                            prev.map((c) =>
+                              c.id === selectedLayer.id
+                                ? { ...c, x: 0, y: 0, w: 1, h: 1 }
+                                : c,
+                            ),
+                          )
+                        }
+                        className="rounded border border-[#f5c518]/40 bg-[#f5c518]/10 py-1.5 text-[#f5c518]"
+                      >
+                        ملء الإطار
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLayerClips((prev) =>
+                            prev.map((c) =>
+                              c.id === selectedLayer.id
+                                ? { ...c, x: 0.55, y: 0.05, w: 0.4, h: 0.35 }
+                                : c,
+                            ),
+                          )
+                        }
+                        className="rounded border border-[#333] py-1.5 text-[#ccc] hover:bg-[#222]"
+                      >
+                        صورة داخل صورة
+                      </button>
+                    </div>
+                    <label className="block text-[#888]">
+                      شفافية الطبقة {Math.round(selectedLayer.opacity * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      value={Math.round(selectedLayer.opacity * 100)}
+                      onChange={(e) => {
+                        const op = Number(e.target.value) / 100;
+                        setLayerClips((prev) =>
+                          prev.map((c) =>
+                            c.id === selectedLayer.id
+                              ? { ...c, opacity: op }
+                              : c,
+                          ),
+                        );
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-1">
                   {(
                     [
@@ -3466,7 +3507,7 @@ export function VideoEditorWorkspace({
                           <img
                             src={clip.url}
                             alt=""
-                            className="h-full w-full object-contain"
+                            className="h-full w-full object-cover"
                             draggable={false}
                           />
                         ) : (
@@ -3474,7 +3515,7 @@ export function VideoEditorWorkspace({
                             src={clip.url}
                             muted
                             playsInline
-                            className="h-full w-full object-contain"
+                            className="h-full w-full object-cover"
                             ref={(el) => {
                               if (el) layerVideoElsRef.current.set(clip.id, el);
                               else layerVideoElsRef.current.delete(clip.id);
