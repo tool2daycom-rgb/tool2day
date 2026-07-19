@@ -41,78 +41,81 @@ export function SiteHeader() {
       {/* ترتيب سطح المكتب مثل صورة 123apps: شعار يسار — قوائم + لغة/دخول يمين */}
       <div
         dir="ltr"
-        className="mx-auto flex h-14 w-full max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8"
+        className="relative mx-auto flex h-14 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8"
       >
         <Link
           href="/"
-          className="flex shrink-0 items-center"
+          className="relative z-10 flex shrink-0 items-center"
           aria-label="Tool2Day — الصفحة الرئيسية"
         >
           <BrandLogo size="md" showWord />
         </Link>
 
-        <div className="min-w-0 flex-1" aria-hidden />
-
-        <nav className="hidden items-center gap-0.5 md:flex">
-          {desktopNavOrder.map((category) => {
-            const items = getToolsByCategory(category);
-            const isOpen = open === category;
-            const Icon = categoryIcon[category];
-            return (
-              <div
-                key={category}
-                className="relative"
-                onMouseEnter={() => setOpen(category)}
-                onMouseLeave={() => setOpen(null)}
-              >
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold text-white transition hover:bg-white/10"
-                  aria-expanded={isOpen}
+        <nav className="pointer-events-none absolute inset-x-0 top-0 hidden h-14 items-center justify-center md:flex">
+          <div className="pointer-events-auto flex items-center gap-0.5">
+            {desktopNavOrder.map((category) => {
+              const items = getToolsByCategory(category);
+              const isOpen = open === category;
+              const Icon = categoryIcon[category];
+              return (
+                <div
+                  key={category}
+                  className="relative"
+                  onMouseEnter={() => setOpen(category)}
+                  onMouseLeave={() => setOpen(null)}
                 >
-                  <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                  <span>{categoryMeta[category].label}</span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-90" strokeWidth={2.5} />
-                </button>
-                {isOpen ? (
-                  <div
-                    dir="rtl"
-                    className={`absolute top-full z-50 mt-0 min-w-56 rounded-md border border-white/10 bg-[#1c1c1c] py-2 shadow-xl ${
-                      category === "video"
-                        ? "left-0 w-[34rem]"
-                        : "left-1/2 w-64 -translate-x-1/2"
-                    }`}
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold text-white transition hover:bg-white/10"
+                    aria-expanded={isOpen}
                   >
-                    <ul
-                      className={
+                    <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+                    <span>{categoryMeta[category].label}</span>
+                    <ChevronDown
+                      className="h-3.5 w-3.5 opacity-90"
+                      strokeWidth={2.5}
+                    />
+                  </button>
+                  {isOpen ? (
+                    <div
+                      dir="rtl"
+                      className={`absolute top-full z-50 mt-0 min-w-56 rounded-md border border-white/10 bg-[#1c1c1c] py-2 shadow-xl ${
                         category === "video"
-                          ? "grid grid-cols-2 gap-x-2 px-2"
-                          : "flex flex-col px-1"
-                      }
+                          ? "left-1/2 w-[34rem] -translate-x-1/2"
+                          : "left-1/2 w-64 -translate-x-1/2"
+                      }`}
                     >
-                      {items.map((tool) => {
-                        const ToolIcon = tool.icon;
-                        return (
-                          <li key={tool.slug}>
-                            <Link
-                              href={`/tools/${tool.slug}`}
-                              className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                            >
-                              <ToolIcon className="h-4 w-4 shrink-0" />
-                              <span>{tool.title}</span>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+                      <ul
+                        className={
+                          category === "video"
+                            ? "grid grid-cols-2 gap-x-2 px-2"
+                            : "flex flex-col px-1"
+                        }
+                      >
+                        {items.map((tool) => {
+                          const ToolIcon = tool.icon;
+                          return (
+                            <li key={tool.slug}>
+                              <Link
+                                href={`/tools/${tool.slug}`}
+                                className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                              >
+                                <ToolIcon className="h-4 w-4 shrink-0" />
+                                <span>{tool.title}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </nav>
 
-        <div className="flex shrink-0 items-center gap-4 text-sm font-bold text-white">
+        <div className="relative z-10 ml-auto flex shrink-0 items-center gap-4 text-sm font-bold text-white">
           <button
             type="button"
             className="inline-flex items-center gap-1.5 transition hover:opacity-80"
