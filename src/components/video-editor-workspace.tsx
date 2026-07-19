@@ -502,7 +502,7 @@ export function VideoEditorWorkspace({
     setTimelineZoom(1);
     const el = timelineScrollRef.current;
     if (el) el.scrollTo({ left: 0, top: 0, behavior: "smooth" });
-    setStatus("تكبير لتناسب الخط الزمني");
+    setStatus("تكبير لتناسب الخط الزمني بشكل افضل");
   }
   useEffect(() => {
     if (!file) return;
