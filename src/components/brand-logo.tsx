@@ -48,7 +48,7 @@ export function BrandLogo({
             />
           ) : (
             <span
-              className="mx-0.5 inline-block border-y-[1.75px] border-current px-[0.1em] text-[0.88em] leading-[0.95] tracking-normal"
+              className="mx-0.5 inline-block border-y-[2px] border-current px-[0.12em] text-[1.15em] leading-[0.9] tracking-normal"
               aria-label="2"
             >
               2
