@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type DragEvent as ReactDragEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -76,6 +77,7 @@ type MediaProfile = {
 
 const SETTINGS_PROMPT_KEY = "tool2day-skip-media-settings-prompt";
 const DEFAULT_PROJECT: MediaProfile = { w: 1080, h: 1920, fps: 25 };
+const MEDIA_DND_MIME = "application/x-tool2day-media";
 
 type Overlay =
   | {
@@ -454,6 +456,9 @@ export function VideoEditorWorkspace({
   const [layerClips, setLayerClips] = useState<LayerClip[]>([]);
   const [mediaLibrary, setMediaLibrary] = useState<MediaAsset[]>([]);
   const [mediaImportBusy, setMediaImportBusy] = useState(false);
+  const [timelineDropTarget, setTimelineDropTarget] = useState<string | null>(
+    null,
+  );
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -1593,20 +1598,40 @@ export function VideoEditorWorkspace({
   async function addLayerMedia(list: FileList | null, trackId?: string) {
     const f = list?.[0];
     if (!f) return;
-    await placeFileAsLayer(f, trackId);
+    await placeFileAsLayer(
+      f,
+      trackId ? { trackId } : { newTrack: true },
+    );
   }
 
-  async function placeFileAsLayer(f: File, trackId?: string) {
+  async function placeFileAsLayer(
+    f: File,
+    opts?: { trackId?: string; start?: number; newTrack?: boolean },
+  ) {
     if (!f.type.startsWith("video/") && !f.type.startsWith("image/")) {
       setError("الملف يجب أن يكون فيديو أو صورة");
       return;
     }
-    const tid = trackId || layerTargetTrackRef.current || ensureTopVideoLayer();
-    setVideoLayers((prev) =>
-      prev.some((t) => t.id === tid)
-        ? prev
-        : [...prev, { id: tid, visible: true, locked: false, muted: true }],
-    );
+    let tid = opts?.trackId || layerTargetTrackRef.current || undefined;
+    let stackIndex = videoLayers.length;
+    if (opts?.newTrack || !tid) {
+      tid = nextId(idCounterRef, "vtrack");
+      setVideoLayers((prev) => {
+        stackIndex = prev.length;
+        return [
+          ...prev,
+          { id: tid!, visible: true, locked: false, muted: true },
+        ];
+      });
+    } else {
+      const existingIdx = videoLayers.findIndex((t) => t.id === tid);
+      stackIndex = existingIdx >= 0 ? existingIdx : videoLayers.length;
+      setVideoLayers((prev) =>
+        prev.some((t) => t.id === tid)
+          ? prev
+          : [...prev, { id: tid!, visible: true, locked: false, muted: true }],
+      );
+    }
     const mediaUrl = URL.createObjectURL(f);
     const isVideo = f.type.startsWith("video/");
     let sourceDuration = 5;
@@ -1640,26 +1665,31 @@ export function VideoEditorWorkspace({
       h = Math.min(0.6, w / ar / (outSize.w / Math.max(1, outSize.h)));
       sourceDuration = Math.max(3, clipDuration);
     }
+    const startAt = Math.max(
+      0,
+      opts?.start ?? Math.max(0, currentTime - trimIn),
+    );
     const playDur = Math.min(
       sourceDuration,
-      Math.max(1, clipDuration - Math.max(0, currentTime - trimIn)),
+      Math.max(1, Math.max(clipDuration, sourceDuration) - startAt),
     );
+    const stagger = (stackIndex % 5) * 0.06;
     const id = nextId(idCounterRef, isVideo ? "lvid" : "limg");
     setLayerClips((prev) => [
       ...prev,
       {
         id,
-        trackId: tid,
+        trackId: tid!,
         kind: isVideo ? "video" : "image",
         name: f.name,
         file: f,
         url: mediaUrl,
-        start: Math.max(0, currentTime - trimIn),
+        start: startAt,
         duration: playDur,
         offset: 0,
         sourceDuration,
-        x: 0.25,
-        y: 0.2,
+        x: Math.min(0.55, 0.18 + stagger),
+        y: Math.min(0.5, 0.14 + stagger),
         w,
         h,
         opacity: 1,
@@ -1669,8 +1699,8 @@ export function VideoEditorWorkspace({
     setPropTab("video");
     setStatus(
       isVideo
-        ? "تمت إضافة فيديو كطبقة مونتاج — اسحبه على الخط الزمني"
-        : "تمت إضافة صورة كطبقة مونتاج — اسحبها وحرّكها في المعاينة",
+        ? "تمت إضافة فيديو فوق الطبقات — اسحبه على المسار أو في المعاينة"
+        : "تمت إضافة صورة فوق الطبقات — اسحبها في المعاينة أو على المسار",
     );
     layerTargetTrackRef.current = null;
   }
@@ -1719,11 +1749,13 @@ export function VideoEditorWorkspace({
     }
   }
 
-  async function placeAssetOnTimeline(asset: MediaAsset) {
+  async function placeAssetOnTimeline(
+    asset: MediaAsset,
+    opts?: { trackId?: string; start?: number; newTrack?: boolean },
+  ) {
     if (asset.kind === "audio") {
       const peaks = await analyzeWaveform(asset.file, 120);
       const id = nextId(idCounterRef, "music");
-      // نسخ URL جديد حتى لا يُلغى مع حذف الأصل من المكتبة
       const trackUrl = URL.createObjectURL(asset.file);
       setAudioTracks((prev) => [
         ...prev,
@@ -1732,7 +1764,10 @@ export function VideoEditorWorkspace({
           name: asset.name,
           file: asset.file,
           url: trackUrl,
-          start: Math.max(0, currentTime - trimIn),
+          start: Math.max(
+            0,
+            opts?.start ?? Math.max(0, currentTime - trimIn),
+          ),
           volume: 1,
           duration: asset.duration || 5,
           offset: 0,
@@ -1745,7 +1780,73 @@ export function VideoEditorWorkspace({
       setStatus(`تمت إضافة الصوت إلى الخط الزمني: ${asset.name}`);
       return;
     }
-    await placeFileAsLayer(asset.file);
+    await placeFileAsLayer(asset.file, {
+      trackId: opts?.trackId,
+      start: opts?.start,
+      newTrack: opts?.newTrack ?? !opts?.trackId,
+    });
+  }
+
+  async function dropMediaOnTimeline(
+    e: ReactDragEvent,
+    target:
+      | { type: "layer"; trackId: string }
+      | { type: "new-layer" }
+      | { type: "audio" },
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    setTimelineDropTarget(null);
+    const start = Math.max(0, timeFromClientX(e.clientX) - trimIn);
+
+    const assetId = e.dataTransfer.getData(MEDIA_DND_MIME);
+    if (assetId) {
+      const asset = mediaLibrary.find((a) => a.id === assetId);
+      if (!asset) return;
+      if (target.type === "audio" || asset.kind === "audio") {
+        if (asset.kind !== "audio") {
+          setStatus("أسقط ملفات الصوت على مسار الصوت");
+          return;
+        }
+        await placeAssetOnTimeline(asset, { start });
+        return;
+      }
+      if (target.type === "layer") {
+        await placeAssetOnTimeline(asset, {
+          trackId: target.trackId,
+          start,
+          newTrack: false,
+        });
+      } else {
+        await placeAssetOnTimeline(asset, { start, newTrack: true });
+      }
+      return;
+    }
+
+    const files = e.dataTransfer.files;
+    if (files?.length) {
+      const f = files[0]!;
+      if (target.type === "audio" || f.type.startsWith("audio/")) {
+        await importMediaFiles(files);
+        return;
+      }
+      if (f.type.startsWith("video/") || f.type.startsWith("image/")) {
+        await placeFileAsLayer(
+          f,
+          target.type === "layer"
+            ? { trackId: target.trackId, start }
+            : { newTrack: true, start },
+        );
+        void importMediaFiles(files);
+      }
+    }
+  }
+
+  function onTimelineDragOver(e: ReactDragEvent, targetId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+    setTimelineDropTarget(targetId);
   }
 
   function removeMediaAsset(id: string) {
@@ -2271,34 +2372,46 @@ export function VideoEditorWorkspace({
               {mediaLibrary.length > 0 ? (
                 <div className="space-y-2 border-t border-[#2a2a2e] pt-2">
                   <p className="text-[11px] text-[#888]">
-                    المكتبة ({mediaLibrary.length}) — اضغط للإضافة للخط الزمني
+                    المكتبة ({mediaLibrary.length}) — اسحب إلى شريط المونتاج أو
+                    اضغط للإضافة
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {mediaLibrary.map((asset) => (
                       <div
                         key={asset.id}
-                        className="group relative overflow-hidden rounded-md border border-[#333] bg-[#141416]"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(MEDIA_DND_MIME, asset.id);
+                          e.dataTransfer.effectAllowed = "copy";
+                          setStatus(
+                            `اسحب «${asset.name}» وأفلته على مسار فيديو أو صوت`,
+                          );
+                        }}
+                        className="group relative cursor-grab overflow-hidden rounded-md border border-[#333] bg-[#141416] active:cursor-grabbing"
                       >
                         <button
                           type="button"
-                          title="إضافة إلى الخط الزمني"
-                          onClick={() => void placeAssetOnTimeline(asset)}
+                          title="إضافة كطبقة جديدة فوق الفيديو"
+                          onClick={() =>
+                            void placeAssetOnTimeline(asset, { newTrack: true })
+                          }
                           className="block w-full text-start"
                         >
                           <div className="relative aspect-video bg-[#0a0a0b]">
                             {asset.kind === "image" ? (
-                              // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 src={asset.url}
                                 alt=""
-                                className="h-full w-full object-cover"
+                                className="pointer-events-none h-full w-full object-cover"
+                                draggable={false}
                               />
                             ) : asset.kind === "video" ? (
                               <video
                                 src={asset.url}
                                 muted
                                 preload="metadata"
-                                className="h-full w-full object-cover"
+                                className="pointer-events-none h-full w-full object-cover"
+                                draggable={false}
                               />
                             ) : (
                               <div className="flex h-full items-center justify-center bg-[#0c5f8f]/30">
@@ -2336,7 +2449,8 @@ export function VideoEditorWorkspace({
                 </div>
               ) : (
                 <p className="text-center text-[11px] text-[#666]">
-                  لا توجد ملفات بعد — استورد صوراً أو فيديوهات أو أصواتاً
+                  لا توجد ملفات بعد — استورد صوراً أو فيديوهات أو أصواتاً ثم اسحبها
+                  إلى الخط الزمني
                 </p>
               )}
 
@@ -3828,13 +3942,35 @@ export function VideoEditorWorkspace({
                         const clips = layerClips.filter(
                           (c) => c.trackId === track.id,
                         );
+                        const dropHot = timelineDropTarget === track.id;
                         return (
                           <div
                             key={track.id}
-                            className="absolute inset-x-0"
+                            className={`absolute inset-x-0 ${
+                              dropHot
+                                ? "z-20 bg-[#f5c518]/15 ring-1 ring-inset ring-[#f5c518]"
+                                : ""
+                            }`}
                             style={{ top, height: VIDEO_H }}
+                            onDragOver={(e) => onTimelineDragOver(e, track.id)}
+                            onDragLeave={() =>
+                              setTimelineDropTarget((t) =>
+                                t === track.id ? null : t,
+                              )
+                            }
+                            onDrop={(e) =>
+                              void dropMediaOnTimeline(e, {
+                                type: "layer",
+                                trackId: track.id,
+                              })
+                            }
                           >
                             <div className="pointer-events-none absolute inset-y-0 w-full border-t border-[#252528]" />
+                            {dropHot && (
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-[#f5c518]">
+                                أفلت هنا — طبقة فوق الفيديو
+                              </div>
+                            )}
                             {clips.map((clip) => {
                               const left = timelinePct(trimIn + clip.start);
                               const width = duration
@@ -3932,13 +4068,28 @@ export function VideoEditorWorkspace({
                         );
                       })}
 
-                      {/* Video 1 base lane */}
+                      {/* Video 1 base lane — الإفلات يضيف طبقة جديدة فوقه */}
                       <div
-                        className="absolute inset-x-0"
+                        className={`absolute inset-x-0 ${
+                          timelineDropTarget === "base-video"
+                            ? "z-20 bg-[#f5c518]/15 ring-1 ring-inset ring-[#f5c518]"
+                            : ""
+                        }`}
                         style={{
                           top: RULER + 2 + layerCount * (VIDEO_H + 4),
                           height: VIDEO_H,
                         }}
+                        onDragOver={(e) =>
+                          onTimelineDragOver(e, "base-video")
+                        }
+                        onDragLeave={() =>
+                          setTimelineDropTarget((t) =>
+                            t === "base-video" ? null : t,
+                          )
+                        }
+                        onDrop={(e) =>
+                          void dropMediaOnTimeline(e, { type: "new-layer" })
+                        }
                       >
                         <div
                           className={`absolute h-full overflow-hidden rounded border-2 border-amber-400 ${
@@ -4006,8 +4157,23 @@ export function VideoEditorWorkspace({
                         return (
                           <div
                             key={t.id}
-                            className="absolute inset-x-0"
+                            className={`absolute inset-x-0 ${
+                              timelineDropTarget === `audio-${t.id}`
+                                ? "z-20 bg-[#7dd3fc]/15 ring-1 ring-inset ring-[#7dd3fc]"
+                                : ""
+                            }`}
                             style={{ top, height: LANE_H }}
+                            onDragOver={(e) =>
+                              onTimelineDragOver(e, `audio-${t.id}`)
+                            }
+                            onDragLeave={() =>
+                              setTimelineDropTarget((cur) =>
+                                cur === `audio-${t.id}` ? null : cur,
+                              )
+                            }
+                            onDrop={(e) =>
+                              void dropMediaOnTimeline(e, { type: "audio" })
+                            }
                           >
                             <div className="pointer-events-none absolute inset-y-0 start-0 w-full border-t border-[#252528]" />
                             <div
@@ -4086,7 +4252,11 @@ export function VideoEditorWorkspace({
                       })}
 
                       <div
-                        className="absolute inset-x-2 flex items-center justify-center gap-2 rounded border border-dashed border-[#333] text-[11px] text-[#666]"
+                        className={`absolute inset-x-2 flex items-center justify-center gap-2 rounded border border-dashed text-[11px] ${
+                          timelineDropTarget === "new-layer-zone"
+                            ? "border-[#f5c518] bg-[#f5c518]/10 text-[#f5c518]"
+                            : "border-[#333] text-[#666]"
+                        }`}
                         style={{
                           top:
                             RULER +
@@ -4097,6 +4267,17 @@ export function VideoEditorWorkspace({
                             Math.max(1, lanes.length) * (LANE_H + LANE_GAP),
                           height: ADD_H,
                         }}
+                        onDragOver={(e) =>
+                          onTimelineDragOver(e, "new-layer-zone")
+                        }
+                        onDragLeave={() =>
+                          setTimelineDropTarget((t) =>
+                            t === "new-layer-zone" ? null : t,
+                          )
+                        }
+                        onDrop={(e) =>
+                          void dropMediaOnTimeline(e, { type: "new-layer" })
+                        }
                       >
                         <button
                           type="button"
@@ -4135,8 +4316,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              تمرير ↑↓ للمسارات · Ctrl+عجلة للتكبير · + فيديو = طبقة مونتاج فوق
-              الفيديو
+              اسحب من المكتبة وأفلت على المسار · كل صورة/فيديو = طبقة فوق التي
+              تحتها · Ctrl+عجلة للتكبير
             </p>
           </div>
         </div>
