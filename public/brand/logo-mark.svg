@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" fill="none" role="img" aria-label="Tool2Day">
-  <circle cx="24" cy="24" r="16" fill="#6BA3F7"/>
-  <circle cx="80" cy="24" r="16" fill="#F5C84A"/>
-  <circle cx="136" cy="24" r="16" fill="#E8905A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" fill="none" role="img" aria-label="Tool2Day mark">
+  <!-- Professional three-dot mark · fully transparent background -->
+  <circle cx="40" cy="40" r="28" fill="#5B9BF5"/>
+  <circle cx="120" cy="40" r="28" fill="#F5C518"/>
+  <circle cx="200" cy="40" r="28" fill="#E8874A"/>
 </svg>
