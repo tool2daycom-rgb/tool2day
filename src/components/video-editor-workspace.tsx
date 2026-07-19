@@ -5917,28 +5917,9 @@ export function VideoEditorWorkspace({
                         style={{ left: `${timelinePct(currentTime)}%` }}
                         onPointerDown={(e) => e.stopPropagation()}
                       >
-                        <button
-                          type="button"
-                          title="انقر للتقسيم (B)"
-                          onPointerDown={(e) => {
-                            // منع خط الزمن من preventDefault الذي يلغي click
-                            e.preventDefault();
-                            e.stopPropagation();
-                            splitAtPlayhead();
-                          }}
-                          className="group absolute -top-1 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center"
-                        >
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#111] bg-[#ff6a00] text-white shadow-lg hover:scale-105 hover:bg-[#ff8124]">
-                            <Scissors className="h-3.5 w-3.5" strokeWidth={2.5} />
-                          </span>
-                          <span className="pointer-events-none absolute bottom-full mb-1 hidden whitespace-nowrap rounded bg-black/90 px-2 py-1 text-center text-[10px] leading-4 text-white group-hover:block">
-                            انقر للتقسيم (B)
-                            <br />
-                            اسحب الخط لتحريك الرأس
-                          </span>
-                        </button>
+                        {/* خط الرأس كامل الارتفاع */}
                         <div
-                          className="absolute top-7 bottom-0 left-1/2 w-3 -translate-x-1/2 cursor-ew-resize"
+                          className="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2 cursor-ew-resize"
                           onPointerDown={(e) => {
                             e.stopPropagation();
                             onTimelinePointerDown(e, "playhead");
@@ -5946,6 +5927,26 @@ export function VideoEditorWorkspace({
                         >
                           <div className="mx-auto h-full w-0.5 bg-[#ff4d2e]" />
                         </div>
+                        {/* المقص أسفل المسطرة قليلاً — على المسارات مثل Filmora/CapCut */}
+                        <button
+                          type="button"
+                          title="انقر للتقسيم (B)"
+                          onPointerDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            splitAtPlayhead();
+                          }}
+                          className="group absolute top-[26px] left-1/2 z-50 flex -translate-x-1/2 flex-col items-center"
+                        >
+                          <span className="inline-flex h-11 w-7 items-center justify-center rounded-full border-2 border-white/90 bg-[#e11d2e] text-white shadow-[0_2px_10px_rgba(0,0,0,0.45)] hover:scale-105 hover:bg-[#f12a3c]">
+                            <Scissors className="h-4 w-4" strokeWidth={2.5} />
+                          </span>
+                          <span className="pointer-events-none absolute start-full top-1/2 ms-2 hidden -translate-y-1/2 whitespace-nowrap rounded bg-black/90 px-2 py-1 text-center text-[10px] leading-4 text-white group-hover:block">
+                            انقر للتقسيم (B)
+                            <br />
+                            اسحب الخط لتحريك الرأس
+                          </span>
+                        </button>
                       </div>
                     </div>
                   </div>
