@@ -58,65 +58,52 @@ a {
   }
 }
 
-/* Tool2Day triangle mark — soft sway + staggered breathe */
+/* Tool2Day triangle mark — continuous rotate */
 .brand-mark-animated {
   transform-origin: center center;
 }
 
 .brand-mark-sway {
-  transform-origin: 100px 100px;
+  transform-origin: 100px 101px;
   transform-box: view-box;
-  animation: brand-sway 5.5s ease-in-out infinite;
+  animation: brand-spin 7s linear infinite;
 }
 
 .brand-dot {
   transform-box: fill-box;
   transform-origin: center;
-  animation:
-    brand-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
-    brand-breathe 2.6s ease-in-out 0.7s infinite;
+  animation: brand-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .brand-dot-a {
-  animation-delay: 0s, 0.7s;
+  animation-delay: 0s;
 }
 
 .brand-dot-b {
-  animation-delay: 0.12s, 0.95s;
+  animation-delay: 0.12s;
 }
 
 .brand-dot-c {
-  animation-delay: 0.24s, 1.2s;
+  animation-delay: 0.24s;
 }
 
 @keyframes brand-enter {
   from {
     opacity: 0;
-    transform: scale(0.55) translateY(10px);
+    transform: scale(0.55);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-@keyframes brand-breathe {
-  0%,
-  100% {
     transform: scale(1);
   }
-  50% {
-    transform: scale(1.04);
-  }
 }
 
-@keyframes brand-sway {
-  0%,
-  100% {
-    transform: rotate(-4deg);
+@keyframes brand-spin {
+  from {
+    transform: rotate(0deg);
   }
-  50% {
-    transform: rotate(4deg);
+  to {
+    transform: rotate(360deg);
   }
 }
 
