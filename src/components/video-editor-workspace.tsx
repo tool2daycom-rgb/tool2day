@@ -1676,10 +1676,17 @@ export function VideoEditorWorkspace({
     setPropTab("video");
     setStatus(
       isVideo
-        ? `فيديو ${stackIndex + 2}: يغطي الطبقة السفلى — صغّره من الزاوية لصورة داخل صورة`
-        : `صورة على فيديو ${stackIndex + 2}: فوق الطبقة السفلى — اسحب الزاوية للتصغير`,
+        ? `فيديو ${stackIndex + 2} في الأعلى — يغطي الطبقات السفلى`
+        : `صورة على فيديو ${stackIndex + 2} في الأعلى — يغطي الطبقات السفلى`,
     );
     layerTargetTrackRef.current = null;
+    requestAnimationFrame(() => {
+      headerScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      timelineScrollRef.current?.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    });
   }
 
   async function importMediaFiles(list: FileList | null) {
@@ -1788,15 +1795,9 @@ export function VideoEditorWorkspace({
         await placeAssetOnTimeline(asset, { start });
         return;
       }
-      if (target.type === "layer") {
-        await placeAssetOnTimeline(asset, {
-          trackId: target.trackId,
-          start,
-          newTrack: false,
-        });
-      } else {
-        await placeAssetOnTimeline(asset, { start, newTrack: true });
-      }
+      // فيديو/صورة: دائماً مسار جديد في أعلى المكدس (فوق كل الطبقات)
+      await placeAssetOnTimeline(asset, { start, newTrack: true });
+      setStatus("تم وضع المسار في الأعلى فوق الطبقات");
       return;
     }
 
@@ -1808,13 +1809,9 @@ export function VideoEditorWorkspace({
         return;
       }
       if (f.type.startsWith("video/") || f.type.startsWith("image/")) {
-        await placeFileAsLayer(
-          f,
-          target.type === "layer"
-            ? { trackId: target.trackId, start }
-            : { newTrack: true, start },
-        );
+        await placeFileAsLayer(f, { newTrack: true, start });
         void importMediaFiles(files);
+        setStatus("تم وضع المسار في الأعلى فوق الطبقات");
       }
     }
   }
@@ -2363,7 +2360,7 @@ export function VideoEditorWorkspace({
                           e.dataTransfer.setData(MEDIA_DND_MIME, asset.id);
                           e.dataTransfer.effectAllowed = "copy";
                           setStatus(
-                            `اسحب «${asset.name}» وأفلته على مسار فيديو أو صوت`,
+                            `اسحب «${asset.name}» وأفلته على الخط — يُضاف مسار في الأعلى`,
                           );
                         }}
                         className="group relative cursor-grab overflow-hidden rounded-md border border-[#333] bg-[#141416] active:cursor-grabbing"
@@ -4009,7 +4006,7 @@ export function VideoEditorWorkspace({
                             <div className="pointer-events-none absolute inset-y-0 w-full border-t border-[#252528]" />
                             {dropHot && (
                               <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-[#f5c518]">
-                                أفلت هنا — طبقة فوق الفيديو
+                                أفلت — مسار جديد في الأعلى
                               </div>
                             )}
                             {clips.map((clip) => {
@@ -4357,8 +4354,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              اسحب من المكتبة وأفلت على المسار · كل صورة/فيديو = طبقة فوق التي
-              تحتها · Ctrl+عجلة للتكبير
+              اسحب صورة/فيديو من المكتبة → مسار جديد تلقائياً في الأعلى · الصوت على
+              مسار الصوت
             </p>
           </div>
         </div>
