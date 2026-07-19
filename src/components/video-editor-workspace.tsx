@@ -71,7 +71,34 @@ type Panel =
   | "tts"
   | "audio";
 type PropTab = "video" | "audio";
-type Aspect = "original" | "16:9" | "9:16" | "1:1";
+type Aspect =
+  | "original"
+  | "9:16"
+  | "3:4"
+  | "4:5"
+  | "1:1"
+  | "4:3"
+  | "16:9"
+  | "21:9"
+  | "custom";
+
+const ASPECT_PRESETS: {
+  id: Aspect;
+  label: string;
+  hint: string;
+  w: number;
+  h: number;
+}[] = [
+  { id: "9:16", label: "9:16", hint: "TikTok / Reels / Shorts", w: 1080, h: 1920 },
+  { id: "3:4", label: "3:4", hint: "Instagram عمودي", w: 1080, h: 1440 },
+  { id: "4:5", label: "4:5", hint: "منشور إنستغرام", w: 1080, h: 1350 },
+  { id: "1:1", label: "1:1", hint: "مربع", w: 1080, h: 1080 },
+  { id: "4:3", label: "4:3", hint: "كلاسيكي", w: 1440, h: 1080 },
+  { id: "16:9", label: "16:9", hint: "يوتيوب / أفقى", w: 1920, h: 1080 },
+  { id: "21:9", label: "21:9", hint: "سينمائي عريض", w: 2560, h: 1080 },
+  { id: "original", label: "أصلي", hint: "حسب ملف الفيديو", w: 0, h: 0 },
+  { id: "custom", label: "مخصص", hint: "أدخل العرض والارتفاع", w: 0, h: 0 },
+];
 
 type MediaProfile = {
   w: number;
@@ -267,6 +294,45 @@ function TrackCtrlBtn({
   );
 }
 
+/** أيقونة شكل النسبة في قائمة حجم الفيديو */
+function AspectThumb({
+  w,
+  h,
+  active = false,
+}: {
+  w: number;
+  h: number;
+  active?: boolean;
+}) {
+  if (w <= 0 || h <= 0) {
+    return (
+      <span
+        className={`inline-flex h-5 w-5 items-center justify-center rounded border text-[9px] ${
+          active
+            ? "border-teal-400 text-teal-300"
+            : "border-[#666] text-[#999]"
+        }`}
+      >
+        ✎
+      </span>
+    );
+  }
+  const max = 18;
+  const ratio = w / h;
+  const tw = ratio >= 1 ? max : Math.max(6, Math.round(max * ratio));
+  const th = ratio >= 1 ? Math.max(6, Math.round(max / ratio)) : max;
+  return (
+    <span
+      className={`inline-block shrink-0 rounded-[2px] border ${
+        active
+          ? "border-teal-400 bg-teal-400/25"
+          : "border-[#888] bg-[#2a2a2e]"
+      }`}
+      style={{ width: tw, height: th }}
+    />
+  );
+}
+
 function WaveformBars({
   peaks,
   dimmed = false,
@@ -332,10 +398,18 @@ function aspectSize(
   aspect: Aspect,
   videoW: number,
   videoH: number,
+  custom?: { w: number; h: number },
 ): { w: number; h: number } {
-  if (aspect === "16:9") return { w: 1280, h: 720 };
-  if (aspect === "9:16") return { w: 720, h: 1280 };
-  if (aspect === "1:1") return { w: 1080, h: 1080 };
+  if (aspect === "custom" && custom) {
+    return {
+      w: Math.max(64, Math.min(3840, Math.round(custom.w) || 1080)),
+      h: Math.max(64, Math.min(3840, Math.round(custom.h) || 1920)),
+    };
+  }
+  const preset = ASPECT_PRESETS.find((p) => p.id === aspect);
+  if (preset && preset.w > 0 && preset.h > 0) {
+    return { w: preset.w, h: preset.h };
+  }
   const max = 1280;
   if (videoW >= videoH) {
     return { w: max, h: Math.round((max * videoH) / Math.max(1, videoW)) };
@@ -462,6 +536,10 @@ export function VideoEditorWorkspace({
   const [flipV, setFlipV] = useState(false);
   const [opacity, setOpacity] = useState(1);
   const [aspect, setAspect] = useState<Aspect>("original");
+  const [customSize, setCustomSize] = useState({ w: 1080, h: 1920 });
+  const [scaleLock, setScaleLock] = useState(true);
+  const [aspectMenuOpen, setAspectMenuOpen] = useState(false);
+  const aspectMenuRef = useRef<HTMLDivElement>(null);
   const [projectProfile, setProjectProfile] =
     useState<MediaProfile>(DEFAULT_PROJECT);
   const [lockProjectSize, setLockProjectSize] = useState(false);
@@ -540,8 +618,70 @@ export function VideoEditorWorkspace({
         h: projectProfile.h,
       };
     }
-    return aspectSize(aspect, videoNatural.w, videoNatural.h);
-  }, [aspect, videoNatural, lockProjectSize, projectProfile]);
+    return aspectSize(aspect, videoNatural.w, videoNatural.h, customSize);
+  }, [aspect, videoNatural, lockProjectSize, projectProfile, customSize]);
+
+  const aspectLabel =
+    aspect === "custom"
+      ? "مخصص"
+      : aspect === "original"
+        ? "أصلي"
+        : aspect;
+
+  function applyAspect(id: Aspect) {
+    setAspect(id);
+    setLockProjectSize(false);
+    setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
+    const preset = ASPECT_PRESETS.find((p) => p.id === id);
+    if (preset && preset.w > 0 && preset.h > 0) {
+      setCustomSize({ w: preset.w, h: preset.h });
+      setProjectProfile((p) => ({ ...p, w: preset.w, h: preset.h }));
+    }
+    if (id === "custom") {
+      setProjectProfile((p) => ({
+        ...p,
+        w: customSize.w,
+        h: customSize.h,
+      }));
+    }
+    setAspectMenuOpen(false);
+  }
+
+  function updateVideoScale(axis: "w" | "h", pct: number) {
+    const v = Math.min(2, Math.max(0.05, pct / 100));
+    setVideoBox((b) => {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      if (scaleLock) {
+        const nw = v;
+        const nh = v;
+        return {
+          w: nw,
+          h: nh,
+          x: Math.max(0, Math.min(1 - nw, cx - nw / 2)),
+          y: Math.max(0, Math.min(1 - nh, cy - nh / 2)),
+        };
+      }
+      const nw = axis === "w" ? v : b.w;
+      const nh = axis === "h" ? v : b.h;
+      return {
+        w: nw,
+        h: nh,
+        x: Math.max(0, Math.min(1 - nw, b.x)),
+        y: Math.max(0, Math.min(1 - nh, b.y)),
+      };
+    });
+  }
+
+  function updateVideoPos(axis: "x" | "y", pct: number) {
+    const v = Math.min(100, Math.max(-50, pct)) / 100;
+    setVideoBox((b) => {
+      if (axis === "x") {
+        return { ...b, x: Math.max(0, Math.min(1 - b.w, v)) };
+      }
+      return { ...b, y: Math.max(0, Math.min(1 - b.h, v)) };
+    });
+  }
 
   const clipDuration = Math.max(0.1, trimOut - trimIn);
 
@@ -702,6 +842,20 @@ export function VideoEditorWorkspace({
   const redoEditRef = useRef(redoEdit);
   undoEditRef.current = undoEdit;
   redoEditRef.current = redoEdit;
+
+  useEffect(() => {
+    if (!aspectMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (
+        aspectMenuRef.current &&
+        !aspectMenuRef.current.contains(e.target as Node)
+      ) {
+        setAspectMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [aspectMenuOpen]);
 
   // تسجيل تلقائي لتاريخ التعديلات بعد استقرار الحالة
   useEffect(() => {
@@ -3819,42 +3973,196 @@ export function VideoEditorWorkspace({
 
           {panel === "canvas" && (
             <div className="space-y-3 text-sm">
-              <p className="font-semibold text-[#f5c518]">القماش</p>
+              <p className="font-semibold text-[#f5c518]">حجم الفيديو</p>
               <div className="rounded-md border border-[#333] bg-[#101012] px-3 py-2 text-xs text-[#aaa]">
-                المشروع: {projectProfile.w}×{projectProfile.h}{" "}
-                {projectProfile.fps}fps
-                {lockProjectSize ? " · مقفل على الإعدادات" : ""}
+                نموذج وسائل التواصل الاجتماعي
+                <div className="mt-1 font-mono text-[#ccc]">
+                  الإخراج: {outSize.w}×{outSize.h}
+                  {lockProjectSize ? " · مقفل على إعدادات المشروع" : ""}
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    ["original", "أصلي"],
-                    ["16:9", "16:9"],
-                    ["9:16", "9:16"],
-                    ["1:1", "1:1"],
-                  ] as const
-                ).map(([id, label]) => (
+              <div className="grid grid-cols-3 gap-1.5">
+                {ASPECT_PRESETS.map((p) => {
+                  const active = aspect === p.id && !lockProjectSize;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      title={p.hint}
+                      onClick={() => applyAspect(p.id)}
+                      className={`flex flex-col items-center gap-1.5 rounded-md px-1.5 py-2 text-[11px] transition ${
+                        active
+                          ? "bg-teal-500/20 font-semibold text-teal-300 ring-1 ring-teal-400"
+                          : "border border-[#333] text-[#ccc] hover:bg-[#1a1a1d]"
+                      }`}
+                    >
+                      <AspectThumb w={p.w} h={p.h} active={active} />
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {aspect === "custom" && !lockProjectSize && (
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-[#333] bg-[#101012] p-2">
+                  <label className="text-[11px] text-[#888]">
+                    عرض (px)
+                    <input
+                      type="number"
+                      min={64}
+                      max={3840}
+                      value={customSize.w}
+                      onChange={(e) => {
+                        const w = Math.max(
+                          64,
+                          Math.min(3840, Number(e.target.value) || 64),
+                        );
+                        setCustomSize((s) => ({ ...s, w }));
+                        setProjectProfile((p) => ({ ...p, w }));
+                      }}
+                      className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1.5 text-xs text-white"
+                    />
+                  </label>
+                  <label className="text-[11px] text-[#888]">
+                    ارتفاع (px)
+                    <input
+                      type="number"
+                      min={64}
+                      max={3840}
+                      value={customSize.h}
+                      onChange={(e) => {
+                        const h = Math.max(
+                          64,
+                          Math.min(3840, Number(e.target.value) || 64),
+                        );
+                        setCustomSize((s) => ({ ...s, h }));
+                        setProjectProfile((p) => ({ ...p, h }));
+                      }}
+                      className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1.5 text-xs text-white"
+                    />
+                  </label>
+                </div>
+              )}
+              <div className="space-y-2 rounded-md border border-[#333] bg-[#101012] p-2">
+                <p className="text-xs font-semibold text-[#ddd]">تحويل</p>
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 text-[11px] text-[#888]">
+                    عرض {Math.round(videoBox.w * 100)}%
+                    <input
+                      type="range"
+                      min={5}
+                      max={200}
+                      value={Math.round(videoBox.w * 100)}
+                      onChange={(e) =>
+                        updateVideoScale("w", Number(e.target.value))
+                      }
+                      className="mt-1 w-full"
+                    />
+                  </label>
                   <button
-                    key={id}
                     type="button"
-                    onClick={() => {
-                      setAspect(id);
-                      setLockProjectSize(false);
-                      setVideoBox({ x: 0, y: 0, w: 1, h: 1 });
-                    }}
-                    className={`rounded-md px-2 py-2 text-xs ${
-                      aspect === id && !lockProjectSize
+                    title={scaleLock ? "فك قفل النسبة" : "قفل النسبة"}
+                    onClick={() => setScaleLock((v) => !v)}
+                    className={`mt-4 rounded border p-1.5 ${
+                      scaleLock
+                        ? "border-teal-500/50 text-teal-300"
+                        : "border-[#333] text-[#888]"
+                    }`}
+                  >
+                    {scaleLock ? (
+                      <Lock className="h-3.5 w-3.5" />
+                    ) : (
+                      <LockOpen className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                  <label className="flex-1 text-[11px] text-[#888]">
+                    ارتفاع {Math.round(videoBox.h * 100)}%
+                    <input
+                      type="range"
+                      min={5}
+                      max={200}
+                      value={Math.round(videoBox.h * 100)}
+                      onChange={(e) =>
+                        updateVideoScale("h", Number(e.target.value))
+                      }
+                      className="mt-1 w-full"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[11px] text-[#888]">
+                    موضع X {Math.round(videoBox.x * 100)}
+                    <input
+                      type="number"
+                      step={1}
+                      value={Math.round(videoBox.x * 100)}
+                      onChange={(e) =>
+                        updateVideoPos("x", Number(e.target.value))
+                      }
+                      className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-xs text-white"
+                    />
+                  </label>
+                  <label className="text-[11px] text-[#888]">
+                    موضع Y {Math.round(videoBox.y * 100)}
+                    <input
+                      type="number"
+                      step={1}
+                      value={Math.round(videoBox.y * 100)}
+                      onChange={(e) =>
+                        updateVideoPos("y", Number(e.target.value))
+                      }
+                      className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-xs text-white"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFlipH((v) => !v)}
+                    className={`flex items-center justify-center gap-1 rounded py-1.5 text-[11px] ${
+                      flipH
                         ? "bg-[#f5c518] font-bold text-[#111]"
                         : "border border-[#333] text-[#ccc]"
                     }`}
                   >
-                    {label}
+                    <FlipHorizontal className="h-3.5 w-3.5" />
+                    عكس أفقي
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setFlipV((v) => !v)}
+                    className={`flex items-center justify-center gap-1 rounded py-1.5 text-[11px] ${
+                      flipV
+                        ? "bg-[#f5c518] font-bold text-[#111]"
+                        : "border border-[#333] text-[#ccc]"
+                    }`}
+                  >
+                    <FlipVertical className="h-3.5 w-3.5" />
+                    عكس رأسي
+                  </button>
+                </div>
+                <label className="block text-[11px] text-[#888]">
+                  استدارة
+                  <div className="mt-1 grid grid-cols-4 gap-1">
+                    {([0, 90, 180, 270] as const).map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setRotate(r)}
+                        className={`rounded py-1 text-[11px] ${
+                          rotate === r
+                            ? "bg-[#f5c518] font-bold text-[#111]"
+                            : "border border-[#333] text-[#ccc]"
+                        }`}
+                      >
+                        {r}°
+                      </button>
+                    ))}
+                  </div>
+                </label>
               </div>
               <p className="text-[11px] leading-5 text-[#777]">
-                الإخراج: {outSize.w}×{outSize.h} — اسحب إطار الفيديو الأصفر
-                لتغيير الحجم/الموضع
+                اختر نسبة القماش ثم عدّل حجم/موضع الفيديو داخله — أو اسحب
+                الإطار الأصفر في المعاينة.
               </p>
             </div>
           )}
@@ -4480,6 +4788,77 @@ export function VideoEditorWorkspace({
                   onChange={(e) => setSpeed(Number(e.target.value) / 100)}
                   className="w-full"
                 />
+                <div className="space-y-2 rounded border border-[#333] p-2">
+                  <p className="text-xs font-semibold text-[#ddd]">تحويل</p>
+                  <div className="flex items-center gap-2">
+                    <label className="flex-1 text-[11px] text-[#888]">
+                      حجم عرض {Math.round(videoBox.w * 100)}%
+                      <input
+                        type="range"
+                        min={5}
+                        max={200}
+                        value={Math.round(videoBox.w * 100)}
+                        onChange={(e) =>
+                          updateVideoScale("w", Number(e.target.value))
+                        }
+                        className="mt-1 w-full"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      title={scaleLock ? "فك قفل النسبة" : "قفل النسبة"}
+                      onClick={() => setScaleLock((v) => !v)}
+                      className={`mt-4 rounded border p-1.5 ${
+                        scaleLock
+                          ? "border-teal-500/50 text-teal-300"
+                          : "border-[#333] text-[#888]"
+                      }`}
+                    >
+                      {scaleLock ? (
+                        <Lock className="h-3.5 w-3.5" />
+                      ) : (
+                        <LockOpen className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <label className="flex-1 text-[11px] text-[#888]">
+                      حجم ارتفاع {Math.round(videoBox.h * 100)}%
+                      <input
+                        type="range"
+                        min={5}
+                        max={200}
+                        value={Math.round(videoBox.h * 100)}
+                        onChange={(e) =>
+                          updateVideoScale("h", Number(e.target.value))
+                        }
+                        className="mt-1 w-full"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-[11px] text-[#888]">
+                      موضع X
+                      <input
+                        type="number"
+                        value={Math.round(videoBox.x * 100)}
+                        onChange={(e) =>
+                          updateVideoPos("x", Number(e.target.value))
+                        }
+                        className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-xs text-white"
+                      />
+                    </label>
+                    <label className="text-[11px] text-[#888]">
+                      موضع Y
+                      <input
+                        type="number"
+                        value={Math.round(videoBox.y * 100)}
+                        onChange={(e) =>
+                          updateVideoPos("y", Number(e.target.value))
+                        }
+                        className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-xs text-white"
+                      />
+                    </label>
+                  </div>
+                </div>
                 <label className="text-[#888]">عكس</label>
                 <div className="grid grid-cols-2 gap-1">
                   <button
@@ -4760,6 +5139,94 @@ export function VideoEditorWorkspace({
 
           {/* Transport */}
           <div className="flex flex-wrap items-center gap-2 border-t border-[#2a2a2e] bg-[#141416] px-3 py-2">
+            <div className="relative" ref={aspectMenuRef}>
+              <button
+                type="button"
+                onClick={() => setAspectMenuOpen((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold ${
+                  aspectMenuOpen
+                    ? "border-teal-400 bg-teal-500/15 text-teal-300"
+                    : "border-[#333] text-[#ddd] hover:bg-[#222]"
+                }`}
+                title="حجم الفيديو / نسبة القماش"
+              >
+                <Ratio className="h-3.5 w-3.5 opacity-80" />
+                {aspectLabel}
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </button>
+              {aspectMenuOpen && (
+                <div className="absolute bottom-[calc(100%+6px)] start-0 z-[90] w-56 overflow-hidden rounded-lg border border-[#3a3a40] bg-[#1c1c1f] shadow-2xl">
+                  <div className="border-b border-[#2e2e32] px-3 py-2 text-[11px] font-medium text-[#aaa]">
+                    نموذج وسائل التواصل الاجتماعي
+                  </div>
+                  <div className="max-h-72 overflow-y-auto py-1">
+                    {ASPECT_PRESETS.map((p) => {
+                      const active = aspect === p.id && !lockProjectSize;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => applyAspect(p.id)}
+                          className={`flex w-full items-center gap-3 px-3 py-2 text-start text-xs transition ${
+                            active
+                              ? "bg-teal-500/15 text-teal-300"
+                              : "text-[#ddd] hover:bg-[#2a2a2e]"
+                          }`}
+                        >
+                          <AspectThumb w={p.w} h={p.h} active={active} />
+                          <span className="flex flex-col">
+                            <span className="font-semibold">{p.label}</span>
+                            <span className="text-[10px] text-[#777]">
+                              {p.hint}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {aspect === "custom" && (
+                    <div className="grid grid-cols-2 gap-2 border-t border-[#2e2e32] p-2">
+                      <input
+                        type="number"
+                        min={64}
+                        max={3840}
+                        value={customSize.w}
+                        onChange={(e) => {
+                          const w = Math.max(
+                            64,
+                            Math.min(3840, Number(e.target.value) || 64),
+                          );
+                          setCustomSize((s) => ({ ...s, w }));
+                          setProjectProfile((p) => ({ ...p, w }));
+                          setLockProjectSize(false);
+                        }}
+                        className="rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-[11px] text-white"
+                        placeholder="عرض"
+                        aria-label="عرض مخصص"
+                      />
+                      <input
+                        type="number"
+                        min={64}
+                        max={3840}
+                        value={customSize.h}
+                        onChange={(e) => {
+                          const h = Math.max(
+                            64,
+                            Math.min(3840, Number(e.target.value) || 64),
+                          );
+                          setCustomSize((s) => ({ ...s, h }));
+                          setProjectProfile((p) => ({ ...p, h }));
+                          setLockProjectSize(false);
+                        }}
+                        className="rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-[11px] text-white"
+                        placeholder="ارتفاع"
+                        aria-label="ارتفاع مخصص"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               onClick={undoEdit}
