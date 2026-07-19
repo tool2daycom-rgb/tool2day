@@ -44,6 +44,8 @@ import {
   EyeOff,
   Lock,
   LockOpen,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
@@ -381,6 +383,8 @@ export function VideoEditorWorkspace({
     oy: number;
     ow: number;
     oh: number;
+    /** مسار الطبقة أثناء السحب العمودي */
+    laneId?: string;
   } | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
@@ -1447,6 +1451,7 @@ export function VideoEditorWorkspace({
 
   function onPointerUp() {
     dragRef.current = null;
+    setTimelineDropTarget(null);
   }
 
   function timelinePct(t: number) {
@@ -1831,6 +1836,45 @@ export function VideoEditorWorkspace({
     });
   }
 
+  function moveVideoLayer(trackId: string, dir: -1 | 1) {
+    // videoLayers: 0 = الأدنى، الأخير = الأعلى
+    setVideoLayers((prev) => {
+      const i = prev.findIndex((t) => t.id === trackId);
+      if (i < 0) return prev;
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      const a = next[i]!;
+      const b = next[j]!;
+      next[i] = b;
+      next[j] = a;
+      return next;
+    });
+    setStatus(dir > 0 ? "تم رفع المسار للأعلى" : "تم إنزال المسار للأسفل");
+  }
+
+  /** مسار الطبقة تحت مؤشر الماوس أثناء السحب العمودي */
+  function resolveLayerTrackAtY(clientY: number): string | null {
+    const el = timelineRef.current;
+    const scroll = timelineScrollRef.current;
+    if (!el || videoLayers.length === 0) return null;
+    const rect = el.getBoundingClientRect();
+    const y = clientY - rect.top + (scroll?.scrollTop || 0);
+    const RULER = 22;
+    const VIDEO_H = 36;
+    const layerAreaStart = RULER + 2;
+    const layersTopFirst = [...videoLayers].reverse();
+    if (y < layerAreaStart - 4) {
+      return videoLayers[videoLayers.length - 1]?.id ?? null;
+    }
+    const idx = Math.floor((y - layerAreaStart) / (VIDEO_H + 4));
+    if (idx < 0) return videoLayers[videoLayers.length - 1]?.id ?? null;
+    if (idx >= layersTopFirst.length) {
+      return videoLayers[0]?.id ?? null;
+    }
+    return layersTopFirst[idx]?.id ?? null;
+  }
+
   function onLayerClipPointerDown(
     e: ReactPointerEvent,
     id: string,
@@ -1857,8 +1901,12 @@ export function VideoEditorWorkspace({
       oy: clip.offset,
       ow: clip.duration,
       oh: clip.sourceDuration,
+      laneId: clip.trackId,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (kind === "layer-move") {
+      setStatus("اسحب يميناً/يساراً للوقت · أعلى/أسفل لنقل المسار");
+    }
   }
 
   function removeLayerClip(id: string) {
@@ -1937,11 +1985,27 @@ export function VideoEditorWorkspace({
       if (drag.kind === "layer-move") {
         const maxStart = Math.max(0, duration - drag.ow);
         const nextStart = Math.max(0, Math.min(maxStart, drag.ox + dt));
+        const hoverTrack = resolveLayerTrackAtY(e.clientY);
+        const dest =
+          hoverTrack &&
+          !videoLayers.find((t) => t.id === hoverTrack)?.locked
+            ? hoverTrack
+            : drag.laneId;
         setLayerClips((prev) =>
           prev.map((c) =>
-            c.id === drag.id ? { ...c, start: nextStart } : c,
+            c.id === drag.id
+              ? {
+                  ...c,
+                  start: nextStart,
+                  trackId: dest || c.trackId,
+                }
+              : c,
           ),
         );
+        if (dest) {
+          drag.laneId = dest;
+          setTimelineDropTarget(dest);
+        }
       } else if (drag.kind === "layer-trim-in") {
         const maxIn = Math.min(drag.ow - 0.15, drag.oh - drag.oy - 0.15);
         const delta = Math.max(-drag.oy, Math.min(maxIn, dt));
@@ -3836,29 +3900,67 @@ export function VideoEditorWorkspace({
                       </div>
                       {layersTopFirst.map((track, revIdx) => {
                         const num = videoLayers.length + 1 - revIdx;
+                        const stackIdx = videoLayers.findIndex(
+                          (t) => t.id === track.id,
+                        );
                         return (
                           <div
                             key={track.id}
                             style={{ height: VIDEO_H + 4 }}
+                            className={
+                              timelineDropTarget === track.id
+                                ? "bg-[#f5c518]/10"
+                                : undefined
+                            }
                           >
-                            {laneHeader(`فيديو ${num}`, {
-                              visible: track.visible,
-                              muted: track.muted,
-                              locked: track.locked,
-                              showSolo: false,
-                              onToggleVisible: () =>
-                                patchVideoLayer(track.id, {
-                                  visible: !track.visible,
-                                }),
-                              onToggleMute: () =>
-                                patchVideoLayer(track.id, {
-                                  muted: !track.muted,
-                                }),
-                              onToggleLock: () =>
-                                patchVideoLayer(track.id, {
-                                  locked: !track.locked,
-                                }),
-                            })}
+                            <div className="flex h-full items-stretch gap-0.5 border-b border-[#2a2a2e]">
+                              <div className="flex w-5 shrink-0 flex-col justify-center gap-0.5">
+                                <button
+                                  type="button"
+                                  title="رفع المسار للأعلى"
+                                  disabled={stackIdx >= videoLayers.length - 1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    moveVideoLayer(track.id, 1);
+                                  }}
+                                  className="inline-flex h-3.5 items-center justify-center rounded text-[#888] hover:bg-white/10 hover:text-[#f5c518] disabled:opacity-25"
+                                >
+                                  <ChevronUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="إنزال المسار للأسفل"
+                                  disabled={stackIdx <= 0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    moveVideoLayer(track.id, -1);
+                                  }}
+                                  className="inline-flex h-3.5 items-center justify-center rounded text-[#888] hover:bg-white/10 hover:text-[#f5c518] disabled:opacity-25"
+                                >
+                                  <ChevronDown className="h-3 w-3" />
+                                </button>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                {laneHeader(`فيديو ${num}`, {
+                                  visible: track.visible,
+                                  muted: track.muted,
+                                  locked: track.locked,
+                                  showSolo: false,
+                                  onToggleVisible: () =>
+                                    patchVideoLayer(track.id, {
+                                      visible: !track.visible,
+                                    }),
+                                  onToggleMute: () =>
+                                    patchVideoLayer(track.id, {
+                                      muted: !track.muted,
+                                    }),
+                                  onToggleLock: () =>
+                                    patchVideoLayer(track.id, {
+                                      locked: !track.locked,
+                                    }),
+                                })}
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -4354,8 +4456,8 @@ export function VideoEditorWorkspace({
               );
             })()}
             <p className="mt-2 text-center text-[11px] text-[#666]">
-              اسحب صورة/فيديو من المكتبة → مسار جديد تلقائياً في الأعلى · الصوت على
-              مسار الصوت
+              اسحب المقطع يميناً/يساراً للوقت · أعلى/أسفل بين المسارات · ▲▼ لترتيب
+              الطبقات
             </p>
           </div>
         </div>
