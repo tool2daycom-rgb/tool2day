@@ -25,6 +25,7 @@ export function BrandLogo({
       <BrandMarkAnimated size={markPx} />
       {showWord ? (
         <span
+          dir="ltr"
           className={`inline-flex items-center font-[family-name:var(--font-display)] font-extrabold uppercase tracking-[-0.02em] ${
             size === "lg"
               ? twoAsImage
