@@ -3686,9 +3686,9 @@ export function VideoEditorWorkspace({
             <a href="/" className="inline-flex items-center gap-2 text-[#f5c518] hover:underline">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/brand/logo-mark-sizes.svg"
+                src="/brand/logo-mark-triangle.svg"
                 alt=""
-                className="h-4 w-auto"
+                className="h-5 w-auto"
               />
               Tool2Day
             </a>

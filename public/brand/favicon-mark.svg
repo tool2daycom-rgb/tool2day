@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="Tool2Day icon">
-  <!-- Transparent favicon · dots fill the frame -->
-  <circle cx="30" cy="82" r="22" fill="#5B9BF5"/>
-  <circle cx="62" cy="64" r="30" fill="#F5C518"/>
-  <circle cx="98" cy="44" r="38" fill="#E8874A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <circle cx="64" cy="34" r="26" fill="#F5C518"/>
+  <circle cx="38" cy="90" r="26" fill="#5B9BF5"/>
+  <circle cx="90" cy="90" r="26" fill="#E8874A"/>
 </svg>

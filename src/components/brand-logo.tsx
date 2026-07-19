@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
+import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 
-/** شعار Tool2Day — الأحجام المتدرجة الشفافة */
+/** شعار Tool2Day — مثلث النقاط مع حركة احترافية */
 export function BrandLogo({
   className = "",
   showWord = true,
@@ -11,31 +11,11 @@ export function BrandLogo({
   showWord?: boolean;
   size?: "sm" | "md" | "lg";
 }) {
-  const dims =
-    size === "lg"
-      ? { w: 120, h: 48 }
-      : size === "sm"
-        ? { w: 56, h: 22 }
-        : { w: 88, h: 36 };
+  const markPx = size === "lg" ? 52 : size === "sm" ? 28 : 40;
 
   return (
     <span className={`inline-flex items-center gap-2.5 ${className}`}>
-      <Image
-        src="/brand/logo-mark-sizes.svg"
-        alt=""
-        width={dims.w}
-        height={dims.h}
-        className="h-auto max-h-10 w-auto sm:max-h-12"
-        style={
-          size === "lg"
-            ? { maxHeight: "2.75rem" }
-            : size === "sm"
-              ? { maxHeight: "1.5rem" }
-              : { maxHeight: "2.25rem" }
-        }
-        priority
-        unoptimized
-      />
+      <BrandMarkAnimated size={markPx} />
       {showWord ? (
         <span
           className={`font-[family-name:var(--font-display)] font-bold tracking-tight ${

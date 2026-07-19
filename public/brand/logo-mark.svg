@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 88" fill="none" role="img" aria-label="Tool2Day">
-  <!-- Larger ascending dots · fully transparent -->
-  <circle cx="32" cy="56" r="24" fill="#5B9BF5"/>
-  <circle cx="96" cy="44" r="34" fill="#F5C518"/>
-  <circle cx="174" cy="34" r="44" fill="#E8874A"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 180" fill="none" role="img" aria-label="Tool2Day">
+  <!-- Alternate mark: triangular constellation -->
+  <circle cx="100" cy="48" r="36" fill="#F5C518"/>
+  <circle cx="58" cy="128" r="36" fill="#5B9BF5"/>
+  <circle cx="142" cy="128" r="36" fill="#E8874A"/>
 </svg>
