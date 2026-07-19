@@ -40,9 +40,9 @@ export function BrandLogo({
             <Image
               src="/pngegg.png"
               alt="2"
-              width={48}
-              height={70}
-              className="mx-0.5 inline-block h-[1.25em] w-auto translate-y-[-0.06em] object-contain"
+              width={64}
+              height={92}
+              className="mx-1 inline-block h-[1.7em] w-auto translate-y-[-0.08em] object-contain"
               unoptimized
               priority
             />
