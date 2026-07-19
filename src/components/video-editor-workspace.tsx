@@ -30,7 +30,7 @@ import {
   Sticker,
   Trash2,
   Type,
-  Maximize2,
+  UnfoldHorizontal,
   Volume2,
   VolumeX,
   Download,
@@ -2783,16 +2783,16 @@ export function VideoEditorWorkspace({
               <button
                 type="button"
                 onClick={fitTimelineZoom}
-                className="group relative rounded p-1 text-[#aaa] hover:bg-[#2a2a2e] hover:text-white"
-                title="تكبير لتناسب الخط الزمني (Shift+Z)"
-                aria-label="تكبير لتناسب الخط الزمني"
+                className="group relative rounded border border-[#555] p-1 text-[#cfcfcf] hover:border-[#888] hover:bg-[#2a2a2e] hover:text-white"
+                title="تكبير لتناسب الخط الزمني بشكل افضل"
+                aria-label="تكبير لتناسب الخط الزمني بشكل افضل"
               >
-                <Maximize2 className="h-3.5 w-3.5" />
+                <UnfoldHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
                 <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-[#555] bg-[#2c2c30] px-2.5 py-1.5 text-[11px] text-white shadow-xl group-hover:block">
                   <span className="me-2 inline-flex items-center gap-0.5 rounded border border-[#777] bg-[#1a1a1d] px-1 py-0.5 font-mono text-[9px] text-[#ddd]">
                     ⇧Z
                   </span>
-                  تكبير لتناسب الخط الزمني
+                  تكبير لتناسب الخط الزمني بشكل افضل
                 </span>
               </button>
             </div>
