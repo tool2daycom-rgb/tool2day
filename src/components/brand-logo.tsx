@@ -19,14 +19,13 @@ export function BrandLogo({
 
   return (
     <span
+      dir="ltr"
       className={`inline-flex items-center gap-2 ${className}`}
-      style={{ flexDirection: "row" }}
     >
       <BrandMarkAnimated size={markPx} />
       {showWord ? (
         <span
-          dir="ltr"
-          className={`inline-flex items-center font-[family-name:var(--font-display)] font-extrabold uppercase tracking-[-0.02em] ${
+          className={`inline-flex items-center font-[family-name:var(--font-display)] font-black uppercase tracking-[-0.02em] ${
             size === "lg"
               ? twoAsImage
                 ? "text-[2rem] leading-none sm:text-[2.4rem]"

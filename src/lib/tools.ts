@@ -48,35 +48,45 @@ export type Tool = {
 
 export const categoryMeta: Record<
   ToolCategory,
-  { label: string; sectionTitle: string; anchor: string }
+  {
+    label: string;
+    sectionTitle: string;
+    anchor: string;
+    icon: LucideIcon;
+  }
 > = {
   video: {
     label: "الفيديو",
     sectionTitle: "أدوات الفيديو",
     anchor: "video",
+    icon: Video,
   },
   audio: {
     label: "الصوت",
     sectionTitle: "أدوات الصوت",
     anchor: "audio",
+    icon: Music2,
   },
   pdf: {
     label: "PDF",
     sectionTitle: "أدوات PDF",
     anchor: "pdf",
+    icon: FileText,
   },
   converters: {
     label: "المحولات",
     sectionTitle: "المحولات",
     anchor: "converters",
+    icon: RefreshCcw,
   },
 };
 
+/** ترتيب مثل 123apps: فيديو → صوت → PDF → محولات */
 export const navCategories: ToolCategory[] = [
-  "converters",
-  "pdf",
-  "audio",
   "video",
+  "audio",
+  "pdf",
+  "converters",
 ];
 
 export const tools: Tool[] = [
