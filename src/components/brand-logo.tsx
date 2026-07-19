@@ -47,7 +47,12 @@ export function BrandLogo({
               priority
             />
           ) : (
-            <span>2</span>
+            <span
+              className="mx-0.5 inline-block border-y-[1.75px] border-current px-[0.1em] text-[0.88em] leading-[0.95] tracking-normal"
+              aria-label="2"
+            >
+              2
+            </span>
           )}
           <span>day</span>
         </span>
