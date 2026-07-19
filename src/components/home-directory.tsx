@@ -1,5 +1,5 @@
+import Image from "next/image";
 import Link from "next/link";
-import { BrandLogo } from "@/components/brand-logo";
 import { isToolLive } from "@/lib/processors/active-tools";
 import {
   categoryMeta,
@@ -58,7 +58,15 @@ export function HomeDirectory() {
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-12 text-center sm:mb-16">
         <div className="flex justify-center">
-          <BrandLogo size="lg" showWord twoAsImage />
+          <Image
+            src="/brand/logo-hero-eyes.png"
+            alt="Tool2Day"
+            width={920}
+            height={220}
+            className="h-auto w-full max-w-[28rem] object-contain sm:max-w-[36rem]"
+            priority
+            unoptimized
+          />
         </div>
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
           الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
