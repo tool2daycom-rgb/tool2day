@@ -46,6 +46,8 @@ import {
   LockOpen,
   ChevronUp,
   ChevronDown,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
@@ -192,6 +194,32 @@ type MediaAsset = {
   file: File;
   url: string;
   duration: number;
+};
+
+/** لقطة لحالة المونتاج (تراجع / تقدم) */
+type EditorHistorySnapshot = {
+  mainClips: MainClip[];
+  layerClips: LayerClip[];
+  videoLayers: VideoLayerTrack[];
+  audioTracks: AudioTrack[];
+  overlays: Overlay[];
+  mediaLibrary: MediaAsset[];
+  videoLane: VideoLaneState;
+  videoBox: { x: number; y: number; w: number; h: number };
+  trimIn: number;
+  trimOut: number;
+  volume: number;
+  muted: boolean;
+  opacity: number;
+  rotate: 0 | 90 | 180 | 270;
+  flipH: boolean;
+  flipV: boolean;
+  speed: number;
+  fadeIn: number;
+  fadeOut: number;
+  audioPitch: number;
+  audioReverse: boolean;
+  noiseReduce: boolean;
 };
 
 type AudioSection =
@@ -484,6 +512,13 @@ export function VideoEditorWorkspace({
   );
   const [mediaDragActive, setMediaDragActive] = useState(false);
   const [showRecordStudio, setShowRecordStudio] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const historyPastRef = useRef<EditorHistorySnapshot[]>([]);
+  const historyFutureRef = useRef<EditorHistorySnapshot[]>([]);
+  const historyPresentRef = useRef<EditorHistorySnapshot | null>(null);
+  const historySkipRef = useRef(false);
+  const historyReadyRef = useRef(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
   const [detachBusy, setDetachBusy] = useState(false);
@@ -525,6 +560,211 @@ export function VideoEditorWorkspace({
     );
     return Math.max(duration, mainEnd, layerEnd, audioEnd, 0.1);
   }, [mainClips, layerClips, audioTracks, duration]);
+
+  function captureHistorySnapshot(): EditorHistorySnapshot {
+    return {
+      mainClips: mainClips.map((c) => ({ ...c })),
+      layerClips: layerClips.map((c) => ({ ...c })),
+      videoLayers: videoLayers.map((t) => ({ ...t })),
+      audioTracks: audioTracks.map((t) => ({
+        ...t,
+        peaks: t.peaks ? [...t.peaks] : undefined,
+      })),
+      overlays: overlays.map((o) => ({ ...o })),
+      mediaLibrary: mediaLibrary.map((a) => ({ ...a })),
+      videoLane: { ...videoLane },
+      videoBox: { ...videoBox },
+      trimIn,
+      trimOut,
+      volume,
+      muted,
+      opacity,
+      rotate,
+      flipH,
+      flipV,
+      speed,
+      fadeIn,
+      fadeOut,
+      audioPitch,
+      audioReverse,
+      noiseReduce,
+    };
+  }
+
+  function historyFingerprint(s: EditorHistorySnapshot): string {
+    return JSON.stringify({
+      mainClips: s.mainClips,
+      layerClips: s.layerClips.map(
+        ({ file: _f, url: _u, ...rest }) => rest,
+      ),
+      videoLayers: s.videoLayers,
+      audioTracks: s.audioTracks.map(
+        ({ file: _f, url: _u, peaks: _p, ...rest }) => rest,
+      ),
+      overlays: s.overlays.map((o) =>
+        o.type === "image"
+          ? { id: o.id, type: o.type, x: o.x, y: o.y, w: o.w, h: o.h, opacity: o.opacity }
+          : o,
+      ),
+      mediaLibrary: s.mediaLibrary.map(({ id, kind, name, duration: d }) => ({
+        id,
+        kind,
+        name,
+        duration: d,
+      })),
+      videoLane: s.videoLane,
+      videoBox: s.videoBox,
+      trimIn: s.trimIn,
+      trimOut: s.trimOut,
+      volume: s.volume,
+      muted: s.muted,
+      opacity: s.opacity,
+      rotate: s.rotate,
+      flipH: s.flipH,
+      flipV: s.flipV,
+      speed: s.speed,
+      fadeIn: s.fadeIn,
+      fadeOut: s.fadeOut,
+      audioPitch: s.audioPitch,
+      audioReverse: s.audioReverse,
+      noiseReduce: s.noiseReduce,
+    });
+  }
+
+  function applyHistorySnapshot(s: EditorHistorySnapshot) {
+    historySkipRef.current = true;
+    setMainClips(s.mainClips.map((c) => ({ ...c })));
+    setLayerClips(s.layerClips.map((c) => ({ ...c })));
+    setVideoLayers(s.videoLayers.map((t) => ({ ...t })));
+    setAudioTracks(
+      s.audioTracks.map((t) => ({
+        ...t,
+        peaks: t.peaks ? [...t.peaks] : undefined,
+      })),
+    );
+    setOverlays(s.overlays.map((o) => ({ ...o })));
+    setMediaLibrary(s.mediaLibrary.map((a) => ({ ...a })));
+    setVideoLane({ ...s.videoLane });
+    setVideoBox({ ...s.videoBox });
+    setTrimIn(s.trimIn);
+    setTrimOut(s.trimOut);
+    setVolume(s.volume);
+    setMuted(s.muted);
+    setOpacity(s.opacity);
+    setRotate(s.rotate);
+    setFlipH(s.flipH);
+    setFlipV(s.flipV);
+    setSpeed(s.speed);
+    setFadeIn(s.fadeIn);
+    setFadeOut(s.fadeOut);
+    setAudioPitch(s.audioPitch);
+    setAudioReverse(s.audioReverse);
+    setNoiseReduce(s.noiseReduce);
+  }
+
+  function clearEditorHistory() {
+    historyPastRef.current = [];
+    historyFutureRef.current = [];
+    historyPresentRef.current = null;
+    historyReadyRef.current = false;
+    historySkipRef.current = false;
+    setCanUndo(false);
+    setCanRedo(false);
+  }
+
+  function undoEdit() {
+    if (historyPastRef.current.length === 0) return;
+    const present = captureHistorySnapshot();
+    const prev = historyPastRef.current.pop()!;
+    historyFutureRef.current.push(present);
+    historyPresentRef.current = prev;
+    applyHistorySnapshot(prev);
+    setCanUndo(historyPastRef.current.length > 0);
+    setCanRedo(true);
+    setStatus("تراجع خطوة");
+    setError(null);
+  }
+
+  function redoEdit() {
+    if (historyFutureRef.current.length === 0) return;
+    const present = captureHistorySnapshot();
+    const next = historyFutureRef.current.pop()!;
+    historyPastRef.current.push(present);
+    historyPresentRef.current = next;
+    applyHistorySnapshot(next);
+    setCanUndo(true);
+    setCanRedo(historyFutureRef.current.length > 0);
+    setStatus("تقدم خطوة");
+    setError(null);
+  }
+
+  const undoEditRef = useRef(undoEdit);
+  const redoEditRef = useRef(redoEdit);
+  undoEditRef.current = undoEdit;
+  redoEditRef.current = redoEdit;
+
+  // تسجيل تلقائي لتاريخ التعديلات بعد استقرار الحالة
+  useEffect(() => {
+    if (!file) {
+      clearEditorHistory();
+      return;
+    }
+    if (historySkipRef.current) {
+      historySkipRef.current = false;
+      historyPresentRef.current = captureHistorySnapshot();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const snap = captureHistorySnapshot();
+      if (!historyReadyRef.current || !historyPresentRef.current) {
+        historyPresentRef.current = snap;
+        historyReadyRef.current = true;
+        setCanUndo(false);
+        setCanRedo(false);
+        return;
+      }
+      if (
+        historyFingerprint(historyPresentRef.current) ===
+        historyFingerprint(snap)
+      ) {
+        return;
+      }
+      historyPastRef.current.push(historyPresentRef.current);
+      if (historyPastRef.current.length > 40) {
+        historyPastRef.current.shift();
+      }
+      historyPresentRef.current = snap;
+      historyFutureRef.current = [];
+      setCanUndo(true);
+      setCanRedo(false);
+    }, 400);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    file,
+    mainClips,
+    layerClips,
+    videoLayers,
+    audioTracks,
+    overlays,
+    mediaLibrary,
+    videoLane,
+    videoBox,
+    trimIn,
+    trimOut,
+    volume,
+    muted,
+    opacity,
+    rotate,
+    flipH,
+    flipV,
+    speed,
+    fadeIn,
+    fadeOut,
+    audioPitch,
+    audioReverse,
+    noiseReduce,
+  ]);
 
   function mainClipAt(t: number) {
     return (
@@ -769,6 +1009,19 @@ export function VideoEditorWorkspace({
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
         deleteSelected();
+      } else if (
+        (e.key === "z" || e.key === "Z") &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey
+      ) {
+        e.preventDefault();
+        redoEditRef.current();
+      } else if ((e.key === "z" || e.key === "Z") && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        undoEditRef.current();
+      } else if ((e.key === "y" || e.key === "Y") && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        redoEditRef.current();
       } else if ((e.key === "b" || e.key === "B") && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         splitAtPlayheadRef.current();
@@ -808,6 +1061,7 @@ export function VideoEditorWorkspace({
     const next = URL.createObjectURL(f);
     fileLiveRef.current = f;
     urlLiveRef.current = next;
+    clearEditorHistory();
     setFile(f);
     setUrl(next);
     setOverlays((prev) => {
@@ -3056,6 +3310,26 @@ export function VideoEditorWorkspace({
             </a>
           )}
           <span className="max-w-[180px] truncate text-[#ddd]">{file.name}</span>
+          <div className="ms-2 flex items-center gap-0.5 rounded-md border border-[#2e2e32] bg-[#1a1a1d] p-0.5">
+            <button
+              type="button"
+              title="تراجع خطوة (Ctrl/⌘+Z)"
+              disabled={!canUndo}
+              onClick={undoEdit}
+              className="inline-flex h-8 w-8 items-center justify-center rounded text-[#ccc] transition hover:bg-[#2a2a2e] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              title="تقدم خطوة (Ctrl/⌘+Shift+Z)"
+              disabled={!canRedo}
+              onClick={redoEdit}
+              className="inline-flex h-8 w-8 items-center justify-center rounded text-[#ccc] transition hover:bg-[#2a2a2e] hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Redo2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="ms-auto flex items-center gap-2">
           <button
@@ -4486,6 +4760,24 @@ export function VideoEditorWorkspace({
 
           {/* Transport */}
           <div className="flex flex-wrap items-center gap-2 border-t border-[#2a2a2e] bg-[#141416] px-3 py-2">
+            <button
+              type="button"
+              onClick={undoEdit}
+              disabled={!canUndo}
+              className="rounded border border-[#333] p-1.5 hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-35"
+              title="تراجع خطوة (Ctrl/⌘+Z)"
+            >
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={redoEdit}
+              disabled={!canRedo}
+              className="rounded border border-[#333] p-1.5 hover:bg-[#222] disabled:cursor-not-allowed disabled:opacity-35"
+              title="تقدم خطوة (Ctrl/⌘+Shift+Z)"
+            >
+              <Redo2 className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={() =>
