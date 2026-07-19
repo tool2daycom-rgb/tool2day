@@ -325,7 +325,7 @@ export function VideoEditorWorkspace({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [timelineZoom, setTimelineZoom] = useState(1); // 1–8
+  const [timelineZoom, setTimelineZoom] = useState(1); // 0.15 (بعيد) → 10 (قريب)
   const [showRecordStudio, setShowRecordStudio] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const ctxMenuRef = useRef<HTMLDivElement>(null);
@@ -447,6 +447,9 @@ export function VideoEditorWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [ctxMenu]);
 
+  const TIMELINE_ZOOM_MIN = 0.15;
+  const TIMELINE_ZOOM_MAX = 10;
+
   useEffect(() => {
     const scroll = timelineScrollRef.current;
     if (!scroll) return;
@@ -454,8 +457,9 @@ export function VideoEditorWorkspace({
       e.preventDefault();
       const dir = e.deltaY > 0 ? -1 : 1;
       setTimelineZoom((z) => {
-        const next = Math.round((z + dir * 0.25) * 100) / 100;
-        return Math.min(8, Math.max(1, next));
+        const step = z <= 1 ? 0.1 : 0.25;
+        const next = Math.round((z + dir * step) * 100) / 100;
+        return Math.min(TIMELINE_ZOOM_MAX, Math.max(TIMELINE_ZOOM_MIN, next));
       });
     }
     scroll.addEventListener("wheel", onWheel, { passive: false });
@@ -463,9 +467,11 @@ export function VideoEditorWorkspace({
   }, [file, url]);
 
   function bumpTimelineZoom(delta: number) {
-    setTimelineZoom((z) =>
-      Math.min(8, Math.max(1, Math.round((z + delta) * 100) / 100)),
-    );
+    setTimelineZoom((z) => {
+      const step = delta < 0 && z <= 1.5 ? Math.min(Math.abs(delta), 0.15) * Math.sign(delta) || delta : delta;
+      const next = Math.round((z + step) * 100) / 100;
+      return Math.min(TIMELINE_ZOOM_MAX, Math.max(TIMELINE_ZOOM_MIN, next));
+    });
   }
 
   function fitTimelineZoom() {
@@ -2628,29 +2634,32 @@ export function VideoEditorWorkspace({
                 {formatTime(currentTime)}
               </span>
             </div>
-            <div className="flex items-center gap-1.5" title="تكبير التايملاين">
+            <div
+              className="ms-auto flex items-center gap-1 rounded-md border border-[#2e2e32] bg-[#1a1a1d] px-1.5 py-1"
+              title="تكبير / تصغير التايملاين"
+            >
               <button
                 type="button"
-                onClick={() => bumpTimelineZoom(-0.5)}
-                className="rounded border border-[#333] p-1.5 text-[#ccc] hover:bg-[#222]"
+                onClick={() => bumpTimelineZoom(timelineZoom <= 1 ? -0.1 : -0.5)}
+                className="rounded p-1 text-[#aaa] hover:bg-[#2a2a2e] hover:text-white"
                 title="تكبير للخارج"
               >
                 <ZoomOut className="h-3.5 w-3.5" />
               </button>
               <input
                 type="range"
-                min={1}
-                max={8}
-                step={0.1}
+                min={TIMELINE_ZOOM_MIN}
+                max={TIMELINE_ZOOM_MAX}
+                step={0.05}
                 value={timelineZoom}
                 onChange={(e) => setTimelineZoom(Number(e.target.value))}
-                className="w-24 accent-[#888]"
+                className="h-1 w-28 cursor-pointer accent-[#9ca3af]"
                 aria-label="تكبير التايملاين"
               />
               <button
                 type="button"
-                onClick={() => bumpTimelineZoom(0.5)}
-                className="rounded border border-[#333] p-1.5 text-[#ccc] hover:bg-[#222]"
+                onClick={() => bumpTimelineZoom(timelineZoom < 1 ? 0.1 : 0.5)}
+                className="rounded p-1 text-[#aaa] hover:bg-[#2a2a2e] hover:text-white"
                 title="تكبير للداخل"
               >
                 <ZoomIn className="h-3.5 w-3.5" />
@@ -2658,14 +2667,11 @@ export function VideoEditorWorkspace({
               <button
                 type="button"
                 onClick={fitTimelineZoom}
-                className="rounded border border-[#333] p-1.5 text-[#ccc] hover:bg-[#222]"
+                className="rounded p-1 text-[#aaa] hover:bg-[#2a2a2e] hover:text-white"
                 title="ملاءمة العرض"
               >
                 <UnfoldHorizontal className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-8 text-[10px] text-[#666]">
-                {timelineZoom.toFixed(1)}×
-              </span>
             </div>
           </div>
 
@@ -2694,9 +2700,11 @@ export function VideoEditorWorkspace({
                     ref={timelineRef}
                     className="relative"
                     style={{
-                      width: `${Math.max(100, timelineZoom * 100)}%`,
-                      minWidth: "100%",
+                      // أقل من 100% = تصغير أكثر (ضغط الزمن)، أكبر = تكبير للتفاصيل
+                      width: `${Math.max(12, timelineZoom * 100)}%`,
+                      minWidth: timelineZoom >= 1 ? "100%" : undefined,
                       height: bodyH,
+                      marginInline: timelineZoom < 1 ? "auto" : undefined,
                     }}
                     onPointerMove={onTimelineMove}
                     onPointerUp={onPointerUp}
@@ -2710,8 +2718,12 @@ export function VideoEditorWorkspace({
                   >
                     {/* Ruler */}
                     <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[22px] items-end justify-between border-b border-[#2a2a2e] px-1 pb-0.5 text-[9px] text-[#777]">
-                      {Array.from({ length: Math.max(6, Math.round(timelineZoom * 6)) }).map(
-                        (_, i, arr) => (
+                      {Array.from({
+                        length: Math.max(
+                          4,
+                          Math.round(Math.max(timelineZoom, 0.4) * 8),
+                        ),
+                      }).map((_, i, arr) => (
                           <span key={i}>
                             {formatTime((duration * i) / Math.max(1, arr.length - 1))}
                           </span>
