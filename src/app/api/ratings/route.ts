@@ -20,23 +20,20 @@ function adminClient() {
   });
 }
 
-async function ensureTable(
-  supabase: NonNullable<ReturnType<typeof adminClient>>,
-) {
-  // Table must exist via schema; we only query.
-  void supabase;
-}
-
+/** إحصاءات أداة واحدة، أو تجميع كل التقييمات للموقع */
 async function getStats(
   supabase: NonNullable<ReturnType<typeof adminClient>>,
   target: string,
 ) {
-  const { data, error } = await supabase
-    .from("tool_ratings")
-    .select("stars")
-    .eq("target", target);
+  let query = supabase.from("tool_ratings").select("stars, target");
 
+  if (target !== "site") {
+    query = query.eq("target", target);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
+
   const rows = data ?? [];
   const count = rows.length;
   if (!count) return { average: 0, count: 0 };
@@ -56,7 +53,6 @@ export async function GET(req: Request) {
   }
 
   try {
-    await ensureTable(supabase);
     const stats = await getStats(supabase, target);
     return NextResponse.json(stats);
   } catch {
@@ -76,7 +72,13 @@ export async function POST(req: Request) {
   const stars = Number(body.stars);
   const visitorKey = body.visitorKey?.trim();
 
-  if (!target || !visitorKey || !Number.isFinite(stars) || stars < 1 || stars > 5) {
+  if (
+    !target ||
+    !visitorKey ||
+    !Number.isFinite(stars) ||
+    stars < 1 ||
+    stars > 5
+  ) {
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
   }
 
@@ -100,13 +102,15 @@ export async function POST(req: Request) {
     );
 
     if (error) throw error;
+
+    // ردّ بإحصاءات الهدف المطلوب (للأداة نفسها، أو التجميع للموقع)
     const stats = await getStats(supabase, target);
     return NextResponse.json(stats);
-  } catch {
-    return NextResponse.json({
-      average: stars,
-      count: 1,
-      localOnly: true,
-    });
+  } catch (err) {
+    console.error("ratings POST failed", err);
+    return NextResponse.json(
+      { error: "save failed", average: stars, count: 1, localOnly: true },
+      { status: 200 },
+    );
   }
 }

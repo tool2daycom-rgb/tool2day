@@ -45,7 +45,7 @@ function StarButton({
       className={`relative ${dim} transition hover:scale-110 disabled:cursor-default disabled:hover:scale-100`}
     >
       <Star
-        className={`${dim} fill-[#e8e0d0] text-[#e8e0d0]`}
+        className={`${dim} fill-[#e5e5e5] text-[#e5e5e5]`}
         strokeWidth={1.5}
       />
       {(filled || half) && (
@@ -124,7 +124,7 @@ export function ToolRatingBar({
   }, [target]);
 
   async function pick(stars: number) {
-    if (voted || busy) return;
+    if (busy) return;
     setBusy(true);
     try {
       const next = await submitRating(target, stars);
@@ -144,12 +144,12 @@ export function ToolRatingBar({
       <p className="text-base font-bold text-[#111]">{label}</p>
       <div
         onMouseLeave={() => setHover(0)}
-        className="flex items-center gap-3"
+        className="flex flex-wrap items-center justify-center gap-3"
       >
         <div
-          className="flex"
+          className="flex cursor-pointer"
           onMouseMove={(e) => {
-            if (voted) return;
+            if (busy) return;
             const rect = e.currentTarget.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const n = Math.min(5, Math.max(1, Math.ceil((x / rect.width) * 5)));
@@ -158,9 +158,9 @@ export function ToolRatingBar({
         >
           <StarsRow
             value={display}
-            onPick={voted ? undefined : pick}
-            disabled={voted || busy}
-            size="md"
+            onPick={pick}
+            disabled={busy}
+            size="lg"
           />
         </div>
         <span className="text-sm font-semibold text-[#333]" dir="ltr">
@@ -174,9 +174,13 @@ export function ToolRatingBar({
       </div>
       {voted ? (
         <span className="w-full text-center text-xs font-medium text-emerald-700 sm:w-auto">
-          شكراً لتقييمك
+          شكراً لتقييمك — يمكنك تغيير النجوم في أي وقت
         </span>
-      ) : null}
+      ) : (
+        <span className="w-full text-center text-xs text-[#888] sm:w-auto">
+          اضغط على النجوم للتقييم
+        </span>
+      )}
     </div>
   );
 }
@@ -204,10 +208,12 @@ export function SiteRatingCard() {
   }, []);
 
   async function pick(stars: number) {
-    if (voted || busy) return;
+    if (busy) return;
     setBusy(true);
     try {
-      const next = await submitRating("site", stars);
+      await submitRating("site", stars);
+      // الموقع يعرض تجميع كل تقييمات الأدوات + تقييم الموقع
+      const next = await fetchRatingStats("site");
       setStats(next);
       setVoted(true);
     } finally {
@@ -215,8 +221,8 @@ export function SiteRatingCard() {
     }
   }
 
-  const preview = hover || (voted ? Math.round(stats.average) : 0);
-  const hint = preview >= 1 ? HINTS[preview - 1] : "اضغط على النجوم للتقييم";
+  const preview = hover || Math.round(stats.average) || 0;
+  const hint = preview >= 1 ? HINTS[Math.min(5, preview) - 1] : "اضغط على النجوم للتقييم";
 
   return (
     <section className="relative mt-14 overflow-hidden border-y border-[#dce8f5] bg-[#eef5fc]">
@@ -246,8 +252,8 @@ export function SiteRatingCard() {
           ما رأيك في الموقع؟
         </h2>
         <p className="mx-auto mt-3 max-w-md text-[15px] leading-8 text-[#3d4f63]">
-          تقييمك يساعدنا على تطوير الأدوات وإبقائها{" "}
-          <span className="font-bold text-[#122033]">مجانية بالكامل</span> وبدون
+          تقييمك من هنا ومن كل الأدوات يتجمّع هنا — ويساعدنا على إبقاء Tool2Day{" "}
+          <span className="font-bold text-[#122033]">مجانياً بالكامل</span> وبدون
           علامة مائية.
         </p>
 
@@ -266,7 +272,7 @@ export function SiteRatingCard() {
           {voted ? (
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
               <Check className="h-4 w-4" />
-              شكراً — تم حفظ تقييمك
+              شكراً — يمكنك تغيير النجوم في أي وقت
             </div>
           ) : (
             <p className="mb-5 text-sm font-bold text-[#E8874A]">{hint}</p>
@@ -277,9 +283,9 @@ export function SiteRatingCard() {
             onMouseLeave={() => setHover(0)}
           >
             <div
-              className="flex justify-center"
+              className="flex cursor-pointer justify-center"
               onMouseMove={(e) => {
-                if (voted) return;
+                if (busy) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const n = Math.min(
@@ -290,9 +296,9 @@ export function SiteRatingCard() {
               }}
             >
               <StarsRow
-                value={hover || stats.average || (voted ? stats.average : 0)}
-                onPick={voted ? undefined : pick}
-                disabled={voted || busy}
+                value={hover || stats.average}
+                onPick={pick}
+                disabled={busy}
                 size="xl"
               />
             </div>
@@ -308,8 +314,8 @@ export function SiteRatingCard() {
 
             <p className="text-sm text-[#5a6d80]">
               {stats.count > 0
-                ? `بناءً على ${stats.count} تقييماً من مستخدمي Tool2Day`
-                : "كن أول من يقيّم الموقع"}
+                ? `تجميع ${stats.count} تقييماً من كل الأدوات والموقع`
+                : "كن أول من يقيّم — التقييمات من الأدوات تظهر هنا أيضاً"}
             </p>
           </div>
         </div>

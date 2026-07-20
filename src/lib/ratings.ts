@@ -7,6 +7,8 @@ export const RATING_UPDATED_EVENT = "tool2day:rating-updated";
 const VOTED_KEY = "tool2day-rated-targets";
 const VISITOR_KEY = "tool2day-visitor-id";
 const CONTEXT_KEY = "tool2day-download-rating-context";
+const LOCAL_PREFIX = "tool2day-rating-local-";
+const MY_STARS_PREFIX = "tool2day-my-stars-";
 
 export type RatingStats = {
   average: number;
@@ -67,6 +69,14 @@ export function markRated(target: string) {
   window.dispatchEvent(
     new CustomEvent(RATING_UPDATED_EVENT, { detail: { target } }),
   );
+  // أي تقييم أداة يحدّث تجميع الموقع
+  if (target !== SITE_RATING_TARGET) {
+    window.dispatchEvent(
+      new CustomEvent(RATING_UPDATED_EVENT, {
+        detail: { target: SITE_RATING_TARGET },
+      }),
+    );
+  }
 }
 
 /** سياق الأداة الحالية للتنزيل */
@@ -140,11 +150,7 @@ export async function requireRatingThenDownload(
 
   return new Promise((resolve, reject) => {
     pendingDownloads.push({ blob, filename, resolve, reject });
-    void openRatingGate(target).then((ok) => {
-      if (!ok && pendingDownloads.some((p) => p.blob === blob)) {
-        // resolveRatingGate handles reject; avoid double
-      }
-    });
+    void openRatingGate(target);
   });
 }
 
@@ -165,10 +171,10 @@ export async function fetchRatingStats(target: string): Promise<RatingStats> {
   }
 }
 
-function localFallbackStats(target: string): RatingStats {
+function readLocalEntry(target: string): RatingStats {
   if (!canUseStorage()) return { average: 0, count: 0 };
   try {
-    const raw = localStorage.getItem(`tool2day-rating-local-${target}`);
+    const raw = localStorage.getItem(`${LOCAL_PREFIX}${target}`);
     if (!raw) return { average: 0, count: 0 };
     return JSON.parse(raw) as RatingStats;
   } catch {
@@ -176,15 +182,58 @@ function localFallbackStats(target: string): RatingStats {
   }
 }
 
+/** تجميع كل تقييمات الأدوات (+ الموقع) من التخزين المحلي */
+function localAggregateAll(): RatingStats {
+  if (!canUseStorage()) return { average: 0, count: 0 };
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key?.startsWith(LOCAL_PREFIX)) continue;
+    try {
+      const entry = JSON.parse(localStorage.getItem(key) || "{}") as RatingStats;
+      const c = Number(entry.count) || 0;
+      const avg = Number(entry.average) || 0;
+      if (c > 0) {
+        sum += avg * c;
+        count += c;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  if (!count) return { average: 0, count: 0 };
+  return { average: sum / count, count };
+}
+
+function localFallbackStats(target: string): RatingStats {
+  if (target === SITE_RATING_TARGET) return localAggregateAll();
+  return readLocalEntry(target);
+}
+
 function saveLocalFallback(target: string, stars: number) {
   if (!canUseStorage()) return;
-  const prev = localFallbackStats(target);
-  const count = prev.count + 1;
-  const average =
-    prev.count === 0 ? stars : (prev.average * prev.count + stars) / count;
+  const myKey = `${MY_STARS_PREFIX}${target}`;
+  const prevMine = Number(localStorage.getItem(myKey) || 0);
+  const prev = readLocalEntry(target);
+
+  let count = prev.count;
+  let sum = prev.average * prev.count;
+
+  if (prevMine >= 1 && prevMine <= 5 && count > 0) {
+    sum = sum - prevMine + stars;
+  } else {
+    count += 1;
+    sum += stars;
+  }
+
+  localStorage.setItem(myKey, String(stars));
   localStorage.setItem(
-    `tool2day-rating-local-${target}`,
-    JSON.stringify({ average, count }),
+    `${LOCAL_PREFIX}${target}`,
+    JSON.stringify({
+      average: count ? sum / count : stars,
+      count: Math.max(1, count),
+    }),
   );
 }
 
@@ -202,8 +251,13 @@ export async function submitRating(
       body: JSON.stringify({ target, stars: clamped, visitorKey }),
     });
     if (res.ok) {
-      const data = (await res.json()) as RatingStats;
+      const data = (await res.json()) as RatingStats & { localOnly?: boolean };
       markRated(target);
+      if (data.localOnly) {
+        saveLocalFallback(target, clamped);
+        return localFallbackStats(target);
+      }
+      // بعد تقييم أداة، أعد جلب تجميع الموقع في الواجهة عبر الحدث
       return {
         average: Number(data.average) || clamped,
         count: Number(data.count) || 1,
