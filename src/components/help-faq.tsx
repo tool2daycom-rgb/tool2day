@@ -18,100 +18,104 @@ type FaqSection = {
 
 const supportLink = (
   <Link href="/contact" className="font-medium text-[#2563eb] hover:underline">
-    contact our support team
+    تواصل مع فريق الدعم
   </Link>
 );
 
 const sections: FaqSection[] = [
   {
     id: "billing",
-    title: "Billing & Account",
+    title: "الفوترة والحساب",
     items: [
       {
         id: "cancel-subscription",
-        question: "How do I cancel my subscription or turn off auto‑renew?",
+        question: "كيف ألغي الاشتراك أو أوقف التجديد التلقائي؟",
         answer: (
           <>
-            <p>Please check whether your subscription has been canceled. Here’s how:</p>
+            <p>تحقق مما إذا كان اشتراكك ملغى. اتبع الخطوات التالية:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
-              <li>Log in if you’re not already logged in to your Tool2Day account.</li>
-              <li>Click the profile icon in the top-left area of the header (or top-right in LTR views).</li>
+              <li>سجّل الدخول إلى حسابك في Tool2Day إن لم تكن مسجّلاً.</li>
+              <li>اضغط على أيقونة الملف الشخصي في الشريط العلوي.</li>
               <li>
-                Select <strong>Account</strong> from the menu.
+                اختر <strong>الحساب</strong> من القائمة.
               </li>
-              <li>Scroll to the bottom of the page.</li>
+              <li>مرّر إلى أسفل الصفحة.</li>
               <li>
-                If your plan status is <strong>Active</strong>, click{" "}
-                <strong>Cancel subscription</strong>.
+                إذا كانت حالة الخطة <strong>نشطة</strong>، اضغط{" "}
+                <strong>إلغاء الاشتراك</strong>.
               </li>
             </ol>
             <p className="mt-3">
-              If Premium is not active but you were charged, the subscription may have been
-              purchased under a different email. Try every email you might have used and repeat
-              the steps above.
+              إذا لم يكن Premium مفعّلاً رغم الخصم، فقد يكون الاشتراك تحت بريد إلكتروني
+              آخر. جرّب كل عناوين البريد التي قد تكون استخدمتها واتبع الخطوات أعلاه.
             </p>
             <p className="mt-3">
-              If the subscription is canceled but charges continue, please {supportLink}.
+              إذا ألغيت الاشتراك وما زالت الرسوم مستمرة، يرجى {supportLink}.
             </p>
           </>
         ),
       },
       {
         id: "still-charged",
-        question: "Why am I still getting charged after canceling?",
+        question: "لماذا ما زلت أدفع بعد إلغاء الاشتراك؟",
         answer: (
           <>
             <p>
-              Please confirm you are logged into the correct account via the profile icon in the
-              header.
+              تأكد أنك مسجّل الدخول للحساب الصحيح عبر أيقونة الملف الشخصي في الشريط
+              العلوي.
             </p>
             <p className="mt-3">
-              If you are logged in but Premium is missing after payment, make sure you used the
-              same email at checkout. The subscription may belong to another account.
+              إذا كنت مسجّلاً ولا يظهر Premium بعد الدفع، تأكد أنك استخدمت نفس البريد
+              عند الدفع. قد يكون الاشتراك مرتبطاً بحساب آخر.
             </p>
             <p className="mt-3">
-              If you are sure this is the right account and access is still missing, please{" "}
-              {supportLink}.
+              إذا كنت متأكداً أن الحساب صحيح وما زال الوصول غير متاح، يرجى {supportLink}.
             </p>
           </>
         ),
       },
       {
         id: "restore-premium",
-        question: "I was charged but I don’t have Premium access. How do I restore it?",
+        question: "تم الخصم لكن لا أملك وصول Premium. كيف أستعيده؟",
         answer: (
           <>
             <p>
-              You may have a subscription under a different account. Check every email you might
-              have used. If you find an unwanted subscription, cancel it using the steps in{" "}
-              <a href="#cancel-subscription" className="font-medium text-[#2563eb] hover:underline">
-                How do I cancel my subscription?
+              قد يكون لديك اشتراك تحت حساب آخر. راجع كل عناوين البريد التي قد تكون
+              استخدمتها. إذا وجدت اشتراكاً غير مرغوب، ألغِه كما في{" "}
+              <a
+                href="#cancel-subscription"
+                className="font-medium text-[#2563eb] hover:underline"
+              >
+                كيف ألغي الاشتراك؟
               </a>
               .
             </p>
             <p className="mt-3">
-              If you only have one subscription but were charged twice, please {supportLink} and
-              include your payment receipts.
+              إذا كان لديك اشتراك واحد فقط وتم الخصم مرتين، يرجى {supportLink} وأرسل
+              إيصالات الدفع.
             </p>
           </>
         ),
       },
       {
         id: "charged-twice",
-        question: "I was charged twice. What should I do?",
+        question: "تم الخصم مرتين. ماذا أفعل؟",
         answer: (
           <>
             <p>
-              Check whether you have another active subscription under a different email. Cancel
-              any unwanted plans as described{" "}
-              <a href="#cancel-subscription" className="font-medium text-[#2563eb] hover:underline">
-                here
+              تحقق إن كان لديك اشتراك نشط تحت بريد آخر. ألغِ أي خطط غير مرغوبة كما هو
+              موضّح{" "}
+              <a
+                href="#cancel-subscription"
+                className="font-medium text-[#2563eb] hover:underline"
+              >
+                هنا
               </a>
               .
             </p>
             <p className="mt-3">
-              If you are sure there is only one subscription, please {supportLink} and send the
-              payment receipts.
+              إذا كنت متأكداً أن الاشتراك واحد فقط، يرجى {supportLink} وأرفق إيصالات
+              الدفع.
             </p>
           </>
         ),
@@ -119,29 +123,29 @@ const sections: FaqSection[] = [
       {
         id: "annual-vs-monthly",
         question:
-          "I accidentally bought an annual plan but wanted monthly. Can you switch or refund?",
+          "اشتريت خطة سنوية بالخطأ وأردت شهرية. هل يمكن التحويل أو الاسترداد؟",
         answer: (
           <p>
-            Mistakes happen. If you chose an annual plan instead of monthly, contact us within{" "}
-            <strong>12 hours</strong> of purchase and we will try to help — {supportLink}.
+            نتفهم حدوث الأخطاء. إذا اخترت الخطة السنوية بدل الشهرية، تواصل معنا خلال{" "}
+            <strong>12 ساعة</strong> من الشراء وسنحاول المساعدة — {supportLink}.
           </p>
         ),
       },
       {
         id: "change-payment",
-        question: "How do I change my payment method?",
+        question: "كيف أغيّر طريقة الدفع؟",
         answer: (
           <>
-            <p>To change your payment method:</p>
+            <p>لتغيير طريقة الدفع:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
-              <li>Log in to your Tool2Day account.</li>
+              <li>سجّل الدخول إلى حساب Tool2Day.</li>
               <li>
-                Open <strong>Payment method</strong> and click <strong>Change</strong>.
+                افتح <strong>طريقة الدفع</strong> ثم اضغط <strong>تغيير</strong>.
               </li>
-              <li>Select a new method from the available options and confirm.</li>
+              <li>اختر طريقة جديدة من الخيارات المتاحة وأكّد.</li>
             </ol>
             <p className="mt-3">
-              The updated method will be used for future billing. If you have issues, please{" "}
+              ستُستخدم الطريقة المحدّثة للفواتير القادمة. إن واجهت مشكلة، يرجى{" "}
               {supportLink}.
             </p>
           </>
@@ -149,195 +153,181 @@ const sections: FaqSection[] = [
       },
       {
         id: "payment-failed",
-        question: "My payment keeps failing or being declined. What can I do?",
+        question: "عملية الدفع تفشل أو تُرفض. ماذا أفعل؟",
         answer: (
           <>
-            <p>If the transaction is declined, try these steps:</p>
+            <p>إذا رُفضت العملية، جرّب الخطوات التالية:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
               <li>
-                <strong>Check your card details.</strong> Confirm number, expiration date, and CVV.
+                <strong>تحقق من بيانات البطاقة</strong>: الرقم، تاريخ الانتهاء، ورمز CVV.
               </li>
               <li>
-                <strong>Check for sufficient funds</strong> on the linked account.
+                <strong>تأكد من كفاية الرصيد</strong> في الحساب المرتبط.
               </li>
               <li>
-                <strong>Enable online and international payments</strong> in your banking app if
-                required.
+                <strong>فعّل المدفوعات الإلكترونية والدولية</strong> من تطبيق البنك إن
+                لزم.
               </li>
               <li>
-                <strong>Ask your bank</strong> whether the charge was blocked for security reasons.
+                <strong>اسأل البنك</strong> إن تم حظر العملية لأسباب أمنية.
               </li>
               <li>
-                <strong>Disable VPNs or proxies</strong> and try again.
+                <strong>عطّل VPN أو البروكسي</strong> ثم أعد المحاولة.
               </li>
               <li>
-                <strong>Try another card or browser</strong> (Chrome, Firefox, Safari, Edge).
+                <strong>جرّب بطاقة أو متصفحاً آخر</strong> (Chrome، Firefox، Safari، Edge).
               </li>
             </ol>
             <p className="mt-3">
-              Still stuck after confirming with your bank? Please {supportLink} so we can check the
-              error code.
+              ما زالت المشكلة بعد التأكد مع البنك؟ يرجى {supportLink} لنراجع رمز الخطأ.
             </p>
           </>
         ),
       },
       {
         id: "upi",
-        question: "Do you support UPI payment method?",
-        answer: (
-          <p>Not at the moment, but we are considering enabling it in the future.</p>
-        ),
+        question: "هل تدعمون الدفع عبر UPI؟",
+        answer: <p>ليس حالياً، ونفكر في إتاحته مستقبلاً.</p>,
       },
       {
         id: "crypto",
-        question: "Can I pay with crypto?",
-        answer: (
-          <p>Not at the moment, but we are considering enabling it in the future.</p>
-        ),
+        question: "هل يمكن الدفع بالعملات الرقمية؟",
+        answer: <p>ليس حالياً، ونفكر في إتاحته مستقبلاً.</p>,
       },
       {
         id: "cant-login",
-        question: "I can’t log in to my account",
+        question: "لا أستطيع تسجيل الدخول إلى حسابي",
         answer: (
           <>
-            <p>If login fails, try the following:</p>
+            <p>إذا فشل تسجيل الدخول، جرّب ما يلي:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
               <li>
-                <strong>Check your login details</strong> for typos, spaces, or keyboard layout.
+                <strong>تحقق من بيانات الدخول</strong> من أخطاء إملائية أو مسافات أو لغة
+                لوحة المفاتيح.
               </li>
               <li>
-                <strong>Try a normal window</strong> if private/incognito mode blocks cookies.
+                <strong>جرّب نافذة عادية</strong> إذا كان وضع التصفح الخاص يمنع ملفات
+                تعريف الارتباط.
               </li>
               <li>
-                <strong>Reset your password</strong> with “Forgot Password”.
+                <strong>أعد تعيين كلمة المرور</strong> عبر «نسيت كلمة المرور».
               </li>
               <li>
-                <strong>Clear cookies and cache</strong>, then try again.
+                <strong>امسح ملفات تعريف الارتباط والذاكرة المؤقتة</strong> ثم أعد
+                المحاولة.
               </li>
               <li>
-                <strong>Try another browser or device.</strong>
+                <strong>جرّب متصفحاً أو جهازاً آخر.</strong>
               </li>
               <li>
-                <strong>Disable ad blockers / privacy extensions</strong> that may block login.
+                <strong>عطّل مانعات الإعلانات</strong> أو إضافات الخصوصية التي قد تعيق
+                الدخول.
               </li>
               <li>
-                <strong>Use the same sign-in method</strong> you registered with (Google, Apple,
-                email, etc.).
+                <strong>استخدم نفس طريقة التسجيل</strong> (Google، Apple، البريد، إلخ).
               </li>
               <li>
-                <strong>Try again later</strong> in case of a temporary service issue.
+                <strong>أعد المحاولة لاحقاً</strong> في حال مشكلة مؤقتة في الخدمة.
               </li>
             </ol>
             <p className="mt-3">
-              If none of these help, please {supportLink} with details about the issue.
+              إذا لم تنجح الخطوات، يرجى {supportLink} مع تفاصيل المشكلة.
             </p>
           </>
         ),
       },
       {
         id: "reset-email",
-        question: "I don’t receive the password reset email",
+        question: "لا تصلني رسالة إعادة تعيين كلمة المرور",
         answer: (
           <>
-            <p>If the reset email doesn’t arrive:</p>
+            <p>إذا لم تصل الرسالة:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
               <li>
-                <strong>Check spam / junk.</strong>
+                <strong>تحقق من مجلد البريد المزعج / Spam.</strong>
               </li>
               <li>
-                <strong>Verify the email</strong> matches the one used when creating the account.
+                <strong>تأكد من البريد</strong> أنه نفس المستخدم عند إنشاء الحساب.
               </li>
               <li>
-                <strong>Wait up to 10 minutes</strong> — delivery can be delayed.
+                <strong>انتظر حتى 10 دقائق</strong> — قد يتأخر التسليم.
               </li>
+              <li>ابحث في صندوق الوارد عن «Tool2Day» أو «Password Reset».</li>
               <li>
-                Search your inbox for “Tool2Day” or “Password Reset”.
+                <strong>تحقق من مساحة صندوق البريد</strong> — الامتلاء قد يمنع الرسائل
+                الجديدة.
               </li>
+              <li>راجع إعدادات الأمان حتى لا يُحظر نطاق tool2day.com.</li>
+              <li>فلاتر العمل أو الجامعة قد تؤخر رسائل النظام.</li>
               <li>
-                <strong>Check mailbox storage</strong> — a full inbox may block new mail.
+                إذا سجّلت عبر Google/Apple، سجّل الدخول بتلك الطريقة بدل إعادة التعيين.
               </li>
-              <li>
-                Review email security settings so tool2day.com is not blocked.
-              </li>
-              <li>
-                Corporate or school filters may delay system emails.
-              </li>
-              <li>
-                If you registered with Google/Apple, sign in with that method instead of password
-                reset.
-              </li>
-              <li>
-                Wait a few minutes between reset requests to avoid rate limits.
-              </li>
-              <li>
-                Confirm your internet connection is stable.
-              </li>
+              <li>انتظر دقائق بين محاولات إعادة الإرسال لتجنب الحدود المؤقتة.</li>
+              <li>تأكد من استقرار اتصال الإنترنت.</li>
             </ol>
             <p className="mt-3">
-              Still nothing? Please {supportLink} and include your registered email.
+              ما زالت الرسالة غير واصلة؟ يرجى {supportLink} مع بريدك المسجّل.
             </p>
           </>
         ),
       },
       {
         id: "delete-account",
-        question: "How do I delete my account?",
+        question: "كيف أحذف حسابي؟",
         answer: (
           <>
-            <p>To delete your account:</p>
+            <p>لحذف الحساب:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
-              <li>Log in to your account.</li>
+              <li>سجّل الدخول إلى حسابك.</li>
               <li>
-                Scroll down and click <strong>Delete account</strong>.
+                مرّر للأسفل واضغط <strong>حذف الحساب</strong>.
               </li>
-              <li>Confirm in the dialog, or cancel if you change your mind.</li>
+              <li>أكّد في النافذة، أو ألغِ إذا غيّرت رأيك.</li>
             </ol>
             <p className="mt-3">
-              <strong>Please note:</strong> Deleting your account permanently removes associated
-              data and cancels any Premium subscription. This cannot be undone.
+              <strong>ملاحظة:</strong> حذف الحساب يزيل البيانات المرتبطة ويلغي أي اشتراك
+              Premium. لا يمكن التراجع عن ذلك.
             </p>
           </>
         ),
       },
       {
         id: "unknown-charge",
-        question: "I was charged, but I don’t remember subscribing",
+        question: "تم الخصم لكنني لا أتذكر أنني اشتركت",
         answer: (
           <>
-            <p>Unrecognized Tool2Day charges usually come from one of these:</p>
+            <p>الخصومات غير المعروفة من Tool2Day غالباً لأحد الأسباب التالية:</p>
             <ol className="mt-3 list-decimal space-y-2 ps-5">
               <li>
-                <strong>Subscription renewal.</strong> An older monthly/annual plan may have
-                auto-renewed.
+                <strong>تجديد الاشتراك.</strong> قد تكون اشتركت سابقاً وتجددت الخطة تلقائياً.
               </li>
               <li>
-                <strong>Look-alike websites.</strong> Sites that resemble Tool2Day are not always
-                affiliated with us. On your statement, our charges typically appear as{" "}
-                <strong>TOOL2DAY</strong> or similar. A different descriptor usually means another
-                service.
+                <strong>مواقع مشابهة.</strong> بعض المواقع تشبه Tool2Day وليست تابعة لنا.
+                في كشف الحساب يظهر خصمنا عادةً باسم <strong>TOOL2DAY</strong> أو مشابه. إذا
+                كان الوصف مختلفاً فغالباً خدمة أخرى.
               </li>
               <li>
-                <strong>Household use.</strong> Someone with access to your payment method may have
-                subscribed.
+                <strong>استخدام داخل المنزل.</strong> شخص لديه وصول لوسيلة الدفع قد يكون
+                اشترك.
               </li>
               <li>
-                <strong>Unauthorized use.</strong> If you suspect fraud, contact your bank
-                immediately to block the card.
+                <strong>استخدام غير مصرّح.</strong> إذا شككت بالاحتيال، اتصل بالبنك فوراً
+                لحظر البطاقة.
               </li>
             </ol>
             <p className="mt-3">
-              If none of these apply, please {supportLink} so we can help.
+              إذا لم ينطبق شيء مما سبق، يرجى {supportLink} لنساعدك.
             </p>
           </>
         ),
       },
       {
         id: "change-email",
-        question: "How can I change my email address?",
+        question: "كيف أغيّر عنوان البريد الإلكتروني؟",
         answer: (
           <p>
-            Changing the email on an existing account is not available yet. We plan to add this in
-            profile settings in a future update. For urgent cases, please {supportLink}.
+            تغيير البريد المرتبط بالحساب غير متاح حالياً. نخطط لإضافته في إعدادات الملف
+            الشخصي لاحقاً. للحالات العاجلة، يرجى {supportLink}.
           </p>
         ),
       },
@@ -345,24 +335,24 @@ const sections: FaqSection[] = [
   },
   {
     id: "troubleshooting",
-    title: "Troubleshooting",
+    title: "استكشاف الأخطاء",
     items: [
       {
         id: "stuck-progress",
-        question: "The upload or export process is stuck (e.g. 0%, 100%, NaN%, etc.)",
+        question: "توقّف الرفع أو التصدير (مثلاً 0٪ أو 100٪ أو NaN٪)",
         answer: (
           <>
-            <p>If progress stops moving, it’s often a connection issue:</p>
+            <p>إذا توقف شريط التقدم، غالباً السبب اتصال الشبكة:</p>
             <ul className="mt-3 list-disc space-y-2 ps-5">
               <li>
-                <strong>Check your connection</strong> — use a stable network.
+                <strong>تحقق من الاتصال</strong> — استخدم شبكة مستقرة.
               </li>
               <li>
-                <strong>Try a different network</strong> (e.g. mobile hotspot) in case office/school
-                filters block processing.
+                <strong>جرّب شبكة أخرى</strong> (مثل نقطة اتصال الجوال) فقد تحجب شبكات
+                العمل/المدرسة المعالجة.
               </li>
               <li>
-                <strong>Disable VPN/proxy</strong> or change the server location and retry.
+                <strong>عطّل VPN أو البروكسي</strong> أو غيّر موقع الخادم ثم أعد المحاولة.
               </li>
             </ul>
           </>
@@ -370,224 +360,220 @@ const sections: FaqSection[] = [
       },
       {
         id: "larger-output",
-        question:
-          "Why is the output file larger than the original, even though I cut parts of it?",
+        question: "لماذا ملف الإخراج أكبر من الأصلي رغم القص؟",
         answer: (
           <p>
-            Tool2Day re-encodes video on export. Your original file may have used heavy compression.
-            To keep quality, we may apply a higher bitrate, so the file can grow even after cutting.
-            To shrink the result, choose a lower resolution or a lower quality/compression setting
-            when exporting.
+            يعيد Tool2Day ترميز الفيديو عند التصدير. قد يكون ملفك الأصلي مضغوطاً بقوة. للحفاظ
+            على الجودة قد نستخدم معدل بت أعلى، فيكبر الملف حتى بعد القص. لتقليل الحجم اختر
+            دقة أقل أو جودة/ضغطاً أقل عند التصدير.
           </p>
         ),
       },
       {
         id: "encoding-failed",
-        question: 'I get error "Encoding failed". How do I fix it?',
+        question: 'أظهر الخطأ "Encoding failed". كيف أصلحه؟',
         answer: (
           <p>
-            This usually means the source file format, codec, or structure caused a problem during
-            conversion. We support most common formats, but rare codecs or slightly corrupted files
-            can fail. Please {supportLink} for help.
+            غالباً يعني أن تنسيق الملف أو الترميز أو بنيته سبّب مشكلة أثناء التحويل. ندعم
+            أغلب الصيغ الشائعة، لكن بعض الترميزات النادرة أو الملفات التالفة قد تفشل. يرجى{" "}
+            {supportLink}.
           </p>
         ),
       },
       {
         id: "subtitles",
-        question: "How do I add subtitles, captions or text?",
+        question: "كيف أضيف ترجمة أو تعليقات أو نصاً؟",
         answer: (
           <p>
-            You can add text overlays in the{" "}
-            <Link href="/tools/video-editor" className="font-medium text-[#2563eb] hover:underline">
-              video editor
+            يمكنك إضافة نص فوق الفيديو من{" "}
+            <Link
+              href="/tools/video-editor"
+              className="font-medium text-[#2563eb] hover:underline"
+            >
+              محرر الفيديو
             </Link>{" "}
-            with the Text tool. Timed subtitles / closed captions are not supported yet — we plan to
-            add them later.
+            عبر أداة النص. الترجمة المتزامنة / Closed Captions غير مدعومة بعد — ونعمل على
+            إضافتها لاحقاً.
           </p>
         ),
       },
       {
         id: "save-button",
-        question: 'I can\'t find the "Save" button. Where is it?',
+        question: 'أين زر "حفظ"؟',
         answer: (
           <p>
-            In the video editor, the action is labeled <strong>Export</strong> (usually near the top
-            of the workspace). We use “Export” to match common video/audio editing apps.
+            في محرر الفيديو الإجراء اسمه <strong>تصدير</strong> (غالباً أعلى مساحة العمل).
+            استخدمنا «تصدير» ليتوافق مع برامج التحرير الشائعة.
           </p>
         ),
       },
       {
         id: "transitions",
-        question: "How do I add transitions or fade effects?",
+        question: "كيف أضيف انتقالات أو تأثيرات تلاشي؟",
         answer: (
           <p>
-            Cross-fades and fade-in/out transitions are not available yet. We know these are
-            important and are working on them for upcoming updates.
+            الانتقالات بين المقاطع وتأثيرات التلاشي غير متاحة حالياً. نعرف أهميتها ونعمل
+            على إضافتها في تحديثات قادمة.
           </p>
         ),
       },
       {
         id: "remove-logo",
-        question: "How do I remove a logo or watermark from a video?",
+        question: "كيف أزيل شعاراً أو علامة مائية من فيديو؟",
         answer: (
           <>
             <p>
-              Use the{" "}
+              استخدم أداة{" "}
               <Link
                 href="/tools/remove-logo"
                 className="font-medium text-[#2563eb] hover:underline"
               >
-                Remove logo
+                إزالة الشعار
               </Link>{" "}
-              tool to blur logos or watermarks. Desktop works best; mobile support is limited for
-              now.
+              لطمس الشعارات أو العلامات المائية. تعمل بشكل أفضل على سطح المكتب؛ دعم الجوال
+              محدود حالياً.
             </p>
-            <p className="mt-3 font-semibold">Instructions:</p>
+            <p className="mt-3 font-semibold">الخطوات:</p>
             <ol className="mt-2 list-decimal space-y-2 ps-5">
               <li>
-                Open{" "}
+                افتح{" "}
                 <Link
                   href="/tools/remove-logo"
                   className="font-medium text-[#2563eb] hover:underline"
                 >
-                  Remove logo from video
+                  إزالة الشعار من الفيديو
                 </Link>
                 .
               </li>
               <li>
-                Click <strong>Choose File</strong> and upload your video.
+                اضغط <strong>اختيار ملف</strong> وارفع الفيديو.
               </li>
+              <li>ارسم تحديداً فوق الشعار (يمكن تحديد أكثر من منطقة).</li>
               <li>
-                Draw a selection over the logo (you can select multiple areas).
+                اضغط <strong>تصدير</strong> عند الانتهاء.
               </li>
-              <li>
-                Click <strong>Export</strong> when finished.
-              </li>
-              <li>Choose resolution/format and download the result.</li>
+              <li>اختر الدقة والصيغة ثم نزّل النتيجة.</li>
             </ol>
           </>
         ),
       },
       {
         id: "remove-logo-mobile",
-        question: 'Does the "Remove logo" tool work on mobile?',
+        question: "هل تعمل أداة إزالة الشعار على الجوال؟",
         answer: (
           <p>
-            Not fully yet — Remove logo works best on desktop. We’re working on a better mobile
-            experience.
+            ليس بالكامل بعد — الأفضل على الكمبيوتر. نعمل على تحسين تجربة الجوال.
           </p>
         ),
       },
       {
         id: "mic-camera",
-        question:
-          'How do I enable the microphone or camera if I clicked "Block" or "Never Allow"?',
+        question: 'كيف أفعّل الميكروفون أو الكاميرا بعد الضغط على "حظر"؟',
         answer: (
           <>
             <p>
-              If you denied camera/microphone access, re-enable it in the browser for{" "}
+              إذا رفضت إذن الكاميرا/الميكروفون، أعد تفعيله من إعدادات المتصفح لموقع{" "}
               <strong>tool2day.com</strong>.
             </p>
-            <p className="mt-4 font-semibold">Google Chrome & Microsoft Edge</p>
+            <p className="mt-4 font-semibold">Google Chrome و Microsoft Edge</p>
             <ol className="mt-2 list-decimal space-y-2 ps-5">
-              <li>Open the Tool2Day page that needs camera/mic.</li>
-              <li>Click the lock (or site info) icon left of the address bar.</li>
+              <li>افتح صفحة Tool2Day التي تحتاج الكاميرا أو الميكروفون.</li>
+              <li>اضغط أيقونة القفل (أو معلومات الموقع) يسار شريط العنوان.</li>
               <li>
-                Set <strong>Camera</strong> / <strong>Microphone</strong> to Allow (or Ask).
+                اضبط <strong>الكاميرا</strong> / <strong>الميكروفون</strong> على السماح
+                (أو السؤال).
               </li>
-              <li>Reload the page.</li>
+              <li>أعد تحميل الصفحة.</li>
             </ol>
             <p className="mt-4 font-semibold">Safari (macOS)</p>
             <ol className="mt-2 list-decimal space-y-2 ps-5">
               <li>
-                Safari → <strong>Settings</strong> → <strong>Websites</strong>.
+                Safari ← <strong>الإعدادات</strong> ← <strong>المواقع</strong>.
               </li>
               <li>
-                Choose Camera or Microphone, find tool2day.com, set to <strong>Allow</strong>.
+                اختر الكاميرا أو الميكروفون، ابحث عن tool2day.com واضبط على{" "}
+                <strong>السماح</strong>.
               </li>
-              <li>Reload and try again.</li>
+              <li>أعد التحميل ثم حاول مجدداً.</li>
             </ol>
             <p className="mt-4 font-semibold">Mozilla Firefox</p>
             <ol className="mt-2 list-decimal space-y-2 ps-5">
-              <li>Open the site, click the lock icon in the address bar.</li>
+              <li>افتح الموقع واضغط أيقونة القفل في شريط العنوان.</li>
               <li>
-                Clear the blocked Camera/Microphone permission (X), reload, then Allow when prompted.
+                أزل حظر الكاميرا/الميكروفون، أعد التحميل، ثم اسمح عند الطلب.
               </li>
             </ol>
-            <p className="mt-4 font-semibold">If it still doesn’t work</p>
+            <p className="mt-4 font-semibold">إذا استمرت المشكلة</p>
             <ul className="mt-2 list-disc space-y-2 ps-5">
               <li>
-                Allow the browser in OS privacy settings (e.g. macOS → System Settings → Privacy &amp;
-                Security).
+                اسمح للمتصفح من إعدادات خصوصية النظام (مثلاً macOS ← إعدادات النظام ←
+                الخصوصية والأمان).
               </li>
-              <li>Close other apps/tabs using the camera or mic.</li>
+              <li>أغلق التطبيقات/التبويبات الأخرى التي تستخدم الكاميرا أو الميكروفون.</li>
             </ul>
           </>
         ),
       },
       {
         id: "relogin",
-        question: "Why am I sometimes asked to log in again when switching tools?",
+        question: "لماذا يُطلب مني تسجيل الدخول مجدداً عند التنقل بين الأدوات؟",
         answer: (
           <>
             <p>
-              Login sessions depend on browser cookies. Private/Incognito mode and strict privacy
-              settings often clear or block them when you move between pages or tools.
+              جلسة الدخول تعتمد على ملفات تعريف الارتباط. وضع التصفح الخاص وإعدادات
+              الخصوصية الصارمة غالباً تمسحها أو تمنعها عند التنقل بين الصفحات.
             </p>
-            <p className="mt-3">To stay signed in more reliably:</p>
+            <p className="mt-3">للبقاء مسجّلاً بشكل أفضل:</p>
             <ul className="mt-2 list-disc space-y-2 ps-5">
-              <li>Avoid Incognito / Private mode</li>
-              <li>Allow cookies for tool2day.com</li>
-              <li>Disable extensions that block cookies</li>
+              <li>تجنّب وضع التصفح الخاص / Incognito</li>
+              <li>اسمح بملفات تعريف الارتباط لـ tool2day.com</li>
+              <li>عطّل الإضافات التي تحظر ملفات تعريف الارتباط</li>
             </ul>
           </>
         ),
       },
       {
         id: "projects-shared",
-        question:
-          "Are projects shared between audio and video editors or apps on different domains?",
+        question: "هل تُشارك المشاريع بين محرري الصوت والفيديو أو الأدوات المختلفة؟",
         answer: (
           <p>
-            Projects are stored per tool/session in the browser and are not automatically shared
-            across every Tool2Day tool. Data is kept separately for privacy and storage limits in
-            the browser.
+            تُخزَّن المشاريع لكل أداة/جلسة في المتصفح ولا تُشارك تلقائياً بين كل أدوات
+            Tool2Day. تُحفظ البيانات بشكل منفصل لخصوصية المتصفح وحدود التخزين.
           </p>
         ),
       },
       {
         id: "project-other-computer",
         question:
-          "Why is a project created on one computer not available or only partially available on another computer?",
+          "لماذا مشروع أنشأته على جهاز غير متوفر أو ناقص على جهاز آخر؟",
         answer: (
           <>
             <p>
-              Many Tool2Day tools process files in your browser. Projects/files may stay on that
-              device unless sync is enabled for a signed-in plan.
+              كثير من أدوات Tool2Day تعالج الملفات داخل المتصفح. قد تبقى الملفات على ذلك
+              الجهاز ما لم تُفعَّل مزامنة لحساب مسجّل.
             </p>
             <ul className="mt-3 list-disc space-y-2 ps-5">
-              <li>Sync may not have finished before you switched devices</li>
-              <li>Free sessions may keep files only locally for a limited time</li>
-              <li>Temporary server issues (rare)</li>
-              <li>Unstable internet interrupting upload/sync</li>
+              <li>قد لا تكون المزامنة اكتملت قبل تبديل الجهاز</li>
+              <li>الجلسات المجانية قد تبقي الملفات محلياً لفترة محدودة فقط</li>
+              <li>مشكلة خادم مؤقتة (نادرة)</li>
+              <li>اتصال إنترنت غير مستقر يقطع الرفع/المزامنة</li>
             </ul>
           </>
         ),
       },
       {
         id: "timeline-missing",
-        question:
-          "Why is the video editor timeline missing or not showing my uploaded files?",
+        question: "لماذا تايملاين محرر الفيديو مفقود أو لا تظهر الملفات؟",
         answer: (
           <>
-            <p>This is often caused by an outdated browser.</p>
+            <p>غالباً السبب متصفح قديم.</p>
             <ul className="mt-3 list-disc space-y-2 ps-5">
               <li>
-                <strong>Update your browser</strong> to the latest Chrome, Firefox, Safari, or Edge.
+                <strong>حدّث المتصفح</strong> إلى أحدث Chrome أو Firefox أو Safari أو Edge.
               </li>
               <li>
-                <strong>Windows 7 / 8:</strong> Chrome may stop updating past older versions. Prefer{" "}
-                <strong>Firefox</strong>, which remains compatible with our video editor.
+                <strong>Windows 7 / 8:</strong> قد يتوقف تحديث Chrome على إصدارات قديمة.
+                نفضّل <strong>Firefox</strong> لأنه أكثر توافقاً مع محرر الفيديو لدينا.
               </li>
             </ul>
           </>
@@ -614,31 +600,32 @@ export function HelpFaq() {
         items: section.items.filter(
           (item) =>
             itemSearchText(item).includes(q) ||
-            section.title.toLowerCase().includes(q),
+            section.title.toLowerCase().includes(q) ||
+            item.question.includes(query.trim()),
         ),
       }))
       .filter((section) => section.items.length > 0);
   }, [query]);
 
   return (
-    <div dir="ltr" className="mx-auto w-full max-w-3xl px-4 py-12 text-left sm:px-6 sm:py-16">
-      <h1 className="text-3xl font-bold text-[#111] sm:text-4xl">Help</h1>
+    <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+      <h1 className="text-3xl font-bold text-[#111] sm:text-4xl">المساعدة</h1>
       <p className="mt-2 text-[#666]">
-        Answers for Tool2Day billing, accounts, and tools. Need more help?{" "}
+        إجابات حول الفوترة والحساب والأدوات في Tool2Day. تحتاج مساعدة إضافية؟{" "}
         <Link href="/contact" className="font-medium text-[#2563eb] hover:underline">
-          Contact us
+          تواصل معنا
         </Link>
         .
       </p>
 
       <label className="relative mt-8 block">
-        <span className="sr-only">Search help</span>
+        <span className="sr-only">بحث في المساعدة</span>
         <Search className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#999]" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search..."
+          placeholder="ابحث..."
           className="w-full rounded-full border border-[#e5e5e5] bg-white py-3 pe-4 ps-10 text-[15px] text-[#222] outline-none ring-[#2563eb]/30 placeholder:text-[#999] focus:border-[#2563eb] focus:ring-2"
         />
       </label>
@@ -660,7 +647,7 @@ export function HelpFaq() {
                     >
                       <ChevronDown
                         className={`mt-0.5 h-4 w-4 shrink-0 text-[#444] transition-transform duration-200 ${
-                          open ? "rotate-0" : "-rotate-90"
+                          open ? "rotate-0" : "rotate-90"
                         }`}
                       />
                       <span className="text-[15px] font-bold leading-snug text-[#1a1a1a]">
@@ -681,9 +668,9 @@ export function HelpFaq() {
 
         {filtered.length === 0 ? (
           <p className="text-[#666]">
-            No results. Try another keyword or{" "}
+            لا نتائج. جرّب كلمة أخرى أو{" "}
             <Link href="/contact" className="font-medium text-[#2563eb] hover:underline">
-              contact support
+              تواصل مع الدعم
             </Link>
             .
           </p>
@@ -692,7 +679,7 @@ export function HelpFaq() {
 
       <p className="mt-12">
         <Link href="/" className="text-sm font-semibold text-[#2563eb] hover:underline">
-          ← Back to home
+          ← العودة للصفحة الرئيسية
         </Link>
       </p>
     </div>

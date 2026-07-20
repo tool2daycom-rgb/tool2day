@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { HelpFaq } from "@/components/help-faq";
 
 export const metadata: Metadata = {
-  title: "Help | المساعدة",
+  title: "المساعدة",
   description:
-    "Tool2Day help center — billing, account, and troubleshooting for video, audio, and PDF tools.",
+    "مركز مساعدة Tool2Day — الفوترة والحساب واستكشاف أخطاء أدوات الفيديو والصوت وPDF.",
 };
 
 export default function HelpPage() {
