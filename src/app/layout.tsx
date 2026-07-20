@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Cairo, Syne } from "next/font/google";
 import "./globals.css";
 
@@ -55,6 +56,9 @@ export const metadata: Metadata = {
   verification: {
     google: "MmdrWtxfKv5ZbvAydBV_mSodZIVvAHHDIhz_Y7BPNPk",
   },
+  other: {
+    "google-adsense-account": "ca-pub-9998186124580672",
+  },
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },
@@ -78,7 +82,16 @@ export default function RootLayout({
       dir="rtl"
       className={`${cairo.variable} ${syne.variable} h-full antialiased`}
     >
-      <body className="min-h-full font-sans">{children}</body>
+      <body className="min-h-full font-sans">
+        <Script
+          id="adsense"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+        {children}
+      </body>
     </html>
   );
 }
