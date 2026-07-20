@@ -4,18 +4,41 @@ import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** أصوات عربية عصبية قريبة من الواقع (Microsoft Edge) */
+/** كل الأصوات العربية العصبية المتاحة */
 export const ARABIC_NEURAL_VOICES = [
+  // موصى بها — الأقرب للحقيقة (فصحى/واضحة)
   "ar-SA-ZariyahNeural",
   "ar-SA-HamedNeural",
   "ar-EG-SalmaNeural",
   "ar-EG-ShakirNeural",
+  "ar-LB-LaylaNeural",
+  "ar-LB-RamiNeural",
   "ar-AE-FatimaNeural",
   "ar-AE-HamdanNeural",
-  "ar-MA-MounaNeural",
-  "ar-MA-JamalNeural",
   "ar-JO-SanaNeural",
   "ar-JO-TaimNeural",
+  "ar-SY-AmanyNeural",
+  "ar-SY-LaithNeural",
+  "ar-IQ-RanaNeural",
+  "ar-IQ-BasselNeural",
+  "ar-KW-NouraNeural",
+  "ar-KW-FahedNeural",
+  "ar-QA-AmalNeural",
+  "ar-QA-MoazNeural",
+  "ar-BH-LailaNeural",
+  "ar-BH-AliNeural",
+  "ar-OM-AyshaNeural",
+  "ar-OM-AbdullahNeural",
+  "ar-YE-MaryamNeural",
+  "ar-YE-SalehNeural",
+  "ar-MA-MounaNeural",
+  "ar-MA-JamalNeural",
+  "ar-DZ-AminaNeural",
+  "ar-DZ-IsmaelNeural",
+  "ar-TN-ReemNeural",
+  "ar-TN-HediNeural",
+  "ar-LY-ImanNeural",
+  "ar-LY-OmarNeural",
 ] as const;
 
 function escapeXml(text: string) {
@@ -25,6 +48,19 @@ function escapeXml(text: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+/** تحسين الإيقاع ليبدو أقرب للكلام الطبيعي */
+function naturalizeText(text: string) {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n+/g, "، ")
+    .replace(/([.!?؟۔…])/g, "$1 ")
+    .replace(/،\s*/g, "، ")
+    .replace(/؛\s*/g, "؛ ")
+    .replace(/:\s*/g, ": ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function chunkText(text: string, max = 180): string[] {
@@ -55,20 +91,26 @@ async function synthesizeEdge(
   pitch?: string,
 ): Promise<Buffer> {
   const tts = new MsEdgeTTS();
+  // جودة أعلى = أوضح وأقرب للواقع
   await tts.setMetadata(
     voice,
-    OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3,
+    OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
   );
-  const { audioStream } = tts.toStream(escapeXml(text), {
-    rate: rate || "default",
-    pitch: pitch || "default",
+
+  const rateValue =
+    rate === "slow" ? "0.92" : rate === "fast" ? "1.08" : "1.0";
+  const pitchValue =
+    pitch && pitch !== "default" ? pitch : "+0Hz";
+
+  const { audioStream } = tts.toStream(escapeXml(naturalizeText(text)), {
+    rate: rateValue,
+    pitch: pitchValue,
   });
   return streamToBuffer(audioStream);
 }
 
-/** احتياطي: Google Translate TTS */
 async function synthesizeGoogle(text: string, lang: string): Promise<Buffer> {
-  const chunks = chunkText(text);
+  const chunks = chunkText(naturalizeText(text));
   const buffers: Buffer[] = [];
   for (const chunk of chunks) {
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(chunk)}`;

@@ -1,41 +1,61 @@
 import { downloadBlob } from "./ffmpeg-client";
 
-/** أصوات عربية عصبية قريبة من الكلام الحقيقي */
+/** أصوات عربية عصبية — الأقرب للحقيقة أولاً */
 export const TTS_VOICE_OPTIONS = [
   {
     id: "ar-SA-ZariyahNeural",
-    label: "زارية — أنثى (السعودية)",
-    hint: "واضح وطبيعي",
+    label: "⭐ زارية — أنثى (فصحى / السعودية)",
+    hint: "الأقرب للحقيقة",
   },
   {
     id: "ar-SA-HamedNeural",
-    label: "حامد — ذكر (السعودية)",
-    hint: "صوت رجالي رسمي",
+    label: "⭐ حامد — ذكر (فصحى / السعودية)",
+    hint: "الأقرب للحقيقة",
   },
   {
     id: "ar-EG-SalmaNeural",
-    label: "سلمى — أنثى (مصر)",
-    hint: "لهجة مصرية",
+    label: "⭐ سلمى — أنثى (مصر)",
+    hint: "طبيعي جداً",
   },
   {
     id: "ar-EG-ShakirNeural",
-    label: "شاكر — ذكر (مصر)",
-    hint: "لهجة مصرية",
+    label: "⭐ شاكر — ذكر (مصر)",
+    hint: "طبيعي جداً",
+  },
+  {
+    id: "ar-LB-LaylaNeural",
+    label: "ليلى — أنثى (لبنان)",
+    hint: "واضح وناعم",
+  },
+  {
+    id: "ar-LB-RamiNeural",
+    label: "رامي — ذكر (لبنان)",
+    hint: "واضح",
   },
   {
     id: "ar-AE-FatimaNeural",
     label: "فاطمة — أنثى (الإمارات)",
-    hint: "خليجي خفيف",
+    hint: "خليجي",
   },
   {
     id: "ar-AE-HamdanNeural",
     label: "حمدان — ذكر (الإمارات)",
-    hint: "خليجي خفيف",
+    hint: "خليجي",
+  },
+  {
+    id: "ar-SY-AmanyNeural",
+    label: "أماني — أنثى (سوريا)",
+    hint: "شامي",
+  },
+  {
+    id: "ar-SY-LaithNeural",
+    label: "ليث — ذكر (سوريا)",
+    hint: "شامي",
   },
   {
     id: "ar-JO-SanaNeural",
     label: "سناء — أنثى (الأردن)",
-    hint: "شامية",
+    hint: "شامي",
   },
   {
     id: "ar-JO-TaimNeural",
@@ -43,14 +63,24 @@ export const TTS_VOICE_OPTIONS = [
     hint: "شامي",
   },
   {
-    id: "ar-MA-MounaNeural",
-    label: "مونة — أنثى (المغرب)",
-    hint: "مغاربية",
+    id: "ar-IQ-RanaNeural",
+    label: "رنا — أنثى (العراق)",
+    hint: "عراقي",
   },
   {
-    id: "ar-MA-JamalNeural",
-    label: "جمال — ذكر (المغرب)",
-    hint: "مغاربي",
+    id: "ar-IQ-BasselNeural",
+    label: "باسل — ذكر (العراق)",
+    hint: "عراقي",
+  },
+  {
+    id: "ar-KW-NouraNeural",
+    label: "نورة — أنثى (الكويت)",
+    hint: "خليجي",
+  },
+  {
+    id: "ar-KW-FahedNeural",
+    label: "فهد — ذكر (الكويت)",
+    hint: "خليجي",
   },
 ] as const;
 
