@@ -57,6 +57,13 @@ export type VideoLayerClip = {
   w: number;
   h: number;
   opacity?: number;
+  rotate?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+  speed?: number;
+  crop?: { x: number; y: number; w: number; h: number } | null;
+  chromaKey?: { enabled: boolean; color: string; similarity: number } | null;
+  removeLogo?: { x: number; y: number; w: number; h: number } | null;
 };
 
 export type VideoProjectExport = {
@@ -379,15 +386,55 @@ export async function exportVideoProject(
     const end = start + dur;
     const next = `vl${i}`;
     const layerPrep: string[] = [];
+    const layerSpeed = Math.min(2, Math.max(0.5, layer.speed ?? 1));
     if (layer.kind === "video") {
       const off = Math.max(0, layer.offset || 0);
+      const srcDur = Math.max(0.05, dur * layerSpeed);
       layerPrep.push(
-        `trim=start=${off.toFixed(3)}:duration=${dur.toFixed(3)}`,
+        `trim=start=${off.toFixed(3)}:duration=${srcDur.toFixed(3)}`,
         "setpts=PTS-STARTPTS",
       );
+      if (Math.abs(layerSpeed - 1) > 0.02) {
+        layerPrep.push(`setpts=${(1 / layerSpeed).toFixed(4)}*PTS`);
+      }
+    }
+    if (layer.crop) {
+      const cx = Math.max(0, Math.min(0.98, layer.crop.x));
+      const cy = Math.max(0, Math.min(0.98, layer.crop.y));
+      const cw = Math.max(0.02, Math.min(1 - cx, layer.crop.w));
+      const ch = Math.max(0.02, Math.min(1 - cy, layer.crop.h));
+      layerPrep.push(
+        `crop=iw*${cw.toFixed(4)}:ih*${ch.toFixed(4)}:iw*${cx.toFixed(4)}:ih*${cy.toFixed(4)}`,
+      );
+    }
+    if (layer.chromaKey?.enabled) {
+      const hex = parseCssColor(layer.chromaKey.color).replace("#", "");
+      const sim = Math.max(
+        0.05,
+        Math.min(0.5, (layer.chromaKey.similarity || 30) / 100),
+      );
+      layerPrep.push(
+        `chromakey=0x${hex}:${sim.toFixed(3)}:0.1`,
+        "format=rgba",
+      );
+    }
+    if (layer.removeLogo) {
+      const lx = Math.max(1, Math.round(layer.removeLogo.x));
+      const ly = Math.max(1, Math.round(layer.removeLogo.y));
+      let lw = Math.max(4, Math.round(layer.removeLogo.w));
+      let lh = Math.max(4, Math.round(layer.removeLogo.h));
+      if (lw % 2) lw += 1;
+      if (lh % 2) lh += 1;
+      layerPrep.push(`delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}`);
+    }
+    if (layer.flipH) layerPrep.push("hflip");
+    if (layer.flipV) layerPrep.push("vflip");
+    const rot = ((layer.rotate || 0) % 360 + 360) % 360;
+    if (rot > 0.5) {
+      layerPrep.push(`rotate=${((rot * Math.PI) / 180).toFixed(5)}:fillcolor=0x00000000`);
     }
     layerPrep.push(`scale=${iw}:${ih}:force_original_aspect_ratio=decrease`);
-    layerPrep.push(`pad=${iw}:${ih}:(ow-iw)/2:(oh-ih)/2`);
+    layerPrep.push(`pad=${iw}:${ih}:(ow-iw)/2:(oh-ih)/2:color=0x00000000`);
     if (a < 0.999) {
       layerPrep.push(`format=rgba,colorchannelmixer=aa=${a.toFixed(3)}`);
     }

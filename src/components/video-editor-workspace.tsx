@@ -219,7 +219,42 @@ type LayerClip = {
   h: number;
   opacity: number;
   locked?: boolean;
+  /** تحكم لكل مقطع (مثل الفيديو الأساسي) */
+  rotate?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+  speed?: number;
+  cropEnabled?: boolean;
+  crop?: { x: number; y: number; w: number; h: number };
+  chromaEnabled?: boolean;
+  chromaColor?: string;
+  chromaSensitivity?: number;
+  logoEnabled?: boolean;
+  logoBox?: { x: number; y: number; w: number; h: number };
 };
+
+const DEFAULT_LAYER_CROP = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+const DEFAULT_LAYER_LOGO = { x: 20, y: 20, w: 120, h: 60 };
+
+function layerClipDefaults(
+  partial: Omit<LayerClip, "rotate" | "flipH" | "flipV" | "speed"> &
+    Partial<LayerClip>,
+): LayerClip {
+  return {
+    rotate: 0,
+    flipH: false,
+    flipV: false,
+    speed: 1,
+    cropEnabled: false,
+    crop: { ...DEFAULT_LAYER_CROP },
+    chromaEnabled: false,
+    chromaColor: "#00ff00",
+    chromaSensitivity: 30,
+    logoEnabled: false,
+    logoBox: { ...DEFAULT_LAYER_LOGO },
+    ...partial,
+  };
+}
 
 /** مقاطع مسار فيديو 1 بعد القص (للمونتاج بين اللقطات) */
 type MainClip = {
@@ -545,6 +580,9 @@ export function VideoEditorWorkspace({
       | "video-move"
       | "video-resize"
       | "video-rotate"
+      | "layer-box-move"
+      | "layer-box-resize"
+      | "layer-box-rotate"
       | "audio-move"
       | "audio-trim-in"
       | "audio-trim-out"
@@ -1193,9 +1231,13 @@ export function VideoEditorWorkspace({
         continue;
       }
       el.muted = true;
+      const clipSpeed = Math.max(0.5, Math.min(2, clip.speed ?? 1));
+      if (Math.abs(el.playbackRate - clipSpeed) > 0.01) {
+        el.playbackRate = clipSpeed;
+      }
       const local = currentTime - trimIn - clip.start;
       if (local >= 0 && local < clip.duration - 0.02) {
-        const mediaTime = clip.offset + local;
+        const mediaTime = clip.offset + local * clipSpeed;
         if (Math.abs(el.currentTime - mediaTime) > 0.35) {
           el.currentTime = Math.max(0, mediaTime);
         }
@@ -1657,6 +1699,19 @@ export function VideoEditorWorkspace({
         h: Number(raw.h) || 0.4,
         opacity: Number(raw.opacity ?? 1),
         locked: Boolean(raw.locked),
+        rotate: Number(raw.rotate) || 0,
+        flipH: Boolean(raw.flipH),
+        flipV: Boolean(raw.flipV),
+        speed: Number(raw.speed) || 1,
+        cropEnabled: Boolean(raw.cropEnabled),
+        crop: (raw.crop as LayerClip["crop"]) || { ...DEFAULT_LAYER_CROP },
+        chromaEnabled: Boolean(raw.chromaEnabled),
+        chromaColor: String(raw.chromaColor || "#00ff00"),
+        chromaSensitivity: Number(raw.chromaSensitivity) || 30,
+        logoEnabled: Boolean(raw.logoEnabled),
+        logoBox: (raw.logoBox as LayerClip["logoBox"]) || {
+          ...DEFAULT_LAYER_LOGO,
+        },
       });
     }
     setLayerClips(nextLayers);
@@ -1762,6 +1817,17 @@ export function VideoEditorWorkspace({
       h: c.h,
       opacity: c.opacity,
       locked: c.locked,
+      rotate: c.rotate ?? 0,
+      flipH: Boolean(c.flipH),
+      flipV: Boolean(c.flipV),
+      speed: c.speed ?? 1,
+      cropEnabled: Boolean(c.cropEnabled),
+      crop: c.crop ?? { ...DEFAULT_LAYER_CROP },
+      chromaEnabled: Boolean(c.chromaEnabled),
+      chromaColor: c.chromaColor || "#00ff00",
+      chromaSensitivity: c.chromaSensitivity ?? 30,
+      logoEnabled: Boolean(c.logoEnabled),
+      logoBox: c.logoBox ?? { ...DEFAULT_LAYER_LOGO },
     }));
 
     return { assets, overlayPayload, audioPayload, layerPayload };
@@ -3044,6 +3110,134 @@ export function VideoEditorWorkspace({
     }
   }
 
+  function patchLayerClip(id: string, patch: Partial<LayerClip>) {
+    setLayerClips((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    );
+  }
+
+  function onLayerBoxHandleDown(
+    e: ReactPointerEvent,
+    clipId: string,
+    kind: "layer-box-move" | "layer-box-resize" | "layer-box-rotate",
+    corner: VideoResizeCorner = "se",
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const clip = layerClips.find((c) => c.id === clipId);
+    if (!clip) return;
+    const track = videoLayers.find((t) => t.id === clip.trackId);
+    if (track?.locked || clip.locked) {
+      setStatus("المسار مقفل — افتح القفل للتعديل");
+      setSelectedId(clipId);
+      return;
+    }
+    setSelectedId(clipId);
+    setPropTab("video");
+    let startAngle = 0;
+    if (kind === "layer-box-rotate" && stageRef.current) {
+      const rect = stageRef.current.getBoundingClientRect();
+      const cx = rect.left + (clip.x + clip.w / 2) * rect.width;
+      const cy = rect.top + (clip.y + clip.h / 2) * rect.height;
+      startAngle = (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
+    }
+    dragRef.current = {
+      kind,
+      id: clipId,
+      corner,
+      startX: e.clientX,
+      startY: e.clientY,
+      ox: kind === "layer-box-rotate" ? clip.rotate ?? 0 : clip.x,
+      oy: kind === "layer-box-rotate" ? startAngle : clip.y,
+      ow: clip.w,
+      oh: clip.h,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      applyLayerBoxDrag(ev.clientX, ev.clientY);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (
+        dragRef.current?.kind === "layer-box-move" ||
+        dragRef.current?.kind === "layer-box-resize" ||
+        dragRef.current?.kind === "layer-box-rotate"
+      ) {
+        dragRef.current = null;
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function applyLayerBoxDrag(clientX: number, clientY: number) {
+    const drag = dragRef.current;
+    const stage = stageRef.current;
+    if (!drag || !drag.id || !stage) return;
+    if (
+      drag.kind !== "layer-box-move" &&
+      drag.kind !== "layer-box-resize" &&
+      drag.kind !== "layer-box-rotate"
+    ) {
+      return;
+    }
+    const rect = stage.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return;
+    const clipId = drag.id;
+
+    if (drag.kind === "layer-box-rotate") {
+      const clip = layerClips.find((c) => c.id === clipId);
+      if (!clip) return;
+      const centerX = rect.left + (clip.x + clip.w / 2) * rect.width;
+      const centerY = rect.top + (clip.y + clip.h / 2) * rect.height;
+      const ang =
+        (Math.atan2(clientY - centerY, clientX - centerX) * 180) / Math.PI;
+      const next = Math.round((((drag.ox + (ang - drag.oy)) % 360) + 360) % 360);
+      patchLayerClip(clipId, { rotate: next });
+      return;
+    }
+
+    const dx = (clientX - drag.startX) / rect.width;
+    const dy = (clientY - drag.startY) / rect.height;
+
+    if (drag.kind === "layer-box-move") {
+      patchLayerClip(clipId, {
+        x: Math.max(-0.5, Math.min(1.5, drag.ox + dx)),
+        y: Math.max(-0.5, Math.min(1.5, drag.oy + dy)),
+      });
+      return;
+    }
+
+    const corner = drag.corner || "se";
+    let nx = drag.ox;
+    let ny = drag.oy;
+    let nw = drag.ow;
+    let nh = drag.oh;
+    if (corner === "e" || corner === "ne" || corner === "se") {
+      nw = Math.max(0.05, drag.ow + dx);
+    }
+    if (corner === "s" || corner === "se" || corner === "sw") {
+      nh = Math.max(0.05, drag.oh + dy);
+    }
+    if (corner === "w" || corner === "nw" || corner === "sw") {
+      nw = Math.max(0.05, drag.ow - dx);
+      nx = drag.ox + (drag.ow - nw);
+    }
+    if (corner === "n" || corner === "nw" || corner === "ne") {
+      nh = Math.max(0.05, drag.oh - dy);
+      ny = drag.oy + (drag.oh - nh);
+    }
+    patchLayerClip(clipId, { x: nx, y: ny, w: nw, h: nh });
+  }
+
   function applyMainVideoDrag(clientX: number, clientY: number) {
     const drag = dragRef.current;
     const stage = stageRef.current;
@@ -3138,6 +3332,14 @@ export function VideoEditorWorkspace({
       drag.kind === "video-rotate"
     ) {
       applyMainVideoDrag(e.clientX, e.clientY);
+      return;
+    }
+    if (
+      drag.kind === "layer-box-move" ||
+      drag.kind === "layer-box-resize" ||
+      drag.kind === "layer-box-rotate"
+    ) {
+      applyLayerBoxDrag(e.clientX, e.clientY);
       return;
     }
     const rect = stage.getBoundingClientRect();
@@ -3407,7 +3609,7 @@ export function VideoEditorWorkspace({
     const id = nextId(idCounterRef, isVideo ? "lvid" : "limg");
     setLayerClips((prev) => [
       ...prev,
-      {
+      layerClipDefaults({
         id,
         trackId: tid!,
         kind: isVideo ? "video" : "image",
@@ -3423,10 +3625,12 @@ export function VideoEditorWorkspace({
         w: 1,
         h: 1,
         opacity: 1,
-      },
+      }),
     ]);
     setSelectedId(id);
     setPropTab("video");
+    setVideoTool("none");
+    setPanel("files");
     setStatus(
       gap
         ? `تم وضع المقطع في الفراغ (${formatTime(gap.duration)})`
@@ -3964,6 +4168,26 @@ export function VideoEditorWorkspace({
                 w: c.w,
                 h: c.h,
                 opacity: c.opacity,
+                rotate: c.rotate ?? 0,
+                flipH: Boolean(c.flipH),
+                flipV: Boolean(c.flipV),
+                speed: c.speed ?? 1,
+                crop: c.cropEnabled ? c.crop ?? null : null,
+                chromaKey: c.chromaEnabled
+                  ? {
+                      enabled: true,
+                      color: c.chromaColor || "#00ff00",
+                      similarity: c.chromaSensitivity ?? 30,
+                    }
+                  : null,
+                removeLogo: c.logoEnabled && c.logoBox
+                  ? {
+                      x: c.logoBox.x,
+                      y: c.logoBox.y,
+                      w: c.logoBox.w,
+                      h: c.logoBox.h,
+                    }
+                  : null,
               }));
           }),
           overlays: overlays.map((o) => {
@@ -4046,6 +4270,12 @@ export function VideoEditorWorkspace({
   const selectedOverlay = overlays.find((o) => o.id === selectedId) ?? null;
   const selectedLayer =
     layerClips.find((c) => c.id === selectedId) ?? null;
+
+  const editingLayer = selectedLayer;
+  const layerCrop = editingLayer?.crop ?? DEFAULT_LAYER_CROP;
+  const layerLogo = editingLayer?.logoBox ?? DEFAULT_LAYER_LOGO;
+  const layerSpeed = editingLayer?.speed ?? 1;
+  const layerRotate = editingLayer?.rotate ?? 0;
 
   const navBtn = (id: Panel, label: string, Icon: typeof FileVideo) => (
     <button
@@ -5541,25 +5771,25 @@ export function VideoEditorWorkspace({
             </div>
             {propTab === "video" && (
               <div className="space-y-2 text-xs">
-                {selectedLayer && (
+                {editingLayer ? (
                   <div className="space-y-2 rounded-md border border-[#f5c518]/35 bg-[#1c1a12] p-2">
                     <p className="truncate font-semibold text-[#f5c518]">
-                      طبقة فوق الفيديو · {selectedLayer.name}
+                      {editingLayer.kind === "image" ? "صورة" : "فيديو"} ·{" "}
+                      {editingLayer.name}
                     </p>
                     <p className="text-[10px] leading-4 text-[#888]">
-                      الطبقة الأعلى تغطي التي تحتها. صغّر الحجم لصورة داخل صورة.
+                      نفس أدوات التحكم لكل مقطع — حرّك، غيّر الحجم، قص، سرعة…
                     </p>
                     <div className="grid grid-cols-2 gap-1">
                       <button
                         type="button"
                         onClick={() =>
-                          setLayerClips((prev) =>
-                            prev.map((c) =>
-                              c.id === selectedLayer.id
-                                ? { ...c, x: 0, y: 0, w: 1, h: 1 }
-                                : c,
-                            ),
-                          )
+                          patchLayerClip(editingLayer.id, {
+                            x: 0,
+                            y: 0,
+                            w: 1,
+                            h: 1,
+                          })
                         }
                         className="rounded border border-[#f5c518]/40 bg-[#f5c518]/10 py-1.5 text-[#f5c518]"
                       >
@@ -5568,13 +5798,12 @@ export function VideoEditorWorkspace({
                       <button
                         type="button"
                         onClick={() =>
-                          setLayerClips((prev) =>
-                            prev.map((c) =>
-                              c.id === selectedLayer.id
-                                ? { ...c, x: 0.55, y: 0.05, w: 0.4, h: 0.35 }
-                                : c,
-                            ),
-                          )
+                          patchLayerClip(editingLayer.id, {
+                            x: 0.55,
+                            y: 0.05,
+                            w: 0.4,
+                            h: 0.35,
+                          })
                         }
                         className="rounded border border-[#333] py-1.5 text-[#ccc] hover:bg-[#222]"
                       >
@@ -5582,26 +5811,25 @@ export function VideoEditorWorkspace({
                       </button>
                     </div>
                     <label className="block text-[#888]">
-                      شفافية الطبقة {Math.round(selectedLayer.opacity * 100)}%
+                      شفافية {Math.round(editingLayer.opacity * 100)}%
                     </label>
                     <input
                       type="range"
                       min={10}
                       max={100}
-                      value={Math.round(selectedLayer.opacity * 100)}
-                      onChange={(e) => {
-                        const op = Number(e.target.value) / 100;
-                        setLayerClips((prev) =>
-                          prev.map((c) =>
-                            c.id === selectedLayer.id
-                              ? { ...c, opacity: op }
-                              : c,
-                          ),
-                        );
-                      }}
+                      value={Math.round(editingLayer.opacity * 100)}
+                      onChange={(e) =>
+                        patchLayerClip(editingLayer.id, {
+                          opacity: Number(e.target.value) / 100,
+                        })
+                      }
                       className="w-full"
                     />
                   </div>
+                ) : (
+                  <p className="rounded-md border border-[#2a2a2e] bg-[#121214] px-2 py-1.5 text-[10px] text-[#888]">
+                    الفيديو الأساسي — أو اختر مقطعاً من التايملاين للتحكم به
+                  </p>
                 )}
                 <div className="grid grid-cols-2 gap-1">
                   {(
@@ -5635,8 +5863,21 @@ export function VideoEditorWorkspace({
                       تفعيل المحصول
                       <input
                         type="checkbox"
-                        checked={cropEnabled}
-                        onChange={(e) => setCropEnabled(e.target.checked)}
+                        checked={
+                          editingLayer
+                            ? Boolean(editingLayer.cropEnabled)
+                            : cropEnabled
+                        }
+                        onChange={(e) => {
+                          if (editingLayer) {
+                            patchLayerClip(editingLayer.id, {
+                              cropEnabled: e.target.checked,
+                              crop: editingLayer.crop ?? {
+                                ...DEFAULT_LAYER_CROP,
+                              },
+                            });
+                          } else setCropEnabled(e.target.checked);
+                        }}
                       />
                     </label>
                     {(
@@ -5646,26 +5887,34 @@ export function VideoEditorWorkspace({
                         ["w", "عرض"],
                         ["h", "ارتفاع"],
                       ] as const
-                    ).map(([key, label]) => (
-                      <div key={key}>
-                        <label className="text-[#888]">
-                          {label} {Math.round(crop[key] * 100)}%
-                        </label>
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          value={Math.round(crop[key] * 100)}
-                          onChange={(e) =>
-                            setCrop((c) => ({
-                              ...c,
-                              [key]: Number(e.target.value) / 100,
-                            }))
-                          }
-                          className="w-full"
-                        />
-                      </div>
-                    ))}
+                    ).map(([key, label]) => {
+                      const box = editingLayer ? layerCrop : crop;
+                      return (
+                        <div key={key}>
+                          <label className="text-[#888]">
+                            {label} {Math.round(box[key] * 100)}%
+                          </label>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={Math.round(box[key] * 100)}
+                            onChange={(e) => {
+                              const v = Number(e.target.value) / 100;
+                              if (editingLayer) {
+                                patchLayerClip(editingLayer.id, {
+                                  crop: { ...layerCrop, [key]: v },
+                                  cropEnabled: true,
+                                });
+                              } else {
+                                setCrop((c) => ({ ...c, [key]: v }));
+                              }
+                            }}
+                            className="w-full"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -5675,28 +5924,63 @@ export function VideoEditorWorkspace({
                       تفعيل إزالة اللون
                       <input
                         type="checkbox"
-                        checked={chromaEnabled}
-                        onChange={(e) => setChromaEnabled(e.target.checked)}
+                        checked={
+                          editingLayer
+                            ? Boolean(editingLayer.chromaEnabled)
+                            : chromaEnabled
+                        }
+                        onChange={(e) => {
+                          if (editingLayer) {
+                            patchLayerClip(editingLayer.id, {
+                              chromaEnabled: e.target.checked,
+                            });
+                          } else setChromaEnabled(e.target.checked);
+                        }}
                       />
                     </label>
                     <label className="text-[#888]">اللون</label>
                     <input
                       type="color"
-                      value={chromaColor}
-                      onChange={(e) => setChromaColor(e.target.value)}
+                      value={
+                        editingLayer
+                          ? editingLayer.chromaColor || "#00ff00"
+                          : chromaColor
+                      }
+                      onChange={(e) => {
+                        if (editingLayer) {
+                          patchLayerClip(editingLayer.id, {
+                            chromaColor: e.target.value,
+                            chromaEnabled: true,
+                          });
+                        } else setChromaColor(e.target.value);
+                      }}
                       className="h-8 w-full cursor-pointer rounded border border-[#333] bg-transparent"
                     />
                     <label className="text-[#888]">
-                      الحساسية {chromaSensitivity}%
+                      الحساسية{" "}
+                      {editingLayer
+                        ? (editingLayer.chromaSensitivity ?? 30)
+                        : chromaSensitivity}
+                      %
                     </label>
                     <input
                       type="range"
                       min={5}
                       max={80}
-                      value={chromaSensitivity}
-                      onChange={(e) =>
-                        setChromaSensitivity(Number(e.target.value))
+                      value={
+                        editingLayer
+                          ? (editingLayer.chromaSensitivity ?? 30)
+                          : chromaSensitivity
                       }
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (editingLayer) {
+                          patchLayerClip(editingLayer.id, {
+                            chromaSensitivity: v,
+                            chromaEnabled: true,
+                          });
+                        } else setChromaSensitivity(v);
+                      }}
                       className="w-full"
                     />
                   </div>
@@ -5708,8 +5992,22 @@ export function VideoEditorWorkspace({
                       تفعيل إزالة الشعار
                       <input
                         type="checkbox"
-                        checked={logoEnabled}
-                        onChange={(e) => setLogoEnabled(e.target.checked)}
+                        checked={
+                          editingLayer
+                            ? Boolean(editingLayer.logoEnabled)
+                            : logoEnabled
+                        }
+                        onChange={(e) => {
+                          if (editingLayer) {
+                            patchLayerClip(editingLayer.id, {
+                              logoEnabled: e.target.checked,
+                              logoBox:
+                                editingLayer.logoBox ?? {
+                                  ...DEFAULT_LAYER_LOGO,
+                                },
+                            });
+                          } else setLogoEnabled(e.target.checked);
+                        }}
                       />
                     </label>
                     {(
@@ -5719,40 +6017,158 @@ export function VideoEditorWorkspace({
                         ["w", "عرض"],
                         ["h", "ارتفاع"],
                       ] as const
-                    ).map(([key, label]) => (
-                      <div key={key}>
-                        <label className="text-[#888]">
-                          {label} {logoBox[key]}px
-                        </label>
-                        <input
-                          type="range"
-                          min={0}
-                          max={key === "x" || key === "w" ? 1280 : 720}
-                          value={logoBox[key]}
-                          onChange={(e) =>
-                            setLogoBox((b) => ({
-                              ...b,
-                              [key]: Number(e.target.value),
-                            }))
-                          }
-                          className="w-full"
-                        />
-                      </div>
-                    ))}
+                    ).map(([key, label]) => {
+                      const box = editingLayer ? layerLogo : logoBox;
+                      return (
+                        <div key={key}>
+                          <label className="text-[#888]">
+                            {label} {box[key]}px
+                          </label>
+                          <input
+                            type="range"
+                            min={0}
+                            max={key === "x" || key === "w" ? 1280 : 720}
+                            value={box[key]}
+                            onChange={(e) => {
+                              const v = Number(e.target.value);
+                              if (editingLayer) {
+                                patchLayerClip(editingLayer.id, {
+                                  logoBox: { ...layerLogo, [key]: v },
+                                  logoEnabled: true,
+                                });
+                              } else {
+                                setLogoBox((b) => ({ ...b, [key]: v }));
+                              }
+                            }}
+                            className="w-full"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-                <label className="text-[#888]">السرعة {speed.toFixed(2)}×</label>
+                <label className="text-[#888]">
+                  السرعة {(editingLayer ? layerSpeed : speed).toFixed(2)}×
+                  {editingLayer ? " · هذا المقطع" : " · الأساسي"}
+                </label>
                 <input
                   type="range"
                   min={50}
                   max={200}
-                  value={Math.round(speed * 100)}
-                  onChange={(e) => setSpeed(Number(e.target.value) / 100)}
+                  value={Math.round((editingLayer ? layerSpeed : speed) * 100)}
+                  onChange={(e) => {
+                    const v = Number(e.target.value) / 100;
+                    if (editingLayer) {
+                      patchLayerClip(editingLayer.id, { speed: v });
+                    } else setSpeed(v);
+                  }}
                   className="w-full"
                 />
                 <div className="space-y-2 rounded border border-[#333] p-2">
-                  <p className="text-xs font-semibold text-[#ddd]">تحويل</p>
+                  <p className="text-xs font-semibold text-[#ddd]">
+                    تحويل{editingLayer ? " · المقطع المحدد" : ""}
+                  </p>
+
+                  {editingLayer ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <label className="flex-1 text-[11px] text-[#888]">
+                          حجم عرض {Math.round(editingLayer.w * 100)}%
+                          <input
+                            type="range"
+                            min={5}
+                            max={200}
+                            value={Math.round(editingLayer.w * 100)}
+                            onChange={(e) => {
+                              const pct = Number(e.target.value) / 100;
+                              if (scaleLock) {
+                                const ratio =
+                                  editingLayer.h /
+                                  Math.max(0.01, editingLayer.w);
+                                patchLayerClip(editingLayer.id, {
+                                  w: pct,
+                                  h: Math.max(0.05, pct * ratio),
+                                });
+                              } else {
+                                patchLayerClip(editingLayer.id, { w: pct });
+                              }
+                            }}
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          title={scaleLock ? "فك قفل النسبة" : "قفل النسبة"}
+                          onClick={() => setScaleLock((v) => !v)}
+                          className={`mt-4 rounded border p-1.5 ${
+                            scaleLock
+                              ? "border-teal-500/50 text-teal-300"
+                              : "border-[#333] text-[#888]"
+                          }`}
+                        >
+                          {scaleLock ? (
+                            <Lock className="h-3.5 w-3.5" />
+                          ) : (
+                            <LockOpen className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        <label className="flex-1 text-[11px] text-[#888]">
+                          حجم ارتفاع {Math.round(editingLayer.h * 100)}%
+                          <input
+                            type="range"
+                            min={5}
+                            max={200}
+                            value={Math.round(editingLayer.h * 100)}
+                            onChange={(e) => {
+                              const pct = Number(e.target.value) / 100;
+                              if (scaleLock) {
+                                const ratio =
+                                  editingLayer.w /
+                                  Math.max(0.01, editingLayer.h);
+                                patchLayerClip(editingLayer.id, {
+                                  h: pct,
+                                  w: Math.max(0.05, pct * ratio),
+                                });
+                              } else {
+                                patchLayerClip(editingLayer.id, { h: pct });
+                              }
+                            }}
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[11px] text-[#888]">
+                          موضع X
+                          <input
+                            type="number"
+                            value={Math.round(editingLayer.x * 100)}
+                            onChange={(e) =>
+                              patchLayerClip(editingLayer.id, {
+                                x: Number(e.target.value) / 100,
+                              })
+                            }
+                            className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-xs text-white"
+                          />
+                        </label>
+                        <label className="text-[11px] text-[#888]">
+                          موضع Y
+                          <input
+                            type="number"
+                            value={Math.round(editingLayer.y * 100)}
+                            onChange={(e) =>
+                              patchLayerClip(editingLayer.id, {
+                                y: Number(e.target.value) / 100,
+                              })
+                            }
+                            className="mt-1 w-full rounded border border-[#333] bg-[#0a0a0b] px-2 py-1 text-xs text-white"
+                          />
+                        </label>
+                      </div>
+                    </>
+                  ) : (
+                    <>
                   <div className="flex items-center gap-2">
                     <label className="flex-1 text-[11px] text-[#888]">
                       حجم عرض {Math.round(videoBox.w * 100)}%
@@ -5821,14 +6237,22 @@ export function VideoEditorWorkspace({
                       />
                     </label>
                   </div>
+                    </>
+                  )}
                 </div>
                 <label className="text-[#888]">عكس</label>
                 <div className="grid grid-cols-2 gap-1">
                   <button
                     type="button"
-                    onClick={() => setFlipH((v) => !v)}
+                    onClick={() => {
+                      if (editingLayer) {
+                        patchLayerClip(editingLayer.id, {
+                          flipH: !editingLayer.flipH,
+                        });
+                      } else setFlipH((v) => !v);
+                    }}
                     className={`flex items-center justify-center gap-1 rounded py-1.5 ${
-                      flipH
+                      (editingLayer ? editingLayer.flipH : flipH)
                         ? "bg-[#f5c518] font-bold text-[#111]"
                         : "border border-[#333]"
                     }`}
@@ -5838,9 +6262,15 @@ export function VideoEditorWorkspace({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFlipV((v) => !v)}
+                    onClick={() => {
+                      if (editingLayer) {
+                        patchLayerClip(editingLayer.id, {
+                          flipV: !editingLayer.flipV,
+                        });
+                      } else setFlipV((v) => !v);
+                    }}
                     className={`flex items-center justify-center gap-1 rounded py-1.5 ${
-                      flipV
+                      (editingLayer ? editingLayer.flipV : flipV)
                         ? "bg-[#f5c518] font-bold text-[#111]"
                         : "border border-[#333]"
                     }`}
@@ -5849,6 +6279,8 @@ export function VideoEditorWorkspace({
                     رأسي
                   </button>
                 </div>
+                {!editingLayer && (
+                  <>
                 <label className="text-[#888]">
                   شفافية الفيديو {Math.round(opacity * 100)}%
                 </label>
@@ -5860,18 +6292,26 @@ export function VideoEditorWorkspace({
                   onChange={(e) => setOpacity(Number(e.target.value) / 100)}
                   className="w-full"
                 />
+                  </>
+                )}
                 <label className="text-[#888]">
-                  تدوير {Math.round(rotate)}°
+                  تدوير {Math.round(editingLayer ? layerRotate : rotate)}°
                 </label>
                 <input
                   type="range"
                   min={-180}
                   max={180}
                   value={(() => {
-                    const n = ((rotate % 360) + 360) % 360;
+                    const r = editingLayer ? layerRotate : rotate;
+                    const n = ((r % 360) + 360) % 360;
                     return n > 180 ? n - 360 : n;
                   })()}
-                  onChange={(e) => setRotate(Number(e.target.value))}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    if (editingLayer) {
+                      patchLayerClip(editingLayer.id, { rotate: v });
+                    } else setRotate(v);
+                  }}
                   className="w-full"
                 />
                 <div className="grid grid-cols-4 gap-1">
@@ -5879,9 +6319,18 @@ export function VideoEditorWorkspace({
                     <button
                       key={r}
                       type="button"
-                      onClick={() => setRotate(r)}
+                      onClick={() => {
+                        if (editingLayer) {
+                          patchLayerClip(editingLayer.id, { rotate: r });
+                        } else setRotate(r);
+                      }}
                       className={`rounded py-1 ${
-                        Math.abs((((rotate % 360) + 360) % 360) - r) < 0.5
+                        Math.abs(
+                          ((((editingLayer ? layerRotate : rotate) % 360) +
+                            360) %
+                            360) -
+                            r,
+                        ) < 0.5
                           ? "bg-[#f5c518] font-bold text-[#111]"
                           : "border border-[#333]"
                       }`}
@@ -6069,14 +6518,17 @@ export function VideoEditorWorkspace({
                     const local = currentTime - trimIn - clip.start;
                     const active = local >= 0 && local < clip.duration;
                     if (!active) return null;
+                    const cropBox = clip.cropEnabled
+                      ? clip.crop ?? DEFAULT_LAYER_CROP
+                      : null;
                     return (
                       <div
                         key={clip.id}
                         className={`absolute z-20 ${
                           selectedId === clip.id
-                            ? "ring-2 ring-[#f5c518]"
+                            ? "outline outline-2 outline-[#f5c518]"
                             : "ring-1 ring-white/25"
-                        }`}
+                        } cursor-move`}
                         style={{
                           left: `${clip.x * 100}%`,
                           top: `${clip.y * 100}%`,
@@ -6084,28 +6536,53 @@ export function VideoEditorWorkspace({
                           height: `${clip.h * 100}%`,
                           opacity: clip.opacity,
                           zIndex: 20 + trackIdx,
+                          transform: [
+                            clip.rotate ? `rotate(${clip.rotate}deg)` : "",
+                            clip.flipH ? "scaleX(-1)" : "",
+                            clip.flipV ? "scaleY(-1)" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ") || undefined,
+                          transformOrigin: "center center",
+                          touchAction: "none",
                         }}
                         onPointerDown={(e) =>
-                          onOverlayPointerDown(e, clip.id, "move")
+                          onLayerBoxHandleDown(e, clip.id, "layer-box-move")
                         }
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedId(clip.id);
+                          setPropTab("video");
                         }}
                       >
                         {clip.kind === "image" ? (
                           <img
                             src={clip.url}
                             alt=""
-                            className="h-full w-full object-cover"
+                            className="pointer-events-none h-full w-full object-cover"
                             draggable={false}
+                            style={
+                              cropBox
+                                ? {
+                                    objectPosition: `${(cropBox.x + cropBox.w / 2) * 100}% ${(cropBox.y + cropBox.h / 2) * 100}%`,
+                                    clipPath: `inset(${cropBox.y * 100}% ${(1 - cropBox.x - cropBox.w) * 100}% ${(1 - cropBox.y - cropBox.h) * 100}% ${cropBox.x * 100}%)`,
+                                  }
+                                : undefined
+                            }
                           />
                         ) : (
                           <video
                             src={clip.url}
                             muted
                             playsInline
-                            className="h-full w-full object-cover"
+                            className="pointer-events-none h-full w-full object-cover"
+                            style={
+                              cropBox
+                                ? {
+                                    clipPath: `inset(${cropBox.y * 100}% ${(1 - cropBox.x - cropBox.w) * 100}% ${(1 - cropBox.y - cropBox.h) * 100}% ${cropBox.x * 100}%)`,
+                                  }
+                                : undefined
+                            }
                             ref={(el) => {
                               if (el) layerVideoElsRef.current.set(clip.id, el);
                               else layerVideoElsRef.current.delete(clip.id);
@@ -6113,12 +6590,90 @@ export function VideoEditorWorkspace({
                           />
                         )}
                         {selectedId === clip.id && (
-                          <div
-                            className="absolute bottom-0 right-0 h-3.5 w-3.5 translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[#111] bg-[#f5c518]"
-                            onPointerDown={(e) =>
-                              onOverlayPointerDown(e, clip.id, "resize")
-                            }
-                          />
+                          <>
+                            <div className="pointer-events-none absolute left-1/2 top-0 z-30 flex -translate-x-1/2 -translate-y-full flex-col items-center">
+                              <div
+                                className="pointer-events-auto h-3.5 w-3.5 cursor-grab rounded-full border-2 border-[#f5c518] bg-white shadow active:cursor-grabbing"
+                                title="اسحب للتدوير"
+                                onPointerDown={(e) =>
+                                  onLayerBoxHandleDown(
+                                    e,
+                                    clip.id,
+                                    "layer-box-rotate",
+                                  )
+                                }
+                              />
+                              <div className="h-4 w-px bg-[#f5c518]" />
+                            </div>
+                            <button
+                              type="button"
+                              title="اسحب لتحريك المقطع"
+                              className="absolute left-1/2 top-1/2 z-30 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-move items-center justify-center rounded-full border-2 border-[#f5c518] bg-black/50 text-[#f5c518] shadow-lg"
+                              onPointerDown={(e) => {
+                                e.stopPropagation();
+                                onLayerBoxHandleDown(
+                                  e,
+                                  clip.id,
+                                  "layer-box-move",
+                                );
+                              }}
+                            >
+                              <span className="relative block h-3 w-3">
+                                <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-[#f5c518]" />
+                                <span className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-[#f5c518]" />
+                                <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f5c518]" />
+                              </span>
+                            </button>
+                            {(
+                              [
+                                [
+                                  "nw",
+                                  "left-0 top-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize",
+                                ],
+                                [
+                                  "ne",
+                                  "right-0 top-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize",
+                                ],
+                                [
+                                  "sw",
+                                  "left-0 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize",
+                                ],
+                                [
+                                  "se",
+                                  "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize",
+                                ],
+                                [
+                                  "n",
+                                  "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize",
+                                ],
+                                [
+                                  "s",
+                                  "left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-ns-resize",
+                                ],
+                                [
+                                  "w",
+                                  "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
+                                ],
+                                [
+                                  "e",
+                                  "right-0 top-1/2 translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
+                                ],
+                              ] as const
+                            ).map(([corner, pos]) => (
+                              <div
+                                key={corner}
+                                className={`absolute z-20 h-3.5 w-3.5 rounded-full border-2 border-[#111] bg-white shadow ${pos}`}
+                                onPointerDown={(e) =>
+                                  onLayerBoxHandleDown(
+                                    e,
+                                    clip.id,
+                                    "layer-box-resize",
+                                    corner,
+                                  )
+                                }
+                              />
+                            ))}
+                          </>
                         )}
                       </div>
                     );
@@ -6925,6 +7480,7 @@ export function VideoEditorWorkspace({
                                     e.preventDefault();
                                     e.stopPropagation();
                                     setSelectedId(clip.id);
+                          setPropTab("video");
                                     setCtxMenu(
                                       clampMenuPos(e.clientX, e.clientY),
                                     );
@@ -7212,6 +7768,7 @@ export function VideoEditorWorkspace({
                                       e.preventDefault();
                                       e.stopPropagation();
                                       setSelectedId(clip.id);
+                          setPropTab("video");
                                       dragRef.current = {
                                         kind: "main-trim-in",
                                         id: clip.id,
@@ -7233,6 +7790,7 @@ export function VideoEditorWorkspace({
                                       e.preventDefault();
                                       e.stopPropagation();
                                       setSelectedId(clip.id);
+                          setPropTab("video");
                                       dragRef.current = {
                                         kind: "main-trim-out",
                                         id: clip.id,
