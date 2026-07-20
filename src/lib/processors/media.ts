@@ -599,29 +599,97 @@ export async function addAudioToVideo(
   await downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-audio.mp4`);
 }
 
+export type ImageOverlayPosition =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "center";
+
+export type ImageOverlayOptions = {
+  /** نسبة عرض الصورة من عرض الفيديو (0.1–0.8) */
+  scale?: number;
+  position?: ImageOverlayPosition;
+  /** شفافية 0–1 (1 = غير شفاف) */
+  opacity?: number;
+};
+
+function overlayXy(position: ImageOverlayPosition): string {
+  const m = 24;
+  switch (position) {
+    case "top-right":
+      return `main_w-overlay_w-${m}:${m}`;
+    case "bottom-left":
+      return `${m}:main_h-overlay_h-${m}`;
+    case "bottom-right":
+      return `main_w-overlay_w-${m}:main_h-overlay_h-${m}`;
+    case "center":
+      return `(main_w-overlay_w)/2:(main_h-overlay_h)/2`;
+    case "top-left":
+    default:
+      return `${m}:${m}`;
+  }
+}
+
 export async function addImageToVideo(
   video: File,
   image: File,
   onProgress?: MediaProgress,
+  options?: ImageOverlayOptions,
 ) {
+  if (!video.type.startsWith("video/") && !/\.(mp4|webm|mov|mkv)$/i.test(video.name)) {
+    throw new Error("الملف الأول يجب أن يكون فيديو");
+  }
+  if (
+    !image.type.startsWith("image/") &&
+    !/\.(png|jpe?g|webp|gif|bmp)$/i.test(image.name)
+  ) {
+    throw new Error("الملف الثاني يجب أن يكون صورة (PNG / JPG / WebP)");
+  }
+
+  const scale = Math.min(0.8, Math.max(0.08, options?.scale ?? 0.28));
+  const opacity = Math.min(1, Math.max(0.05, options?.opacity ?? 1));
+  const position = options?.position ?? "top-right";
+  const xy = overlayXy(position);
+
   const ffmpeg = await getFFmpeg(onProgress);
   const vExt = extensionForMime(video.type, "mp4");
-  const iExt = image.type.includes("png") ? "png" : "jpg";
+  const name = image.name.toLowerCase();
+  const iExt = name.endsWith(".png")
+    ? "png"
+    : name.endsWith(".webp")
+      ? "webp"
+      : name.endsWith(".gif")
+        ? "gif"
+        : "jpg";
+
   await ffmpeg.writeFile(`v.${vExt}`, await fetchFile(video));
   await ffmpeg.writeFile(`i.${iExt}`, await fetchFile(image));
+
+  // scale2ref: حجم نسبةً لعرض الفيديو + شفافية + موضع
+  const filter =
+    `[1:v]format=rgba,colorchannelmixer=aa=${opacity.toFixed(3)}[img0];` +
+    `[img0][0:v]scale2ref=w=iw*${scale.toFixed(3)}:h=ow/mdar[img][base];` +
+    `[base][img]overlay=${xy}:format=auto`;
+
   await execOrThrow(ffmpeg, [
     "-i",
     `v.${vExt}`,
     "-i",
     `i.${iExt}`,
     "-filter_complex",
-    "[1:v]scale=200:-1[img];[0:v][img]overlay=20:20",
+    filter,
     "-c:a",
     "copy",
+    "-movflags",
+    "+faststart",
     "output.mp4",
   ]);
   const data = await ffmpeg.readFile("output.mp4");
-  await downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-image.mp4`);
+  await downloadBlob(
+    toBlob(data, "video/mp4"),
+    `${basename(video.name)}-image.mp4`,
+  );
 }
 
 export async function addTextToVideo(

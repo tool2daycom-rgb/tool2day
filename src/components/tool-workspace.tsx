@@ -26,7 +26,6 @@ const multiKinds = new Set<ActiveToolKind>([
   "audio-join",
   "jpg-to-pdf",
   "video-add-audio",
-  "video-add-image",
 ]);
 
 const noFileKinds = new Set<ActiveToolKind>([
@@ -84,6 +83,15 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [cropY, setCropY] = useState("0");
   const [cropW, setCropW] = useState("640");
   const [cropH, setCropH] = useState("360");
+  const [overlayVideo, setOverlayVideo] = useState<File | null>(null);
+  const [overlayImage, setOverlayImage] = useState<File | null>(null);
+  const [imgScale, setImgScale] = useState("0.28");
+  const [imgPosition, setImgPosition] = useState<
+    "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center"
+  >("top-right");
+  const [imgOpacity, setImgOpacity] = useState("1");
+  const overlayVideoRef = useRef<HTMLInputElement>(null);
+  const overlayImageRef = useRef<HTMLInputElement>(null);
 
   function clearTtsPreview() {
     ttsAudioRef.current?.pause();
@@ -291,10 +299,17 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           if (files.length < 2) throw new Error("اختر فيديو ثم ملف صوت (ملفين)");
           await media.addAudioToVideo(files[0], files[1], onProgress);
           break;
-        case "video-add-image":
-          if (files.length < 2) throw new Error("اختر فيديو ثم صورة (ملفين)");
-          await media.addImageToVideo(files[0], files[1], onProgress);
+        case "video-add-image": {
+          if (!overlayVideo || !overlayImage) {
+            throw new Error("اختر ملف فيديو وملف صورة");
+          }
+          await media.addImageToVideo(overlayVideo, overlayImage, onProgress, {
+            scale: Number(imgScale) || 0.28,
+            position: imgPosition,
+            opacity: Number(imgOpacity) || 1,
+          });
           break;
+        }
         case "video-add-text":
           await media.addTextToVideo(files[0], overlayText, onProgress);
           break;
@@ -488,6 +503,70 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             </Field>
           </div>
         </div>
+      ) : kind === "video-add-image" ? (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-dashed border-[#d4d4d4] bg-[#fafafa] p-4 text-center">
+              <p className="text-sm font-bold text-[#111]">1) ملف الفيديو</p>
+              <p className="mt-1 text-xs text-[#888]">MP4 / WebM / MOV</p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => overlayVideoRef.current?.click()}
+                className="mt-3 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
+              >
+                اختيار فيديو
+              </button>
+              <input
+                ref={overlayVideoRef}
+                type="file"
+                accept="video/*,.mp4,.webm,.mov"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setOverlayVideo(f);
+                  setError(null);
+                }}
+              />
+              {overlayVideo ? (
+                <p className="mt-2 truncate text-xs text-[#333]">
+                  {overlayVideo.name} ({formatBytes(overlayVideo.size)})
+                </p>
+              ) : null}
+            </div>
+            <div className="rounded-lg border border-dashed border-[#d4d4d4] bg-[#fafafa] p-4 text-center">
+              <p className="text-sm font-bold text-[#111]">2) ملف الصورة</p>
+              <p className="mt-1 text-xs text-[#888]">PNG / JPG / WebP</p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => overlayImageRef.current?.click()}
+                className="mt-3 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
+              >
+                اختيار صورة
+              </button>
+              <input
+                ref={overlayImageRef}
+                type="file"
+                accept="image/*,.png,.jpg,.jpeg,.webp"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setOverlayImage(f);
+                  setError(null);
+                }}
+              />
+              {overlayImage ? (
+                <p className="mt-2 truncate text-xs text-[#333]">
+                  {overlayImage.name} ({formatBytes(overlayImage.size)})
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-xs text-[#888]">
+            ارفع فيديو وصورة منفصلين، ثم اضبط الحجم والموضع والشفافية
+          </p>
+        </div>
       ) : !noFileKinds.has(kind) ? (
         <div
           onDragEnter={(e) => {
@@ -509,10 +588,9 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             {multiple ? "اسحب الملفات هنا" : "اسحب الملف هنا أو اختر من جهازك"}
           </p>
           <p className="mt-2 max-w-sm text-sm leading-7 text-[#666]">{description}</p>
-          {(kind === "video-add-audio" || kind === "video-add-image") && (
+          {(kind === "video-add-audio") && (
             <p className="mt-1 text-xs text-[#888]">
-              اختر ملفين: الأول فيديو، الثاني{" "}
-              {kind === "video-add-audio" ? "صوت" : "صورة"}
+              اختر ملفين: الأول فيديو، الثاني صوت
             </p>
           )}
           <button
@@ -538,7 +616,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         </p>
       )}
 
-      {files.length > 0 && (
+      {files.length > 0 && kind !== "video-add-image" && (
         <ul className="mt-4 space-y-2">
           {files.map((file) => (
             <li
@@ -553,6 +631,69 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       )}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {kind === "video-add-image" && (
+          <>
+            <Field label="حجم الصورة على الفيديو">
+              <select
+                className={sel}
+                value={imgScale}
+                onChange={(e) => setImgScale(e.target.value)}
+              >
+                <option value="0.12">صغير جداً (12%)</option>
+                <option value="0.2">صغير (20%)</option>
+                <option value="0.28">متوسط (28%)</option>
+                <option value="0.4">كبير (40%)</option>
+                <option value="0.55">أكبر (55%)</option>
+                <option value="0.7">ملء شبه كامل (70%)</option>
+              </select>
+            </Field>
+            <Field label={`شفافية الصورة (${Math.round(Number(imgOpacity) * 100)}%)`}>
+              <input
+                className="mt-2 w-full accent-[#2563eb]"
+                type="range"
+                min={0.15}
+                max={1}
+                step={0.05}
+                value={imgOpacity}
+                onChange={(e) => setImgOpacity(e.target.value)}
+              />
+              <div className="mt-1 flex justify-between text-[11px] text-[#888]">
+                <span>شفاف</span>
+                <span>واضح</span>
+              </div>
+            </Field>
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-sm font-semibold text-[#333]">
+                موضع الصورة
+              </p>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {(
+                  [
+                    ["top-right", "أعلى يمين"],
+                    ["top-left", "أعلى يسار"],
+                    ["center", "الوسط"],
+                    ["bottom-right", "أسفل يمين"],
+                    ["bottom-left", "أسفل يسار"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setImgPosition(id)}
+                    className={`rounded-md border px-2 py-2 text-xs font-semibold transition ${
+                      imgPosition === id
+                        ? "border-[#111] bg-[#111] text-white"
+                        : "border-[#ddd] bg-white text-[#333] hover:border-[#bbb]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
         {kind === "video-convert" && (
           <Field label="صيغة الفيديو">
             <select className={sel} value={videoFormat} onChange={(e) => setVideoFormat(e.target.value as "mp4" | "webm" | "mov")}>
@@ -744,7 +885,12 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       ) : (
         <button
           type="button"
-          disabled={busy || (!noFileKinds.has(kind) && files.length === 0)}
+          disabled={
+            busy ||
+            (kind === "video-add-image"
+              ? !overlayVideo || !overlayImage
+              : !noFileKinds.has(kind) && files.length === 0)
+          }
           onClick={run}
           className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
