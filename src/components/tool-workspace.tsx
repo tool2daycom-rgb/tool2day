@@ -75,13 +75,112 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [ttsText, setTtsText] = useState("مرحباً بك في Tool2Day");
   const [ttsVoice, setTtsVoice] = useState("ar-SA-ZariyahNeural");
   const [ttsRate, setTtsRate] = useState("default");
+  const [ttsFile, setTtsFile] = useState<File | null>(null);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsUrlRef = useRef<string | null>(null);
   const [password, setPassword] = useState("");
   const [cropX, setCropX] = useState("0");
   const [cropY, setCropY] = useState("0");
   const [cropW, setCropW] = useState("640");
   const [cropH, setCropH] = useState("360");
 
+  function clearTtsPreview() {
+    ttsAudioRef.current?.pause();
+    ttsAudioRef.current = null;
+    if (ttsUrlRef.current) {
+      URL.revokeObjectURL(ttsUrlRef.current);
+      ttsUrlRef.current = null;
+    }
+    setTtsFile(null);
+    setTtsPlaying(false);
+  }
+
+  useEffect(() => {
+    clearTtsPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ttsText, ttsVoice, ttsRate]);
+
+  useEffect(() => {
+    return () => {
+      ttsAudioRef.current?.pause();
+      if (ttsUrlRef.current) URL.revokeObjectURL(ttsUrlRef.current);
+    };
+  }, []);
+
   const multiple = multiKinds.has(kind);
+
+  async function ensureTtsFile(): Promise<File> {
+    if (ttsFile) return ttsFile;
+    const { synthesizeToFile } = await import("@/lib/processors/tts");
+    const file = await synthesizeToFile(ttsText, {
+      voice: ttsVoice,
+      rate: ttsRate,
+    });
+    setTtsFile(file);
+    return file;
+  }
+
+  async function playTts() {
+    beginToolUse(slug);
+    setBusy(true);
+    setError(null);
+    setProgress(20);
+    setStatus("جارٍ توليد الصوت للمعاينة…");
+    try {
+      const file = await ensureTtsFile();
+      setProgress(70);
+      ttsAudioRef.current?.pause();
+      if (ttsUrlRef.current) URL.revokeObjectURL(ttsUrlRef.current);
+      const url = URL.createObjectURL(file);
+      ttsUrlRef.current = url;
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+      audio.onended = () => setTtsPlaying(false);
+      audio.onpause = () => setTtsPlaying(false);
+      await audio.play();
+      setTtsPlaying(true);
+      setProgress(100);
+      setStatus("جارٍ التشغيل — استمع ثم نزّل عند الجاهزية");
+    } catch (err) {
+      console.error(err);
+      const { formatProcessError } = await import("@/lib/processors/ffmpeg-client");
+      setError(formatProcessError(err));
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function stopTts() {
+    ttsAudioRef.current?.pause();
+    setTtsPlaying(false);
+    setStatus("تم إيقاف التشغيل");
+  }
+
+  async function downloadTts() {
+    if (!ttsFile) {
+      setError("شغّل الصوت أولاً للمعاينة قبل التنزيل");
+      return;
+    }
+    beginToolUse(slug);
+    setBusy(true);
+    setError(null);
+    setStatus("جارٍ التنزيل…");
+    try {
+      const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
+      await downloadBlob(ttsFile, ttsFile.name);
+      setProgress(100);
+      setStatus(`تم التنزيل: ${ttsFile.name}`);
+    } catch (err) {
+      console.error(err);
+      const { formatProcessError } = await import("@/lib/processors/ffmpeg-client");
+      setError(formatProcessError(err));
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function setFromList(list: FileList | null) {
     if (!list?.length) return;
@@ -108,24 +207,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
 
     try {
       if (kind === "tts") {
-        setStatus("جارٍ توليد الصوت العصبي وتنزيله…");
-        const { synthesizeAndDownload } = await import("@/lib/processors/tts");
-        const file = await synthesizeAndDownload(ttsText, {
-          voice: ttsVoice,
-          rate: ttsRate,
-        });
-        setProgress(100);
-        setStatus(`تم التنزيل: ${file.name}`);
-        // معاينة سريعة بعد التنزيل
-        try {
-          const url = URL.createObjectURL(file);
-          const audio = new Audio(url);
-          void audio.play().finally(() => {
-            window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-          });
-        } catch {
-          /* ignore preview errors */
-        }
+        // التشغيل يتم عبر playTts / التنزيل عبر downloadTts
         return;
       }
 
@@ -624,18 +706,44 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
       )}
 
-      <button
-        type="button"
-        disabled={busy || (!noFileKinds.has(kind) && kind !== "tts" && files.length === 0)}
-        onClick={run}
-        className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
-      >
-        {busy
-          ? "جارٍ العمل…"
-          : kind === "tts"
-            ? "حوّل ونزّل MP3"
-            : "ابدأ المعالجة"}
-      </button>
+      {kind === "tts" ? (
+        <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+          <button
+            type="button"
+            disabled={busy || !ttsText.trim()}
+            onClick={() => void (ttsPlaying ? stopTts() : playTts())}
+            className="flex-1 rounded-md bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-50"
+          >
+            {busy
+              ? "جارٍ التوليد…"
+              : ttsPlaying
+                ? "إيقاف التشغيل"
+                : "▶ تشغيل المعاينة"}
+          </button>
+          <button
+            type="button"
+            disabled={busy || !ttsFile}
+            onClick={() => void downloadTts()}
+            className="flex-1 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+          >
+            {ttsFile ? "تنزيل MP3" : "نزّل بعد التشغيل"}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={busy || (!noFileKinds.has(kind) && files.length === 0)}
+          onClick={run}
+          className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+        >
+          {busy ? "جارٍ العمل…" : "ابدأ المعالجة"}
+        </button>
+      )}
+      {kind === "tts" && !ttsFile ? (
+        <p className="mt-2 text-xs text-[#888]">
+          استمع للصوت أولاً، ثم فعّل زر التنزيل
+        </p>
+      ) : null}
       <p className="mt-3 text-xs text-[#888]">
         {title} — مجاني بالكامل · بدون علامة مائية · معالجة في المتصفح
       </p>
