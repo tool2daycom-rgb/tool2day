@@ -721,14 +721,31 @@ export async function addTextToVideo(
 
 export async function removeLogo(
   file: File,
-  box: { x: number; y: number; w: number; h: number },
+  boxOrBoxes:
+    | { x: number; y: number; w: number; h: number }
+    | Array<{ x: number; y: number; w: number; h: number }>,
   onProgress?: MediaProgress,
 ) {
+  const boxes = Array.isArray(boxOrBoxes) ? boxOrBoxes : [boxOrBoxes];
+  if (!boxes.length) {
+    throw new Error("حدّد منطقة الشعار أولاً");
+  }
+
+  const parts = boxes.map((b) => {
+    const x = Math.max(1, Math.round(b.x));
+    const y = Math.max(1, Math.round(b.y));
+    let w = Math.max(4, Math.round(b.w));
+    let h = Math.max(4, Math.round(b.h));
+    if (w % 2) w += 1;
+    if (h % 2) h += 1;
+    return `delogo=x=${x}:y=${y}:w=${w}:h=${h}`;
+  });
+
   await runVideoOut(
     file,
     [
       "-vf",
-      `delogo=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}`,
+      parts.join(","),
       "-c:v",
       "libx264",
       "-preset",

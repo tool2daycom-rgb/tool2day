@@ -7,6 +7,10 @@ import {
   type ActiveToolKind,
 } from "@/lib/processors/active-tools";
 import { setDownloadRatingContext, beginToolUse } from "@/lib/ratings";
+import {
+  LogoRemoveControls,
+  type DelogoBox,
+} from "@/components/logo-remove-controls";
 
 type Props = {
   slug: string;
@@ -90,6 +94,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
     "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center"
   >("top-right");
   const [imgOpacity, setImgOpacity] = useState("1");
+  const [delogoBoxes, setDelogoBoxes] = useState<DelogoBox[]>([]);
   const overlayVideoRef = useRef<HTMLInputElement>(null);
   const overlayImageRef = useRef<HTMLInputElement>(null);
 
@@ -288,16 +293,21 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             onProgress,
           );
           break;
-        case "video-crop":
-        case "video-delogo": {
+        case "video-crop": {
           const box = {
             x: Number(cropX),
             y: Number(cropY),
             w: Number(cropW),
             h: Number(cropH),
           };
-          if (kind === "video-crop") await media.cropVideo(files[0], box, onProgress);
-          else await media.removeLogo(files[0], box, onProgress);
+          await media.cropVideo(files[0], box, onProgress);
+          break;
+        }
+        case "video-delogo": {
+          if (!delogoBoxes.length) {
+            throw new Error("اختر وضع الإزالة أو ارسم منطقة الشعار على المعاينة");
+          }
+          await media.removeLogo(files[0], delogoBoxes, onProgress);
           break;
         }
         case "video-add-audio":
@@ -812,13 +822,19 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             <input className={sel} value={overlayText} onChange={(e) => setOverlayText(e.target.value)} />
           </Field>
         )}
-        {(kind === "video-crop" || kind === "video-delogo") && (
+        {kind === "video-crop" && (
           <>
             <Field label="X"><input className={sel} type="number" value={cropX} onChange={(e) => setCropX(e.target.value)} /></Field>
             <Field label="Y"><input className={sel} type="number" value={cropY} onChange={(e) => setCropY(e.target.value)} /></Field>
             <Field label="العرض"><input className={sel} type="number" value={cropW} onChange={(e) => setCropW(e.target.value)} /></Field>
             <Field label="الارتفاع"><input className={sel} type="number" value={cropH} onChange={(e) => setCropH(e.target.value)} /></Field>
           </>
+        )}
+        {kind === "video-delogo" && (
+          <LogoRemoveControls
+            file={files[0] || null}
+            onBoxesChange={setDelogoBoxes}
+          />
         )}
         {kind === "pdf-split" && (
           <>
