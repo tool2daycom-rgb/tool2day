@@ -873,6 +873,165 @@ export async function stabilizeVideo(file: File, onProgress?: MediaProgress) {
   );
 }
 
+export type EnhanceTarget = "1080" | "1440" | "4k";
+export type EnhanceStrength = "light" | "medium" | "strong";
+
+function evenDim(n: number) {
+  const v = Math.max(2, Math.round(n));
+  return v % 2 === 0 ? v : v - 1;
+}
+
+function enhanceTargetMaxEdge(target: EnhanceTarget) {
+  if (target === "1080") return 1920;
+  if (target === "1440") return 2560;
+  return 3840; // 4K على الجانب الأطول
+}
+
+function buildEnhanceFilter(
+  outW: number,
+  outH: number,
+  strength: EnhanceStrength,
+): string {
+  const denoise =
+    strength === "light"
+      ? "hqdn3d=0.6:0.6:2:2"
+      : strength === "strong"
+        ? "hqdn3d=2.2:1.8:6:5"
+        : "hqdn3d=1.2:1.0:4:3";
+  const sharp =
+    strength === "light"
+      ? "unsharp=5:5:0.55:5:5:0.0"
+      : strength === "strong"
+        ? "unsharp=7:7:1.15:5:5:0.0"
+        : "unsharp=5:5:0.9:5:5:0.0";
+  const eq =
+    strength === "light"
+      ? "eq=contrast=1.04:saturation=1.05:brightness=0.01"
+      : strength === "strong"
+        ? "eq=contrast=1.1:saturation=1.14:brightness=0.015"
+        : "eq=contrast=1.07:saturation=1.09:brightness=0.012";
+
+  return [
+    denoise,
+    `scale=${outW}:${outH}:flags=lanczos+accurate_rnd+full_chroma_int`,
+    sharp,
+    eq,
+    "format=yuv420p",
+  ].join(",");
+}
+
+/**
+ * تحسين جودة الفيديو: تنعيم ضوضاء + رفع دقة (حتى 4K) + توضيح + تباين/تشبع،
+ * ثم ترميز عالي الجودة (CRF منخفض).
+ */
+export async function enhanceVideoQuality(
+  file: File,
+  opts: {
+    target?: EnhanceTarget;
+    strength?: EnhanceStrength;
+  } = {},
+  onProgress?: MediaProgress,
+) {
+  const target = opts.target ?? "4k";
+  const strength = opts.strength ?? "medium";
+  const { w: srcW, h: srcH } = await probeVideoSize(file);
+  if (!srcW || !srcH) throw new Error("تعذّر قراءة أبعاد الفيديو");
+
+  const maxEdge = enhanceTargetMaxEdge(target);
+  const long = Math.max(srcW, srcH);
+  const scale = maxEdge / long;
+  // لا نصغّر إن كان المصدر أكبر من الهدف — نحسّن فقط
+  const factor = scale < 1 ? 1 : scale;
+  const outW = evenDim(srcW * factor);
+  const outH = evenDim(srcH * factor);
+
+  const preset = strength === "strong" ? "slow" : "medium";
+  const crf = strength === "strong" ? "16" : strength === "light" ? "19" : "17";
+
+  const tryChains = [
+    buildEnhanceFilter(outW, outH, strength),
+    // احتياطي بدون hqdn3d إن لم يتوفر في البناء
+    [
+      `scale=${outW}:${outH}:flags=lanczos+accurate_rnd+full_chroma_int`,
+      strength === "strong"
+        ? "unsharp=7:7:1.1:5:5:0.0"
+        : "unsharp=5:5:0.85:5:5:0.0",
+      "eq=contrast=1.07:saturation=1.1:brightness=0.01",
+      "format=yuv420p",
+    ].join(","),
+    // أبسط مسار
+    `scale=${outW}:${outH}:flags=lanczos,unsharp=5:5:0.7:5:5:0.0,format=yuv420p`,
+  ];
+
+  const ffmpeg = await getFFmpeg(onProgress);
+  const input = inputFileName(file, "mp4");
+  const output = "output.mp4";
+  await ffmpeg.writeFile(input, await fetchFile(file));
+
+  let lastError: unknown = null;
+  for (const vf of tryChains) {
+    try {
+      await execOrThrow(ffmpeg, [
+        "-i",
+        input,
+        "-vf",
+        vf,
+        "-c:v",
+        "libx264",
+        "-preset",
+        preset,
+        "-crf",
+        crf,
+        "-profile:v",
+        "high",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-movflags",
+        "+faststart",
+        output,
+      ]);
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      try {
+        await ffmpeg.deleteFile(output);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (lastError) {
+    try {
+      await ffmpeg.deleteFile(input);
+    } catch {
+      /* ignore */
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("فشل تحسين جودة الفيديو");
+  }
+
+  const data = await ffmpeg.readFile(output);
+  const label =
+    target === "4k" ? "4k-enhance" : target === "1440" ? "1440p-enhance" : "1080p-enhance";
+  await downloadBlob(
+    toBlob(data, "video/mp4"),
+    `${basename(file.name)}-${label}.mp4`,
+  );
+  try {
+    await ffmpeg.deleteFile(input);
+    await ffmpeg.deleteFile(output);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function extractAudioTrack(
   file: File,
   onProgress?: MediaProgress,

@@ -219,6 +219,15 @@ export const tools: Tool[] = [
     icon: Video,
   },
   {
+    slug: "enhance-video",
+    title: "تحسين جودة الفيديو",
+    description:
+      "ارفع وضوح الفيديو حتى 4K مع تنعيم الضوضاء وتوضيح الصورة وترميز عالي الجودة.",
+    category: "video",
+    accept: "video/*",
+    icon: WandSparkles,
+  },
+  {
     slug: "video-recorder",
     title: "مسجل الفيديو",
     description: "سجّل فيديو مباشرة من الكاميرا.",

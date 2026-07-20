@@ -243,6 +243,16 @@ const toolExtraKeywords: Record<string, string[]> = {
     "video stabilizer",
     "فيديو ثابت",
   ],
+  "enhance-video": [
+    "تحسين جودة الفيديو",
+    "رفع جودة فيديو",
+    "فيديو 4K",
+    "upscale video 4k",
+    "enhance video quality",
+    "تحسين وضوح فيديو",
+    "video enhancer online",
+    "رفع دقة فيديو",
+  ],
   "video-recorder": [
     "تسجيل فيديو من الكاميرا",
     "webcam recorder",

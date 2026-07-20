@@ -68,6 +68,10 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [rotateDeg, setRotateDeg] = useState<"90" | "180" | "270">("90");
   const [flipMode, setFlipMode] = useState<"h" | "v">("h");
   const [width, setWidth] = useState("1280");
+  const [enhanceTarget, setEnhanceTarget] = useState<"1080" | "1440" | "4k">("4k");
+  const [enhanceStrength, setEnhanceStrength] = useState<
+    "light" | "medium" | "strong"
+  >("strong");
   const [speed, setSpeed] = useState("1.5");
   const [volume, setVolume] = useState("1.5");
   const [loops, setLoops] = useState("2");
@@ -330,6 +334,13 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           break;
         case "video-stabilize":
           await media.stabilizeVideo(files[0], onProgress);
+          break;
+        case "video-enhance":
+          await media.enhanceVideoQuality(
+            files[0],
+            { target: enhanceTarget, strength: enhanceStrength },
+            onProgress,
+          );
           break;
         case "audio-convert":
           await media.convertAudio(files[0], audioFormat, onProgress);
@@ -796,6 +807,43 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
               <option value="1920">1920</option>
             </select>
           </Field>
+        )}
+        {kind === "video-enhance" && (
+          <>
+            <Field label="الدقة المستهدفة">
+              <select
+                className={sel}
+                value={enhanceTarget}
+                onChange={(e) =>
+                  setEnhanceTarget(e.target.value as "1080" | "1440" | "4k")
+                }
+              >
+                <option value="1080">Full HD — 1080p</option>
+                <option value="1440">QHD — 1440p</option>
+                <option value="4k">4K UHD — أفضل وضوح</option>
+              </select>
+            </Field>
+            <Field label="قوة التحسين">
+              <select
+                className={sel}
+                value={enhanceStrength}
+                onChange={(e) =>
+                  setEnhanceStrength(
+                    e.target.value as "light" | "medium" | "strong",
+                  )
+                }
+              >
+                <option value="light">خفيف — أسرع</option>
+                <option value="medium">متوسط — متوازن</option>
+                <option value="strong">قوي — أقصى جودة (أبطأ)</option>
+              </select>
+            </Field>
+            <p className="sm:col-span-2 text-xs leading-6 text-[#666]">
+              يطبّق تنعيم الضوضاء، رفع الدقة بمحرّك Lanczos، توضيح الحواف، وتحسين
+              التباين/الألوان، ثم ترميز عالي الجودة. المقاطع الطويلة قد تستغرق
+              وقتاً أطول داخل المتصفح.
+            </p>
+          </>
         )}
         {(kind === "video-speed" || kind === "audio-speed") && (
           <Field label="السرعة 0.5–2">
