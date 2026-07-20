@@ -111,10 +111,13 @@ export function AuthMenu() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex max-w-[12rem] items-center gap-2 transition hover:opacity-90"
+        className="inline-flex max-w-[12rem] flex-row items-center gap-2 transition hover:opacity-90"
         aria-expanded={open}
         aria-label={label}
       >
+        <span className="hidden truncate text-sm font-bold sm:inline">
+          {label}
+        </span>
         {showPhoto ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -131,9 +134,6 @@ export function AuthMenu() {
             <User className="h-4 w-4" strokeWidth={2.25} />
           </span>
         )}
-        <span className="hidden truncate text-sm font-bold sm:inline">
-          {label}
-        </span>
       </button>
       {open ? (
         <div
