@@ -1,21 +1,12 @@
 import type { Metadata } from "next";
-import { InfoShell } from "@/components/info-shell";
+import { HelpFaq } from "@/components/help-faq";
 
 export const metadata: Metadata = {
-  title: "المساعدة",
-  description: "مركز المساعدة في Tool2Day",
+  title: "Help | المساعدة",
+  description:
+    "Tool2Day help center — billing, account, and troubleshooting for video, audio, and PDF tools.",
 };
 
 export default function HelpPage() {
-  return (
-    <InfoShell
-      title="المساعدة"
-      description="إجابات سريعة لأكثر الأسئلة شيوعاً."
-      paragraphs={[
-        "اختر الأداة من الصفحة الرئيسية، ارفع ملفك، ثم ابدأ المعالجة مباشرة في المتصفح.",
-        "إذا توقف التحميل أو فشلت المعالجة، جرّب ملفاً أصغر أو متصفحاً حديثاً مثل Chrome أو Edge.",
-        "للمزيد من الدعم، استخدم صفحة «تواصل معنا».",
-      ]}
-    />
-  );
+  return <HelpFaq />;
 }
