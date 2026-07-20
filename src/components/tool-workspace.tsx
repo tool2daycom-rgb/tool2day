@@ -231,7 +231,12 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         return;
       }
 
-      if (!files.length) {
+      if (kind === "video-add-image") {
+        if (!overlayVideo || !overlayImage) {
+          setError("اختر ملف فيديو وملف صورة");
+          return;
+        }
+      } else if (!files.length) {
         setError("اختر ملفاً أولاً");
         return;
       }
