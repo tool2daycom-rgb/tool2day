@@ -71,9 +71,6 @@ export function HomeDirectory() {
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
           الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
         </h1>
-        <p className="mt-3 text-sm text-[#666]">
-          كل الأدوات مفعّلة — ارفع ملفك وابدأ المعالجة مباشرة في المتصفح
-        </p>
       </div>
 
       <div className="rounded-2xl border border-[#e8e8e8] bg-white px-5 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)] sm:px-10">
