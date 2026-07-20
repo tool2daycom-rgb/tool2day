@@ -18,6 +18,8 @@ import {
   FileVideo,
   FlipHorizontal,
   FlipVertical,
+  FolderOpen,
+  Globe,
   Image as ImageIcon,
   ImagePlus,
   Mic,
@@ -49,6 +51,23 @@ import {
   Undo2,
   Redo2,
 } from "lucide-react";
+import { AuthMenu } from "@/components/auth-menu";
+import { BrandLogoLink } from "@/components/brand-logo";
+import { RecordStudio } from "@/components/record-studio";
+import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
+import {
+  captureVideoThumbnail,
+  deleteSavedProject,
+  formatBytes,
+  formatProjectDate,
+  getSavedProject,
+  listSavedProjects,
+  newProjectId,
+  saveVideoEditorProject,
+  type ProjectAssetBlob,
+  type ProjectEditState,
+  type SavedProjectListItem,
+} from "@/lib/video-editor-projects";
 import { exportVideoProject } from "@/lib/processors/video-project";
 import { extractAudioTrack } from "@/lib/processors/media";
 import { analyzeWaveform } from "@/lib/audio-waveform";
@@ -59,8 +78,6 @@ import {
   TTS_LANGS,
   VIDEO_FONTS,
 } from "@/lib/video-editor-assets";
-import { RecordStudio } from "@/components/record-studio";
-import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 
 type Panel =
   | "files"
@@ -632,6 +649,19 @@ export function VideoEditorWorkspace({
   const [mainClips, setMainClips] = useState<MainClip[]>([]);
   const [mediaLibrary, setMediaLibrary] = useState<MediaAsset[]>([]);
   const [mediaImportBusy, setMediaImportBusy] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const projectIdRef = useRef<string | null>(null);
+  const [savedProjects, setSavedProjects] = useState<SavedProjectListItem[]>(
+    [],
+  );
+  const [filesTab, setFilesTab] = useState<"current" | "projects">("current");
+  const [projectsBusy, setProjectsBusy] = useState(false);
+  const restoreBundleRef = useRef<{
+    state: ProjectEditState;
+    assets: Map<string, File>;
+  } | null>(null);
+  const skipAutosaveRef = useRef(false);
+  const savingProjectRef = useRef(false);
   const [timelineDropTarget, setTimelineDropTarget] = useState<string | null>(
     null,
   );
@@ -1316,15 +1346,22 @@ export function VideoEditorWorkspace({
   async function onPick(list: FileList | null) {
     const f = list?.[0];
     if (!f) return;
+    await persistCurrentProject("auto");
     await loadVideoFile(f);
   }
 
-  async function loadVideoFile(f: File) {
+  async function loadVideoFile(f: File, opts?: { projectId?: string }) {
     if (url) URL.revokeObjectURL(url);
     const next = URL.createObjectURL(f);
     fileLiveRef.current = f;
     urlLiveRef.current = next;
     clearEditorHistory();
+    const pid = opts?.projectId ?? newProjectId();
+    projectIdRef.current = pid;
+    setProjectId(pid);
+    if (!opts?.projectId) {
+      restoreBundleRef.current = null;
+    }
     setFile(f);
     setUrl(next);
     setOverlays((prev) => {
@@ -1364,6 +1401,7 @@ export function VideoEditorWorkspace({
     setError(null);
     setStatus(`تم تحميل: ${f.name}`);
     setPanel("files");
+    setFilesTab("current");
     setShowRecordStudio(false);
     settingsPromptedRef.current = null;
     void analyzeWaveform(f, 240).then((peaks) => {
@@ -1385,6 +1423,12 @@ export function VideoEditorWorkspace({
     const d = v.duration || 0;
     const mw = v.videoWidth || 1280;
     const mh = v.videoHeight || 720;
+    const bundle = restoreBundleRef.current;
+    if (bundle) {
+      restoreBundleRef.current = null;
+      applyRestoredState(bundle.state, bundle.assets, d, mw, mh);
+      return;
+    }
     setDuration(d);
     setTrimIn(0);
     setTrimOut(d);
@@ -1449,6 +1493,427 @@ export function VideoEditorWorkspace({
       applyMatchMedia(media);
     }
   }
+
+  function applyRestoredState(
+    state: ProjectEditState,
+    assets: Map<string, File>,
+    mediaDuration: number,
+    mw: number,
+    mh: number,
+  ) {
+    skipAutosaveRef.current = true;
+    const liveFile = fileLiveRef.current!;
+    const liveUrl = urlLiveRef.current!;
+
+    setDuration(state.duration || mediaDuration);
+    setVideoNatural(state.videoNatural?.w ? state.videoNatural : { w: mw, h: mh });
+    setTrimIn(state.trimIn);
+    setTrimOut(state.trimOut || mediaDuration);
+    setCurrentTime(0);
+    setVolume(state.volume);
+    setMuted(state.muted);
+    setFadeIn(state.fadeIn);
+    setFadeOut(state.fadeOut);
+    setSpeed(state.speed);
+    setAudioPitch(state.audioPitch);
+    setAudioReverse(state.audioReverse);
+    setNoiseReduce(state.noiseReduce);
+    setRotate(state.rotate);
+    setFlipH(state.flipH);
+    setFlipV(state.flipV);
+    setOpacity(state.opacity);
+    setAspect(state.aspect as Aspect);
+    setCustomSize(state.customSize);
+    setScaleLock(state.scaleLock);
+    setBgBlurEnabled(state.bgBlurEnabled);
+    setBgBlurAmount(state.bgBlurAmount);
+    setCanvasBg(state.canvasBg);
+    setProjectProfile(state.projectProfile);
+    setLockProjectSize(state.lockProjectSize);
+    setVideoBox(state.videoBox);
+    setMainClips(state.mainClips.length ? state.mainClips : [
+      { id: nextId(idCounterRef, "main"), start: 0, duration: mediaDuration, offset: 0 },
+    ]);
+    setVideoLane(state.videoLane);
+    setVideoLayers(state.videoLayers);
+
+    const lib: MediaAsset[] = state.mediaLibrary.map((m) => {
+      const f = assets.get(m.id);
+      const file = f ?? liveFile;
+      const url = URL.createObjectURL(file);
+      return {
+        id: m.id,
+        kind: m.kind,
+        name: m.name,
+        file,
+        url,
+        duration: m.duration,
+      };
+    });
+    setMediaLibrary(lib);
+
+    const nextOverlays: Overlay[] = [];
+    for (const raw of state.overlays) {
+      const type = raw.type as string;
+      if (type === "text" || type === "emoji") {
+        nextOverlays.push(raw as unknown as Overlay);
+        continue;
+      }
+      if (type === "image") {
+        const assetId = String(raw.assetId || raw.id);
+        const f = assets.get(assetId);
+        if (!f) continue;
+        const src = URL.createObjectURL(f);
+        nextOverlays.push({
+          id: String(raw.id),
+          type: "image",
+          src,
+          file: f,
+          x: Number(raw.x) || 0,
+          y: Number(raw.y) || 0,
+          w: Number(raw.w) || 0.3,
+          h: Number(raw.h) || 0.3,
+          opacity: Number(raw.opacity ?? 1),
+        });
+      }
+    }
+    setOverlays(nextOverlays);
+
+    const nextAudio: AudioTrack[] = [];
+    for (const raw of state.audioTracks) {
+      const id = String(raw.id);
+      if (id === "linked-audio" || id.startsWith("detached-")) {
+        nextAudio.push({
+          id,
+          name: String(raw.name || liveFile.name),
+          file: liveFile,
+          url: liveUrl,
+          start: Number(raw.start) || 0,
+          volume: Number(raw.volume ?? 1),
+          duration: Number(raw.duration) || mediaDuration,
+          offset: Number(raw.offset) || 0,
+          sourceDuration: Number(raw.sourceDuration) || mediaDuration,
+          visible: raw.visible !== false,
+          locked: Boolean(raw.locked),
+          muted: Boolean(raw.muted),
+          solo: Boolean(raw.solo),
+        });
+        continue;
+      }
+      const f = assets.get(id);
+      if (!f) continue;
+      const aurl = URL.createObjectURL(f);
+      nextAudio.push({
+        id,
+        name: String(raw.name || f.name),
+        file: f,
+        url: aurl,
+        start: Number(raw.start) || 0,
+        volume: Number(raw.volume ?? 1),
+        duration: Number(raw.duration) || 5,
+        offset: Number(raw.offset) || 0,
+        sourceDuration: Number(raw.sourceDuration) || Number(raw.duration) || 5,
+        visible: raw.visible !== false,
+        locked: Boolean(raw.locked),
+        muted: Boolean(raw.muted),
+        solo: Boolean(raw.solo),
+      });
+    }
+    if (!nextAudio.some((t) => t.id === "linked-audio")) {
+      nextAudio.unshift({
+        id: "linked-audio",
+        name: liveFile.name,
+        file: liveFile,
+        url: liveUrl,
+        start: 0,
+        volume: 1,
+        duration: mediaDuration,
+        offset: 0,
+        sourceDuration: mediaDuration,
+      });
+    }
+    setAudioTracks(nextAudio);
+
+    const nextLayers: LayerClip[] = [];
+    for (const raw of state.layerClips) {
+      const id = String(raw.id);
+      const f = assets.get(id);
+      if (!f) continue;
+      const lurl = URL.createObjectURL(f);
+      nextLayers.push({
+        id,
+        trackId: String(raw.trackId),
+        kind: (raw.kind as "video" | "image") || "video",
+        name: String(raw.name || f.name),
+        file: f,
+        url: lurl,
+        start: Number(raw.start) || 0,
+        duration: Number(raw.duration) || 5,
+        offset: Number(raw.offset) || 0,
+        sourceDuration: Number(raw.sourceDuration) || Number(raw.duration) || 5,
+        x: Number(raw.x) || 0.1,
+        y: Number(raw.y) || 0.1,
+        w: Number(raw.w) || 0.4,
+        h: Number(raw.h) || 0.4,
+        opacity: Number(raw.opacity ?? 1),
+        locked: Boolean(raw.locked),
+      });
+    }
+    setLayerClips(nextLayers);
+
+    setSelectedId("video");
+    setPanel("files");
+    setFilesTab("current");
+    setStatus("تم استعادة المشروع المحفوظ");
+    setMediaPrompt(null);
+    queueMicrotask(() => {
+      skipAutosaveRef.current = false;
+    });
+  }
+
+  async function refreshSavedProjects() {
+    try {
+      const list = await listSavedProjects();
+      setSavedProjects(list);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function collectProjectAssets(): {
+    assets: ProjectAssetBlob[];
+    overlayPayload: Array<Record<string, unknown>>;
+    audioPayload: Array<Record<string, unknown>>;
+    layerPayload: Array<Record<string, unknown>>;
+  } {
+    const assets: ProjectAssetBlob[] = [];
+    const seen = new Set<string>();
+
+    const pushAsset = (
+      id: string,
+      kind: ProjectAssetBlob["kind"],
+      file: File,
+    ) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      assets.push({
+        id,
+        kind,
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        blob: file,
+      });
+    };
+
+    for (const m of mediaLibrary) {
+      pushAsset(m.id, m.kind, m.file);
+    }
+    for (const c of layerClips) {
+      pushAsset(c.id, c.kind, c.file);
+    }
+    for (const t of audioTracks) {
+      if (t.id === "linked-audio" || t.id.startsWith("detached-")) continue;
+      pushAsset(t.id, "audio", t.file);
+    }
+
+    const overlayPayload = overlays.map((o) => {
+      if (o.type === "image") {
+        pushAsset(o.id, "image", o.file);
+        return {
+          id: o.id,
+          type: "image",
+          assetId: o.id,
+          x: o.x,
+          y: o.y,
+          w: o.w,
+          h: o.h,
+          opacity: o.opacity,
+        };
+      }
+      return { ...o };
+    });
+
+    const audioPayload = audioTracks.map((t) => ({
+      id: t.id,
+      name: t.name,
+      start: t.start,
+      volume: t.volume,
+      duration: t.duration,
+      offset: t.offset,
+      sourceDuration: t.sourceDuration,
+      visible: t.visible,
+      locked: t.locked,
+      muted: t.muted,
+      solo: t.solo,
+    }));
+
+    const layerPayload = layerClips.map((c) => ({
+      id: c.id,
+      trackId: c.trackId,
+      kind: c.kind,
+      name: c.name,
+      start: c.start,
+      duration: c.duration,
+      offset: c.offset,
+      sourceDuration: c.sourceDuration,
+      x: c.x,
+      y: c.y,
+      w: c.w,
+      h: c.h,
+      opacity: c.opacity,
+      locked: c.locked,
+    }));
+
+    return { assets, overlayPayload, audioPayload, layerPayload };
+  }
+
+  async function persistCurrentProject(reason: string) {
+    if (skipAutosaveRef.current || savingProjectRef.current) return;
+    const f = fileLiveRef.current;
+    const pid = projectIdRef.current;
+    if (!f || !pid || !duration) return;
+
+    savingProjectRef.current = true;
+    try {
+      const { assets, overlayPayload, audioPayload, layerPayload } =
+        collectProjectAssets();
+      const state: ProjectEditState = {
+        trimIn,
+        trimOut,
+        volume,
+        muted,
+        fadeIn,
+        fadeOut,
+        speed,
+        audioPitch,
+        audioReverse,
+        noiseReduce,
+        rotate,
+        flipH,
+        flipV,
+        opacity,
+        aspect,
+        customSize,
+        scaleLock,
+        bgBlurEnabled,
+        bgBlurAmount,
+        canvasBg,
+        projectProfile,
+        lockProjectSize,
+        videoBox,
+        videoNatural,
+        duration,
+        mainClips,
+        videoLane,
+        videoLayers,
+        overlays: overlayPayload,
+        audioTracks: audioPayload,
+        layerClips: layerPayload,
+        mediaLibrary: mediaLibrary.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          name: m.name,
+          duration: m.duration,
+        })),
+      };
+      const thumbnail = await captureVideoThumbnail(videoRef.current);
+      await saveVideoEditorProject({
+        id: pid,
+        name: f.name,
+        duration,
+        thumbnail,
+        mainVideoName: f.name,
+        mainVideoType: f.type || "video/mp4",
+        mainVideo: f,
+        state,
+        assets,
+      });
+      await refreshSavedProjects();
+      if (reason === "manual") {
+        setStatus("تم حفظ المشروع في مشاريعي");
+      }
+    } catch (err) {
+      console.warn("project autosave failed", err);
+      if (reason === "manual") {
+        setError("تعذّر حفظ المشروع (قد تكون مساحة المتصفح ممتلئة)");
+      }
+    } finally {
+      savingProjectRef.current = false;
+    }
+  }
+
+  async function openSavedProject(id: string) {
+    setProjectsBusy(true);
+    setError(null);
+    try {
+      const record = await getSavedProject(id);
+      if (!record) throw new Error("المشروع غير موجود");
+      const mainFile = new File([record.mainVideo], record.mainVideoName, {
+        type: record.mainVideoType || "video/mp4",
+      });
+      const assets = new Map<string, File>();
+      for (const a of record.assets) {
+        assets.set(
+          a.id,
+          new File([a.blob], a.name, {
+            type: a.type || "application/octet-stream",
+          }),
+        );
+      }
+      restoreBundleRef.current = { state: record.state, assets };
+      await loadVideoFile(mainFile, { projectId: record.id });
+      setStatus(`فتح المشروع: ${record.name}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذّر فتح المشروع");
+    } finally {
+      setProjectsBusy(false);
+    }
+  }
+
+  async function removeSavedProject(id: string) {
+    try {
+      await deleteSavedProject(id);
+      await refreshSavedProjects();
+      setStatus("تم حذف المشروع من مشاريعي");
+    } catch {
+      setError("تعذّر حذف المشروع");
+    }
+  }
+
+  const persistFnRef = useRef<() => Promise<void>>(async () => {});
+  persistFnRef.current = async () => {
+    await persistCurrentProject("auto");
+  };
+
+  useEffect(() => {
+    void refreshSavedProjects();
+  }, []);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        void persistFnRef.current();
+      }
+    };
+    const onHide = () => {
+      void persistFnRef.current();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", onHide);
+      void persistFnRef.current();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!file) return;
+    const id = window.setInterval(() => {
+      void persistFnRef.current();
+    }, 25000);
+    return () => window.clearInterval(id);
+  }, [file]);
 
   function applyMatchMedia(media: MediaProfile) {
     setProjectProfile(media);
@@ -3608,18 +4073,31 @@ export function VideoEditorWorkspace({
               : "overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#121214] text-white shadow-xl"
           }
         >
-          <div className="flex items-center border-b border-[#2a2a2e] px-4 py-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Clapperboard className="h-5 w-5 text-[#f5c518]" />
-              محرر الفيديو
+          <div className="flex shrink-0 items-center gap-3 border-b border-[#2a2a2e] bg-[#0a0a0a] px-4 py-2.5">
+            <BrandLogoLink size="sm" />
+            <button
+              type="button"
+              onClick={() => void refreshSavedProjects()}
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/10"
+            >
+              <FolderOpen className="h-4 w-4 text-[#f5c518]" />
+              مشاريعي
+            </button>
+            <span className="text-xs text-[#666]">محرر الفيديو</span>
+            <div className="ms-auto flex items-center gap-3 text-sm font-bold text-white">
+              <span className="inline-flex items-center gap-1.5 text-xs text-[#aaa]">
+                <Globe className="h-3.5 w-3.5" />
+                AR
+              </span>
+              <AuthMenu />
             </div>
           </div>
           <div
-            className={`flex flex-col items-center justify-center gap-4 p-8 ${
-              fullscreen ? "min-h-0 flex-1" : "min-h-[420px]"
+            className={`flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-6 sm:p-8 ${
+              fullscreen ? "" : "min-h-[420px]"
             }`}
           >
-            <div className="rounded-2xl border border-dashed border-[#3a3a40] bg-[#1a1a1d] px-10 py-14 text-center">
+            <div className="rounded-2xl border border-dashed border-[#3a3a40] bg-[#1a1a1d] px-10 py-12 text-center">
               <Upload className="mx-auto mb-4 h-10 w-10 text-[#f5c518]" />
               <p className="mb-4 text-sm text-[#ccc]">
                 اسحب فيديو أو اختر من جهازك أو سجّل مباشرة
@@ -3648,6 +4126,73 @@ export function VideoEditorWorkspace({
                 onChange={(e) => void onPick(e.target.files)}
               />
             </div>
+
+            <div className="w-full max-w-2xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="inline-flex items-center gap-2 text-sm font-bold text-white">
+                  <FolderOpen className="h-4 w-4 text-[#f5c518]" />
+                  مشاريعي
+                </p>
+                <p className="text-[11px] text-[#777]">
+                  تُحفظ تلقائياً عند المغادرة · على هذا الجهاز فقط
+                </p>
+              </div>
+              {projectsBusy ? (
+                <p className="text-center text-xs text-[#888]">جاري التحميل…</p>
+              ) : savedProjects.length === 0 ? (
+                <p className="rounded-xl border border-[#2a2a2e] bg-[#161618] px-4 py-8 text-center text-xs text-[#777]">
+                  لا توجد مشاريع محفوظة بعد. ابدأ بتحرير فيديو وسيُحفظ هنا تلقائياً.
+                </p>
+              ) : (
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {savedProjects.map((p) => (
+                    <li key={p.id}>
+                      <div className="flex gap-3 rounded-xl border border-[#2a2a2e] bg-[#161618] p-2.5 transition hover:border-[#f5c518]/40">
+                        <button
+                          type="button"
+                          disabled={projectsBusy}
+                          onClick={() => void openSavedProject(p.id)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-start"
+                        >
+                          <div className="h-14 w-20 shrink-0 overflow-hidden rounded-md bg-[#0e0e10]">
+                            {p.thumbnail ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={p.thumbnail}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center">
+                                <Clapperboard className="h-5 w-5 text-[#555]" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-white">
+                              {p.name}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-[#888]">
+                              {formatProjectDate(p.updatedAt)} ·{" "}
+                              {formatBytes(p.sizeBytes)}
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          title="حذف"
+                          onClick={() => void removeSavedProject(p.id)}
+                          className="shrink-0 self-center rounded-md p-2 text-[#888] hover:bg-[#2a2a2e] hover:text-red-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <p className="max-w-lg text-center text-xs leading-6 text-[#777]">
               قص، سرعة، تدوير، عكس، شفافية، صوت وتعليق صوتي وملصقات ونصوص مع
               تايملاين ومعاينة حية — ثم صدّر MP4.
@@ -3672,12 +4217,27 @@ export function VideoEditorWorkspace({
           : "overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#0e0e10] text-white shadow-xl"
       }
     >
-      {/* Top bar */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[#2a2a2e] bg-[#161618] px-3 py-2">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Clapperboard className="h-4 w-4 text-[#f5c518]" />
-          <span className="max-w-[180px] truncate text-[#ddd]">{file.name}</span>
-          <div className="ms-2 flex items-center gap-0.5 rounded-md border border-[#2e2e32] bg-[#1a1a1d] p-0.5">
+      {/* Top bar — محرر فقط (شعار + مشاريعي + ملف) بدون قوائم الموقع */}
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[#2a2a2e] bg-[#0a0a0a] px-3 py-2">
+        <BrandLogoLink size="sm" />
+        <button
+          type="button"
+          onClick={() => {
+            setPanel("files");
+            setFilesTab("projects");
+            void refreshSavedProjects();
+          }}
+          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-white/10"
+        >
+          <FolderOpen className="h-4 w-4 text-[#f5c518]" />
+          مشاريعي
+        </button>
+        <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <Clapperboard className="h-4 w-4 shrink-0 text-[#f5c518]" />
+          <span className="max-w-[160px] truncate text-[#ddd] sm:max-w-[220px]">
+            {file.name}
+          </span>
+          <div className="ms-1 flex items-center gap-0.5 rounded-md border border-[#2e2e32] bg-[#1a1a1d] p-0.5">
             <button
               type="button"
               title="تراجع خطوة (Ctrl/⌘+Z)"
@@ -3701,6 +4261,14 @@ export function VideoEditorWorkspace({
         <div className="ms-auto flex items-center gap-2">
           <button
             type="button"
+            onClick={() => void persistCurrentProject("manual")}
+            className="rounded-md border border-[#333] px-3 py-1.5 text-xs text-[#ccc] hover:bg-[#222]"
+            title="حفظ في مشاريعي الآن"
+          >
+            حفظ
+          </button>
+          <button
+            type="button"
             onClick={() => fileRef.current?.click()}
             className="rounded-md border border-[#333] px-3 py-1.5 text-xs text-[#ccc] hover:bg-[#222]"
           >
@@ -3722,6 +4290,11 @@ export function VideoEditorWorkspace({
             <Download className="h-4 w-4" />
             {busy ? `تصدير ${progress}%` : "التصدير"}
           </button>
+          <span className="hidden items-center gap-1.5 text-xs font-bold text-[#aaa] sm:inline-flex">
+            <Globe className="h-3.5 w-3.5" />
+            AR
+          </span>
+          <AuthMenu />
         </div>
       </div>
 
@@ -3750,15 +4323,120 @@ export function VideoEditorWorkspace({
         >
           {panel === "files" && (
             <div className="space-y-3 text-sm">
-              <p className="font-semibold text-[#f5c518]">الملف</p>
-              <p className="truncate text-xs text-[#aaa]">{file.name}</p>
-              <p className="text-xs text-[#777]">
-                المدة: {formatTime(duration)} · المقطع: {formatTime(clipDuration)}
-              </p>
-              <p className="text-[11px] leading-5 text-[#666]">
-                من تبويب &quot;وسائط&quot; استورد صوراً وفيديوهات وأصواتاً، ثم اضغط
-                الملف لإضافته فوق الفيديو أو كمسار صوت.
-              </p>
+              <div className="flex gap-1 rounded-md border border-[#2e2e32] bg-[#121214] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setFilesTab("current")}
+                  className={`flex-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                    filesTab === "current"
+                      ? "bg-[#2a2a2e] text-[#f5c518]"
+                      : "text-[#888] hover:text-white"
+                  }`}
+                >
+                  هذا المشروع
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilesTab("projects");
+                    void refreshSavedProjects();
+                  }}
+                  className={`flex-1 rounded px-2 py-1.5 text-[11px] font-semibold ${
+                    filesTab === "projects"
+                      ? "bg-[#2a2a2e] text-[#f5c518]"
+                      : "text-[#888] hover:text-white"
+                  }`}
+                >
+                  مشاريعي
+                </button>
+              </div>
+
+              {filesTab === "current" ? (
+                <>
+                  <p className="font-semibold text-[#f5c518]">الملف الحالي</p>
+                  <p className="truncate text-xs text-[#aaa]">{file.name}</p>
+                  <p className="text-xs text-[#777]">
+                    المدة: {formatTime(duration)} · المقطع:{" "}
+                    {formatTime(clipDuration)}
+                  </p>
+                  <p className="text-[11px] leading-5 text-[#666]">
+                    يُحفظ المشروع تلقائياً في «مشاريعي» عند المغادرة أو إخفاء
+                    التبويب — يمكنك استكماله لاحقاً من نفس المتصفح.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void persistCurrentProject("manual")}
+                    className="w-full rounded-md border border-[#333] bg-[#1a1a1d] px-3 py-2 text-xs font-semibold text-[#ddd] hover:border-[#f5c518]/50"
+                  >
+                    حفظ الآن في مشاريعي
+                  </button>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <p className="font-semibold text-[#f5c518]">مشاريعي المحفوظة</p>
+                  <p className="text-[11px] leading-5 text-[#666]">
+                    آخر {savedProjects.length || 0} مشاريع على هذا الجهاز
+                  </p>
+                  {savedProjects.length === 0 ? (
+                    <p className="rounded-lg border border-[#2a2a2e] px-3 py-6 text-center text-[11px] text-[#777]">
+                      لا مشاريع بعد
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {savedProjects.map((p) => (
+                        <li
+                          key={p.id}
+                          className={`rounded-lg border p-2 ${
+                            p.id === projectId
+                              ? "border-[#f5c518]/50 bg-[#f5c518]/5"
+                              : "border-[#2a2a2e] bg-[#121214]"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            disabled={projectsBusy || p.id === projectId}
+                            onClick={() => void openSavedProject(p.id)}
+                            className="flex w-full items-center gap-2 text-start disabled:opacity-70"
+                          >
+                            <div className="h-10 w-14 shrink-0 overflow-hidden rounded bg-[#0e0e10]">
+                              {p.thumbnail ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={p.thumbnail}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center">
+                                  <Clapperboard className="h-3.5 w-3.5 text-[#555]" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[11px] font-semibold text-white">
+                                {p.name}
+                                {p.id === projectId ? " · مفتوح" : ""}
+                              </p>
+                              <p className="text-[10px] text-[#777]">
+                                {formatProjectDate(p.updatedAt)}
+                              </p>
+                            </div>
+                          </button>
+                          {p.id !== projectId && (
+                            <button
+                              type="button"
+                              onClick={() => void removeSavedProject(p.id)}
+                              className="mt-1.5 w-full rounded px-2 py-1 text-[10px] text-[#888] hover:bg-[#2a2a2e] hover:text-red-400"
+                            >
+                              حذف
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
