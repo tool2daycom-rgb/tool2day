@@ -48,45 +48,35 @@ export type Tool = {
 
 export const categoryMeta: Record<
   ToolCategory,
-  {
-    label: string;
-    sectionTitle: string;
-    anchor: string;
-    icon: LucideIcon;
-  }
+  { label: string; sectionTitle: string; anchor: string }
 > = {
   video: {
     label: "الفيديو",
     sectionTitle: "أدوات الفيديو",
     anchor: "video",
-    icon: Video,
   },
   audio: {
     label: "الصوت",
     sectionTitle: "أدوات الصوت",
     anchor: "audio",
-    icon: Music2,
   },
   pdf: {
     label: "PDF",
     sectionTitle: "أدوات PDF",
     anchor: "pdf",
-    icon: FileText,
   },
   converters: {
     label: "المحولات",
     sectionTitle: "المحولات",
     anchor: "converters",
-    icon: RefreshCcw,
   },
 };
 
-/** ترتيب مثل 123apps: فيديو → صوت → PDF → محولات */
 export const navCategories: ToolCategory[] = [
-  "video",
-  "audio",
-  "pdf",
   "converters",
+  "pdf",
+  "audio",
+  "video",
 ];
 
 export const tools: Tool[] = [
@@ -103,7 +93,7 @@ export const tools: Tool[] = [
   {
     slug: "screen-recorder",
     title: "مسجل الشاشة",
-    description: "سجّل شاشتك بجودة عالية.",
+    description: "سجّل الشاشة مباشرة من متصفحك — مجاناً وبدون علامة مائية.",
     category: "video",
     accept: "video/*",
     icon: Monitor,

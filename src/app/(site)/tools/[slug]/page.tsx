@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
+import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
+import { getToolSeoContent } from "@/lib/tool-seo-content";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
 
 type Props = {
@@ -22,9 +25,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   const tool = getTool(slug);
   if (!tool) return {};
+  const seo = getToolSeoContent(tool);
   return {
     title: tool.title,
-    description: tool.description,
+    description: seo.tagline,
   };
 }
 
@@ -40,6 +44,7 @@ export default async function ToolPage({ params }: Props) {
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
   const isPdf = slug === "pdf-editor";
+  const seo = getToolSeoContent(tool);
 
   return (
     <div
@@ -53,11 +58,23 @@ export default async function ToolPage({ params }: Props) {
       >
         ← {category.sectionTitle}
       </Link>
-      <div className="mt-6 flex items-center gap-3">
-        <Icon className="h-7 w-7 stroke-[1.5] text-[#222]" />
-        <h1 className="text-3xl font-bold text-[#111] sm:text-4xl">{tool.title}</h1>
+
+      <div className="mt-8 flex flex-col items-center text-center">
+        <BrandMarkAnimated size={40} motion="morph" className="mb-4" />
+        <div className="flex items-center justify-center gap-3">
+          <Icon className="h-7 w-7 stroke-[1.5] text-[#222]" />
+          <h1 className="text-3xl font-bold text-[#111] sm:text-4xl">
+            {tool.title}
+          </h1>
+        </div>
+        <p className="mt-3 max-w-xl text-base leading-8 text-[#555]">
+          {seo.tagline}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-emerald-700">
+          مجاني بالكامل · بدون علامة مائية
+        </p>
       </div>
-      <p className="mt-3 text-base leading-8 text-[#555]">{tool.description}</p>
+
       <div className="mt-8">
         {isPdf ? (
           <PdfEditorWorkspace
@@ -73,6 +90,8 @@ export default async function ToolPage({ params }: Props) {
           />
         )}
       </div>
+
+      <ToolSeoSections content={seo} />
     </div>
   );
 }
