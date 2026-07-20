@@ -7,10 +7,10 @@ import {
   Globe,
   Music2,
   RefreshCcw,
-  User,
   Video,
 } from "lucide-react";
 import { useState } from "react";
+import { AuthMenu } from "@/components/auth-menu";
 import { BrandLogo } from "@/components/brand-logo";
 import {
   categoryMeta,
@@ -124,13 +124,7 @@ export function SiteHeader() {
             <Globe className="h-4 w-4" strokeWidth={2.25} />
             <span className="hidden sm:inline">AR</span>
           </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 transition hover:opacity-80"
-          >
-            <User className="h-4 w-4" strokeWidth={2.25} />
-            <span className="hidden sm:inline">تسجيل الدخول</span>
-          </button>
+          <AuthMenu />
         </div>
       </div>
 
