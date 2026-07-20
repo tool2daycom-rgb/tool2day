@@ -53,6 +53,7 @@ a {
   }
 
   .brand-mark-sway,
+  .brand-mark-morph,
   .brand-dot {
     animation: none !important;
   }
@@ -67,6 +68,13 @@ a {
   transform-origin: 100px 101px;
   transform-box: view-box;
   animation: brand-spin 7s linear infinite;
+}
+
+/* توسّع وينكمش مع دوران — للفوتر */
+.brand-mark-morph {
+  transform-origin: 100px 101px;
+  transform-box: view-box;
+  animation: brand-morph 4.5s ease-in-out infinite;
 }
 
 .brand-dot {
@@ -104,6 +112,18 @@ a {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes brand-morph {
+  0% {
+    transform: rotate(0deg) scale(0.72);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.18);
+  }
+  100% {
+    transform: rotate(360deg) scale(0.72);
   }
 }
 

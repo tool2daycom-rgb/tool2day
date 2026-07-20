@@ -19,6 +19,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "daily",
       priority: 1,
     },
+    ...["privacy", "refund", "pricing", "help", "contact"].map((slug) => ({
+      url: `${BASE}/${slug}`,
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: 0.4,
+    })),
     ...toolEntries,
   ];
 }

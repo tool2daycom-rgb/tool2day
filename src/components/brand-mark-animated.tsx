@@ -1,10 +1,13 @@
-/** شعار المثلث — ثلاث دوائر تدور باستمرار حول المركز */
+/** شعار المثلث المتحرّك */
 export function BrandMarkAnimated({
   className = "",
   size = 22,
+  /** spin = دوران مستمر · morph = توسّع/انكماش مع دوران */
+  motion = "spin",
 }: {
   className?: string;
   size?: number;
+  motion?: "spin" | "morph";
 }) {
   return (
     <span
@@ -20,8 +23,11 @@ export function BrandMarkAnimated({
         role="img"
         aria-label="Tool2Day"
       >
-        <g className="brand-mark-sway">
-          {/* أصفر أعلى · برتقالي يسار · أزرق يمين */}
+        <g
+          className={
+            motion === "morph" ? "brand-mark-morph" : "brand-mark-sway"
+          }
+        >
           <circle
             className="brand-dot brand-dot-a"
             cx="100"
