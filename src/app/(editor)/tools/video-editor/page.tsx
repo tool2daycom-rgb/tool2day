@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ToolRatingBar } from "@/components/star-rating";
 import { VideoEditorWorkspace } from "@/components/video-editor-workspace";
 
 export const metadata: Metadata = {
@@ -17,5 +18,15 @@ export const metadata: Metadata = {
 };
 
 export default function VideoEditorPage() {
-  return <VideoEditorWorkspace fullscreen />;
+  return (
+    <>
+      <VideoEditorWorkspace fullscreen />
+      <div className="border-t border-[#222] bg-[#0a0a0a] px-4 py-6">
+        <ToolRatingBar
+          target="video-editor"
+          className="border-0 pt-0 text-white [&_p]:text-white [&_span]:text-white/80"
+        />
+      </div>
+    </>
+  );
 }

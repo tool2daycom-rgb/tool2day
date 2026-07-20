@@ -31,3 +31,36 @@ create policy "Allow anon read jobs"
   for select
   to anon, authenticated
   using (true);
+
+-- Ratings (site + per-tool)
+create table if not exists public.tool_ratings (
+  id uuid primary key default gen_random_uuid(),
+  target text not null,
+  stars int not null check (stars between 1 and 5),
+  visitor_key text not null,
+  created_at timestamptz not null default now(),
+  unique (target, visitor_key)
+);
+
+create index if not exists tool_ratings_target_idx on public.tool_ratings (target);
+
+alter table public.tool_ratings enable row level security;
+
+create policy "Allow anon read ratings"
+  on public.tool_ratings
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy "Allow anon insert ratings"
+  on public.tool_ratings
+  for insert
+  to anon, authenticated
+  with check (true);
+
+create policy "Allow anon update own ratings"
+  on public.tool_ratings
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);

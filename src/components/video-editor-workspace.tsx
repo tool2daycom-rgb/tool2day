@@ -60,6 +60,7 @@ import {
   VIDEO_FONTS,
 } from "@/lib/video-editor-assets";
 import { RecordStudio } from "@/components/record-studio";
+import { setDownloadRatingContext } from "@/lib/ratings";
 
 type Panel =
   | "files"
@@ -493,6 +494,11 @@ export function VideoEditorWorkspace({
 }: {
   fullscreen?: boolean;
 }) {
+  useEffect(() => {
+    setDownloadRatingContext("video-editor");
+    return () => setDownloadRatingContext(null);
+  }, []);
+
   const idCounterRef = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);

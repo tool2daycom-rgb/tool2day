@@ -14,7 +14,7 @@ export async function extractArchive(file: File) {
   }
   // Re-pack as clean zip download of contents
   const packed = zipSync(outZip);
-  downloadBlob(
+  await downloadBlob(
     new Blob([packed.buffer as ArrayBuffer], { type: "application/zip" }),
     `${basename(file.name)}-extracted.zip`,
   );
@@ -23,12 +23,12 @@ export async function extractArchive(file: File) {
 export async function convertArchiveToZip(file: File) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".zip")) {
-    downloadBlob(file, `${basename(file.name)}.zip`);
+    await downloadBlob(file, `${basename(file.name)}.zip`);
     return;
   }
   if (name.endsWith(".epub") || name.endsWith(".docx") || name.endsWith(".pptx")) {
     // these are already zip-based — save as .zip
-    downloadBlob(file, `${basename(file.name)}.zip`);
+    await downloadBlob(file, `${basename(file.name)}.zip`);
     return;
   }
   throw new Error("تحويل RAR/7Z إلى ZIP يحتاج معالجة على السيرفر.");
@@ -37,7 +37,7 @@ export async function convertArchiveToZip(file: File) {
 export async function ebookToPdfStub(file: File) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf")) {
-    downloadBlob(file, file.name);
+    await downloadBlob(file, file.name);
     return;
   }
   if (name.endsWith(".epub")) {
@@ -76,7 +76,7 @@ export async function ebookToPdfStub(file: File) {
 export async function convertFont(file: File, target: "ttf" | "otf" | "woff") {
   // Browser cannot fully re-encode fonts; we deliver original bytes with new extension for compatible cases
   const buf = await file.arrayBuffer();
-  downloadBlob(
+  await downloadBlob(
     new Blob([buf], { type: "font/" + target }),
     `${basename(file.name)}.${target}`,
   );

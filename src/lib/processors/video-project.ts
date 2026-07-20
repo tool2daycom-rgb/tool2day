@@ -569,7 +569,7 @@ export async function exportVideoProject(
   }
 
   const data = await ffmpeg.readFile(output);
-  downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-edited.mp4`);
+  await downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-edited.mp4`);
 
   for (const name of tempFiles) {
     try {

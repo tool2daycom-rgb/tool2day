@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Cairo, Syne } from "next/font/google";
 import { CookieConsent } from "@/components/cookie-consent";
+import { RatingGateModal } from "@/components/rating-gate-modal";
 import { getAllSiteKeywords, siteSeo } from "@/lib/seo-keywords";
 import "./globals.css";
 
@@ -98,6 +99,7 @@ export default function RootLayout({
         </Script>
         {children}
         <CookieConsent />
+        <RatingGateModal />
       </body>
     </html>
   );

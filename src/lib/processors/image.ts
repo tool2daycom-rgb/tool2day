@@ -26,5 +26,5 @@ export async function convertImage(
   });
 
   const ext = format === "jpeg" ? "jpg" : format;
-  downloadBlob(blob, `${basename(file.name)}.${ext}`);
+  await downloadBlob(blob, `${basename(file.name)}.${ext}`);
 }

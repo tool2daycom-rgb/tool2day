@@ -20,7 +20,7 @@ export async function mergePdfs(files: File[]) {
     pages.forEach((page) => merged.addPage(page));
   }
 
-  downloadBlob(pdfBlob(await merged.save()), "merged.pdf");
+  await downloadBlob(pdfBlob(await merged.save()), "merged.pdf");
 }
 
 export async function splitPdf(
@@ -44,7 +44,7 @@ export async function splitPdf(
     );
     const pages = await out.copyPages(src, indices);
     pages.forEach((page) => out.addPage(page));
-    downloadBlob(
+    await downloadBlob(
       pdfBlob(await out.save()),
       `${basename(file.name)}-p${from}-${to}.pdf`,
     );
@@ -58,7 +58,7 @@ export async function splitPdf(
     out.addPage(page);
     zip.file(`${basename(file.name)}-page-${i + 1}.pdf`, await out.save());
   }
-  downloadBlob(
+  await downloadBlob(
     await zip.generateAsync({ type: "blob" }),
     `${basename(file.name)}-pages.zip`,
   );
@@ -70,7 +70,7 @@ export async function rotatePdf(file: File, angle: 90 | 180 | 270) {
   doc.getPages().forEach((page) => {
     page.setRotation(degrees(angle));
   });
-  downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-rotated.pdf`);
+  await downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-rotated.pdf`);
 }
 
 export async function compressPdf(file: File) {
@@ -78,7 +78,7 @@ export async function compressPdf(file: File) {
   const doc = await PDFDocument.load(bytes);
   // Re-save strips some unused objects — light compression
   const out = await doc.save({ useObjectStreams: true });
-  downloadBlob(pdfBlob(out), `${basename(file.name)}-compressed.pdf`);
+  await downloadBlob(pdfBlob(out), `${basename(file.name)}-compressed.pdf`);
 }
 
 export async function imagesToPdf(files: File[]) {
@@ -100,5 +100,5 @@ export async function imagesToPdf(files: File[]) {
     });
   }
 
-  downloadBlob(pdfBlob(await doc.save()), "images.pdf");
+  await downloadBlob(pdfBlob(await doc.save()), "images.pdf");
 }

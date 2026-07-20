@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { HomeDirectory } from "@/components/home-directory";
+import { SiteRatingCard } from "@/components/star-rating";
 import { getAllSiteKeywords, siteSeo } from "@/lib/seo-keywords";
 import { tools } from "@/lib/tools";
 
@@ -54,6 +55,7 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <HomeDirectory />
+      <SiteRatingCard />
     </>
   );
 }

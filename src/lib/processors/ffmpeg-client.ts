@@ -94,15 +94,9 @@ export function inputFileName(file: File, fallbackExt: string) {
   return `input.${extensionForMime(file.type, fallbackExt)}`;
 }
 
-export function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+export async function downloadBlob(blob: Blob, filename: string) {
+  const { requireRatingThenDownload } = await import("@/lib/ratings");
+  await requireRatingThenDownload(blob, filename);
 }
 
 export function toBlob(data: Uint8Array | string, type: string) {

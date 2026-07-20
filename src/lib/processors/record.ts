@@ -38,5 +38,5 @@ async function recordStream(stream: MediaStream, seconds: number, name: string) 
   stream.getTracks().forEach((t) => t.stop());
   await stopped;
 
-  downloadBlob(new Blob(chunks, { type: "video/webm" }), name);
+  await downloadBlob(new Blob(chunks, { type: "video/webm" }), name);
 }

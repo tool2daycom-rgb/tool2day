@@ -35,7 +35,7 @@ async function runVideoOut(
   await ffmpeg.writeFile(input, await fetchFile(file));
   await execOrThrow(ffmpeg, ["-i", input, ...argsAfterInput, output]);
   const data = await ffmpeg.readFile(output);
-  downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-${suffix}.mp4`);
+  await downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-${suffix}.mp4`);
   await ffmpeg.deleteFile(input);
   await ffmpeg.deleteFile(output);
 }
@@ -52,7 +52,7 @@ async function runAudioOut(
   await ffmpeg.writeFile(input, await fetchFile(file));
   await execOrThrow(ffmpeg, ["-i", input, ...argsAfterInput, output]);
   const data = await ffmpeg.readFile(output);
-  downloadBlob(toBlob(data, "audio/mpeg"), `${basename(file.name)}-${suffix}.mp3`);
+  await downloadBlob(toBlob(data, "audio/mpeg"), `${basename(file.name)}-${suffix}.mp3`);
   await ffmpeg.deleteFile(input);
   await ffmpeg.deleteFile(output);
 }
@@ -138,7 +138,7 @@ export async function convertVideo(
       : format === "mov"
         ? "video/quicktime"
         : "video/mp4";
-  downloadBlob(toBlob(data, mime), `${basename(file.name)}.${format}`);
+  await downloadBlob(toBlob(data, mime), `${basename(file.name)}.${format}`);
   try {
     await ffmpeg.deleteFile(input);
     await ffmpeg.deleteFile(output);
@@ -223,7 +223,7 @@ export async function convertAudio(
     aac: "audio/aac",
     ogg: "audio/ogg",
   } as const;
-  downloadBlob(toBlob(data, mimeMap[format]), `${basename(file.name)}.${format}`);
+  await downloadBlob(toBlob(data, mimeMap[format]), `${basename(file.name)}.${format}`);
   await ffmpeg.deleteFile(input);
   await ffmpeg.deleteFile(output);
 }
@@ -357,7 +357,7 @@ export async function loopVideo(
     output,
   ]);
   const data = await ffmpeg.readFile(output);
-  downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-loop.mp4`);
+  await downloadBlob(toBlob(data, "video/mp4"), `${basename(file.name)}-loop.mp4`);
   await ffmpeg.deleteFile(input);
   await ffmpeg.deleteFile(output);
 }
@@ -401,7 +401,7 @@ export async function mergeVideos(files: File[], onProgress?: MediaProgress) {
     "output.mp4",
   ]);
   const data = await ffmpeg.readFile("output.mp4");
-  downloadBlob(toBlob(data, "video/mp4"), "merged-video.mp4");
+  await downloadBlob(toBlob(data, "video/mp4"), "merged-video.mp4");
 }
 
 export async function compressVideo(file: File, onProgress?: MediaProgress) {
@@ -507,7 +507,7 @@ export async function joinAudio(files: File[], onProgress?: MediaProgress) {
     "output.mp3",
   ]);
   const data = await ffmpeg.readFile("output.mp3");
-  downloadBlob(toBlob(data, "audio/mpeg"), "merged-audio.mp3");
+  await downloadBlob(toBlob(data, "audio/mpeg"), "merged-audio.mp3");
 }
 
 export async function editVideoBasic(
@@ -596,7 +596,7 @@ export async function addAudioToVideo(
     "output.mp4",
   ]);
   const data = await ffmpeg.readFile("output.mp4");
-  downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-audio.mp4`);
+  await downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-audio.mp4`);
 }
 
 export async function addImageToVideo(
@@ -621,7 +621,7 @@ export async function addImageToVideo(
     "output.mp4",
   ]);
   const data = await ffmpeg.readFile("output.mp4");
-  downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-image.mp4`);
+  await downloadBlob(toBlob(data, "video/mp4"), `${basename(video.name)}-image.mp4`);
 }
 
 export async function addTextToVideo(

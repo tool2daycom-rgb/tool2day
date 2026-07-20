@@ -11,10 +11,12 @@ import {
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { basename, downloadBlob, toBlob } from "@/lib/processors/ffmpeg-client";
+import { setDownloadRatingContext } from "@/lib/ratings";
 
 type Props = {
   title: string;
   description: string;
+  slug?: string;
 };
 
 type Overlay =
@@ -209,7 +211,11 @@ async function loadArabicFontBytes() {
   return cloneBytes(buf);
 }
 
-export function PdfEditorWorkspace({ title, description }: Props) {
+export function PdfEditorWorkspace({
+  title,
+  description,
+  slug = "pdf-editor",
+}: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -253,6 +259,11 @@ export function PdfEditorWorkspace({ title, description }: Props) {
   const [replaceWith, setReplaceWith] = useState("");
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDownloadRatingContext(slug);
+    return () => setDownloadRatingContext(null);
+  }, [slug]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -940,18 +951,22 @@ export function PdfEditorWorkspace({ title, description }: Props) {
     }
   }
 
-  function download() {
+  async function download() {
     const current = bytesRef.current;
     if (!current || !file) return;
     if (overlays.length) {
       setError("ثبّت العناصر قبل التنزيل");
       return;
     }
-    downloadBlob(
-      toBlob(cloneBytes(current), "application/pdf"),
-      `${basename(file.name)}-edited.pdf`,
-    );
-    setStatus("تم التنزيل");
+    try {
+      await downloadBlob(
+        toBlob(cloneBytes(current), "application/pdf"),
+        `${basename(file.name)}-edited.pdf`,
+      );
+      setStatus("تم التنزيل");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "فشل التنزيل");
+    }
   }
 
   return (

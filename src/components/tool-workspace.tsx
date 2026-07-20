@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   getToolKind,
   MAX_CLIENT_FILE_MB,
   type ActiveToolKind,
 } from "@/lib/processors/active-tools";
+import { setDownloadRatingContext } from "@/lib/ratings";
 
 type Props = {
   slug: string;
@@ -46,6 +47,11 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDownloadRatingContext(slug);
+    return () => setDownloadRatingContext(null);
+  }, [slug]);
 
   const [videoFormat, setVideoFormat] = useState<"mp4" | "webm" | "mov">("mp4");
   const [audioFormat, setAudioFormat] = useState<"mp3" | "wav" | "aac" | "ogg">("mp3");

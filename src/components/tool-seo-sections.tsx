@@ -3,9 +3,16 @@
 import { useState } from "react";
 import { ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { ToolRatingBar } from "@/components/star-rating";
 import type { ToolSeoContent } from "@/lib/tool-seo-content";
 
-export function ToolSeoSections({ content }: { content: ToolSeoContent }) {
+export function ToolSeoSections({
+  content,
+  toolSlug,
+}: {
+  content: ToolSeoContent;
+  toolSlug: string;
+}) {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
@@ -105,6 +112,8 @@ export function ToolSeoSections({ content }: { content: ToolSeoContent }) {
           })}
         </ul>
       </section>
+
+      <ToolRatingBar target={toolSlug} />
     </div>
   );
 }

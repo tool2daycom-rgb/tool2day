@@ -32,7 +32,7 @@ export async function addPdfPageNumbers(file: File) {
       color: rgb(0.2, 0.2, 0.2),
     });
   });
-  downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-numbered.pdf`);
+  await downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-numbered.pdf`);
 }
 
 export async function protectPdf(file: File, password: string) {
@@ -57,14 +57,14 @@ export async function protectPdf(file: File, password: string) {
       color: rgb(0.5, 0.5, 0.5),
     });
   });
-  downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-protected.pdf`);
+  await downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-protected.pdf`);
 }
 
 export async function unlockPdf(file: File, _password: string) {
   const bytes = await file.arrayBuffer();
   try {
     const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-unlocked.pdf`);
+    await downloadBlob(pdfBlob(await doc.save()), `${basename(file.name)}-unlocked.pdf`);
   } catch {
     throw new Error(
       "تعذر فك القفل في المتصفح. بعض ملفات PDF المحمية تحتاج معالجة على السيرفر.",
@@ -98,7 +98,7 @@ export async function pdfToImages(file: File, format: "jpeg" | "png") {
     zip.file(`${basename(file.name)}-p${i}.${format === "png" ? "png" : "jpg"}`, blob);
   }
 
-  downloadBlob(
+  await downloadBlob(
     await zip.generateAsync({ type: "blob" }),
     `${basename(file.name)}-images.zip`,
   );
@@ -129,7 +129,7 @@ export async function pdfToWord(file: File) {
 
   const doc = new Document({ sections: [{ children: paragraphs }] });
   const blob = await Packer.toBlob(doc);
-  downloadBlob(blob, `${basename(file.name)}.docx`);
+  await downloadBlob(blob, `${basename(file.name)}.docx`);
 }
 
 export async function pdfToExcel(file: File) {
@@ -152,7 +152,7 @@ export async function pdfToExcel(file: File) {
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, "PDF");
   const out = XLSX.write(book, { type: "array", bookType: "xlsx" });
-  downloadBlob(
+  await downloadBlob(
     new Blob([out], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }),
@@ -233,7 +233,7 @@ export async function pptToPdf(file: File) {
 export async function documentToPdf(file: File) {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf")) {
-    downloadBlob(file, file.name);
+    await downloadBlob(file, file.name);
     return;
   }
   if (name.endsWith(".doc") || name.endsWith(".docx")) {

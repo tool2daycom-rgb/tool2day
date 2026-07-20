@@ -115,6 +115,7 @@ export default async function ToolPage({ params }: Props) {
           <PdfEditorWorkspace
             title={tool.title}
             description={tool.description}
+            slug={tool.slug}
           />
         ) : (
           <ToolWorkspace
@@ -126,7 +127,7 @@ export default async function ToolPage({ params }: Props) {
         )}
       </div>
 
-      <ToolSeoSections content={seo} />
+      <ToolSeoSections content={seo} toolSlug={tool.slug} />
     </div>
   );
 }
