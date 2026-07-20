@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { openCookieSettings } from "@/lib/cookie-consent";
 
 const links = [
   { href: "/privacy", label: "الخصوصية" },
@@ -49,6 +52,13 @@ export function SiteFooter() {
                 {link.label}
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={openCookieSettings}
+              className="transition hover:text-white"
+            >
+              إعدادات الكوكيز
+            </button>
           </nav>
 
           <div className="flex w-full flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/55 sm:flex-row sm:text-sm">

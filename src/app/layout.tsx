@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Cairo, Syne } from "next/font/google";
+import { CookieConsent } from "@/components/cookie-consent";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -83,14 +84,21 @@ export default function RootLayout({
       className={`${cairo.variable} ${syne.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
-        <Script
-          id="adsense"
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
+        <Script id="consent-default" strategy="beforeInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('consent', 'default', {
+              ad_storage: 'denied',
+              ad_user_data: 'denied',
+              ad_personalization: 'denied',
+              analytics_storage: 'denied',
+              wait_for_update: 500
+            });
+          `}
+        </Script>
         {children}
+        <CookieConsent />
       </body>
     </html>
   );
