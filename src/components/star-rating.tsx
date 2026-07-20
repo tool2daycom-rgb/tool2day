@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Check, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
@@ -44,7 +45,7 @@ function StarButton({
       className={`relative ${dim} transition hover:scale-110 disabled:cursor-default disabled:hover:scale-100`}
     >
       <Star
-        className={`${dim} fill-[#d4d4d4] text-[#d4d4d4]`}
+        className={`${dim} fill-[#e8e0d0] text-[#e8e0d0]`}
         strokeWidth={1.5}
       />
       {(filled || half) && (
@@ -52,7 +53,7 @@ function StarButton({
           className={`absolute inset-0 overflow-hidden ${half ? "w-1/2" : "w-full"}`}
         >
           <Star
-            className={`${dim} fill-[#F5C518] text-[#F5C518] drop-shadow-[0_1px_2px_rgba(245,197,24,0.45)]`}
+            className={`${dim} fill-[#E8874A] text-[#E8874A] drop-shadow-[0_1px_2px_rgba(232,135,74,0.4)]`}
             strokeWidth={1.5}
           />
         </span>
@@ -218,60 +219,57 @@ export function SiteRatingCard() {
   const hint = preview >= 1 ? HINTS[preview - 1] : "اضغط على النجوم للتقييم";
 
   return (
-    <section className="relative mt-14 overflow-hidden border-y border-[#1a1a1a] bg-[#0f0f0f] text-white">
+    <section className="relative mt-14 overflow-hidden border-y border-[#dce8f5] bg-[#eef5fc]">
       <div
-        className="pointer-events-none absolute inset-0 opacity-90"
+        className="pointer-events-none absolute inset-0"
         aria-hidden
         style={{
           background:
-            "radial-gradient(ellipse 70% 60% at 50% -10%, rgba(245,197,24,0.18), transparent 55%), radial-gradient(ellipse 50% 40% at 100% 100%, rgba(91,155,245,0.12), transparent 50%), radial-gradient(ellipse 40% 35% at 0% 80%, rgba(232,135,74,0.12), transparent 45%)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        aria-hidden
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
+            "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245,197,24,0.22), transparent 55%), radial-gradient(ellipse 45% 55% at 0% 100%, rgba(91,155,245,0.2), transparent 50%), radial-gradient(ellipse 40% 45% at 100% 80%, rgba(232,135,74,0.16), transparent 48%)",
         }}
       />
 
       <div className="relative mx-auto flex max-w-5xl flex-col items-center px-4 py-14 text-center sm:px-6 sm:py-16">
-        <BrandMarkAnimated size={56} motion="morph" />
+        <div className="flex flex-col items-center gap-4">
+          <Image
+            src="/brand/logo-hero-eyes.png"
+            alt="Tool2Day"
+            width={720}
+            height={180}
+            className="h-auto w-full max-w-[16rem] object-contain sm:max-w-[22rem]"
+            unoptimized
+          />
+          <BrandMarkAnimated size={52} motion="morph" />
+        </div>
 
-        <p className="mt-5 font-[family-name:var(--font-syne)] text-xs font-extrabold tracking-[0.2em] text-[#F5C518] uppercase">
-          TOOL2DAY
-        </p>
-
-        <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+        <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-[#122033] sm:text-4xl">
           ما رأيك في الموقع؟
         </h2>
-        <p className="mx-auto mt-3 max-w-md text-[15px] leading-8 text-white/70">
+        <p className="mx-auto mt-3 max-w-md text-[15px] leading-8 text-[#3d4f63]">
           تقييمك يساعدنا على تطوير الأدوات وإبقائها{" "}
-          <span className="font-semibold text-white">مجانية بالكامل</span> وبدون
+          <span className="font-bold text-[#122033]">مجانية بالكامل</span> وبدون
           علامة مائية.
         </p>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-emerald-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-100">
             <Sparkles className="h-3.5 w-3.5" />
             مجاني بالكامل
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-sky-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-800 ring-1 ring-sky-100">
             <ShieldCheck className="h-3.5 w-3.5" />
             بدون علامة مائية
           </span>
         </div>
 
-        <div className="mt-10 w-full max-w-lg rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-8 backdrop-blur-sm sm:px-10 sm:py-10">
+        <div className="mt-10 w-full max-w-lg rounded-2xl border border-white/80 bg-white/80 px-5 py-8 shadow-[0_12px_40px_rgba(18,32,51,0.08)] backdrop-blur-sm sm:px-10 sm:py-10">
           {voted ? (
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1.5 text-sm font-bold text-emerald-300">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
               <Check className="h-4 w-4" />
               شكراً — تم حفظ تقييمك
             </div>
           ) : (
-            <p className="mb-5 text-sm font-semibold text-[#F5C518]">{hint}</p>
+            <p className="mb-5 text-sm font-bold text-[#E8874A]">{hint}</p>
           )}
 
           <div
@@ -300,15 +298,15 @@ export function SiteRatingCard() {
             </div>
 
             <div className="flex items-end justify-center gap-2" dir="ltr">
-              <span className="text-5xl font-extrabold tabular-nums tracking-tight text-white sm:text-6xl">
+              <span className="text-5xl font-extrabold tabular-nums tracking-tight text-[#122033] sm:text-6xl">
                 {stats.count > 0 ? formatRatingAverage(stats.average) : "—"}
               </span>
-              <span className="mb-2 text-lg font-semibold text-white/45">
+              <span className="mb-2 text-lg font-semibold text-[#8a9aab]">
                 / 5
               </span>
             </div>
 
-            <p className="text-sm text-white/55">
+            <p className="text-sm text-[#5a6d80]">
               {stats.count > 0
                 ? `بناءً على ${stats.count} تقييماً من مستخدمي Tool2Day`
                 : "كن أول من يقيّم الموقع"}
