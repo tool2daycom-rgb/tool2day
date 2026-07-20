@@ -41,7 +41,7 @@ function CategorySection({ category }: { category: ToolCategory }) {
                 <span className="text-[15px] leading-6">{tool.title}</span>
                 {live ? (
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    شغّال
+                    مجاناً
                   </span>
                 ) : null}
               </Link>
