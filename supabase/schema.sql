@@ -1,4 +1,4 @@
--- Tool2Day: jobs for file conversion / video editing
+-- Tool2Day schema (safe to re-run)
 create extension if not exists "pgcrypto";
 
 create table if not exists public.tool_jobs (
@@ -19,13 +19,14 @@ create index if not exists tool_jobs_created_at_idx on public.tool_jobs (created
 
 alter table public.tool_jobs enable row level security;
 
--- Public read of own jobs can be tightened later with auth.uid()
+drop policy if exists "Allow anon insert jobs" on public.tool_jobs;
 create policy "Allow anon insert jobs"
   on public.tool_jobs
   for insert
   to anon, authenticated
   with check (true);
 
+drop policy if exists "Allow anon read jobs" on public.tool_jobs;
 create policy "Allow anon read jobs"
   on public.tool_jobs
   for select
@@ -46,18 +47,21 @@ create index if not exists tool_ratings_target_idx on public.tool_ratings (targe
 
 alter table public.tool_ratings enable row level security;
 
+drop policy if exists "Allow anon read ratings" on public.tool_ratings;
 create policy "Allow anon read ratings"
   on public.tool_ratings
   for select
   to anon, authenticated
   using (true);
 
+drop policy if exists "Allow anon insert ratings" on public.tool_ratings;
 create policy "Allow anon insert ratings"
   on public.tool_ratings
   for insert
   to anon, authenticated
   with check (true);
 
+drop policy if exists "Allow anon update own ratings" on public.tool_ratings;
 create policy "Allow anon update own ratings"
   on public.tool_ratings
   for update
