@@ -3,6 +3,7 @@ import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 
 const links = [
   { href: "/privacy", label: "الخصوصية" },
+  { href: "/terms", label: "الشروط والأحكام" },
   { href: "/refund", label: "سياسة الاسترداد" },
   { href: "/pricing", label: "التسعير" },
   { href: "/help", label: "المساعدة" },
