@@ -448,7 +448,7 @@ export const tools: Tool[] = [
     title: "محوّل الصور",
     description: "حوّل بين JPG وPNG وWebP والمزيد.",
     category: "converters",
-    accept: "image/*",
+    accept: "image/*,.svg,image/svg+xml",
     icon: FileImage,
   },
   {
