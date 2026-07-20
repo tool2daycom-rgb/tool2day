@@ -55,7 +55,9 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <HomeDirectory />
-      <SiteRatingCard />
+      <div className="pb-4">
+        <SiteRatingCard />
+      </div>
     </>
   );
 }
