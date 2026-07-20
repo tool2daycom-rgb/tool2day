@@ -3608,23 +3608,10 @@ export function VideoEditorWorkspace({
               : "overflow-hidden rounded-2xl border border-[#2a2a2e] bg-[#121214] text-white shadow-xl"
           }
         >
-          <div className="flex items-center justify-between border-b border-[#2a2a2e] px-4 py-3">
+          <div className="flex items-center border-b border-[#2a2a2e] px-4 py-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Clapperboard className="h-5 w-5 text-[#f5c518]" />
               محرر الفيديو
-            </div>
-            <div className="flex items-center gap-3">
-              {fullscreen && (
-                <a
-                  href="/"
-                  className="text-xs text-[#888] hover:text-[#f5c518]"
-                >
-                  الرئيسية
-                </a>
-              )}
-              <span className="text-xs text-[#888]">
-                مثل 123apps — داخل المتصفح
-              </span>
             </div>
           </div>
           <div
@@ -3689,17 +3676,6 @@ export function VideoEditorWorkspace({
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-[#2a2a2e] bg-[#161618] px-3 py-2">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Clapperboard className="h-4 w-4 text-[#f5c518]" />
-          {fullscreen && (
-            <a href="/" className="inline-flex items-center gap-2 text-[#f5c518] hover:underline">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/brand/logo-mark-triangle.svg"
-                alt=""
-                className="h-5 w-auto"
-              />
-              Tool2Day
-            </a>
-          )}
           <span className="max-w-[180px] truncate text-[#ddd]">{file.name}</span>
           <div className="ms-2 flex items-center gap-0.5 rounded-md border border-[#2e2e32] bg-[#1a1a1d] p-0.5">
             <button
