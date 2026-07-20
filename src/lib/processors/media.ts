@@ -719,6 +719,15 @@ export async function addTextToVideo(
   await addImageToVideo(video, overlay, onProgress);
 }
 
+function evenInt(n: number) {
+  const v = Math.max(2, Math.round(n));
+  return v % 2 === 0 ? v : v + 1;
+}
+
+/**
+ * إزالة شعار بتغطية ناعمة من المنطقة المحيطة (أفضل بكثير من delogo).
+ * ينسخ محيط الشعار، يموّهه بقوة، ثم يغطي الشعار بحواف أنعم.
+ */
 export async function removeLogo(
   file: File,
   boxOrBoxes:
@@ -731,31 +740,119 @@ export async function removeLogo(
     throw new Error("حدّد منطقة الشعار أولاً");
   }
 
-  const parts = boxes.map((b) => {
-    const x = Math.max(1, Math.round(b.x));
-    const y = Math.max(1, Math.round(b.y));
-    let w = Math.max(4, Math.round(b.w));
-    let h = Math.max(4, Math.round(b.h));
-    if (w % 2) w += 1;
-    if (h % 2) h += 1;
-    return `delogo=x=${x}:y=${y}:w=${w}:h=${h}`;
+  const { w: vw, h: vh } = await probeVideoSize(file);
+  if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الفيديو");
+
+  const chains: string[] = [];
+  boxes.forEach((raw, i) => {
+    let x = Math.max(0, Math.min(vw - 4, Math.round(raw.x)));
+    let y = Math.max(0, Math.min(vh - 4, Math.round(raw.y)));
+    let w = evenInt(Math.max(8, Math.min(vw - x, Math.round(raw.w))));
+    let h = evenInt(Math.max(8, Math.min(vh - y, Math.round(raw.h))));
+    if (x + w >= vw) w = evenInt(Math.max(8, vw - x - 2));
+    if (y + h >= vh) h = evenInt(Math.max(8, vh - y - 2));
+
+    // منطقة أوسع حول الشعار لأخذ ألوان الخلفية الحقيقية
+    const pad = evenInt(Math.max(20, Math.round(Math.min(w, h) * 0.9)));
+    let cx = Math.max(0, x - pad);
+    let cy = Math.max(0, y - pad);
+    let cw = evenInt(Math.min(vw - cx, w + 2 * pad));
+    let ch = evenInt(Math.min(vh - cy, h + 2 * pad));
+    if (cx + cw > vw) cw = evenInt(vw - cx);
+    if (cy + ch > vh) ch = evenInt(vh - cy);
+
+    const ox = Math.max(0, Math.min(cw - w, x - cx));
+    const oy = Math.max(0, Math.min(ch - h, y - cy));
+    // تمويه قوي من المحيط (ليس delogo الرمادي)
+    const blur = Math.max(14, Math.min(56, Math.round(Math.min(w, h) * 0.65)));
+    const blurLuma = Math.max(3, Math.floor(blur / 2));
+
+    // طبقة أوسع قليلاً لدمج الحواف مع الخلفية
+    const feather = evenInt(Math.max(8, Math.round(Math.min(w, h) * 0.18)));
+    const fx = Math.max(0, x - feather);
+    const fy = Math.max(0, y - feather);
+    const fw = evenInt(Math.min(vw - fx, w + 2 * feather));
+    const fh = evenInt(Math.min(vh - fy, h + 2 * feather));
+    const fox = Math.max(0, Math.min(cw - fw, fx - cx));
+    const foy = Math.max(0, Math.min(ch - fh, fy - cy));
+    const softBlur = Math.max(8, Math.floor(blur * 0.4));
+    const softLuma = Math.max(2, Math.floor(blurLuma * 0.4));
+
+    const src = i === 0 ? "[0:v]" : `[v${i}]`;
+    const dst = i === boxes.length - 1 ? "[vout]" : `[v${i + 1}]`;
+
+    // 1) تمويه المحيط → طبقة ريش أوسع
+    // 2) تغطية مركز الشعار بتمويه أقوى من نفس المحيط
+    chains.push(
+      `${src}split=2[base${i}][nb${i}];` +
+        `[nb${i}]crop=${cw}:${ch}:${cx}:${cy},boxblur=${blur}:${blurLuma}[blur${i}];` +
+        `[blur${i}]split=2[bcore${i}][bedge${i}];` +
+        `[bedge${i}]crop=${fw}:${fh}:${fox}:${foy},boxblur=${softBlur}:${softLuma}[edge${i}];` +
+        `[base${i}][edge${i}]overlay=${fx}:${fy}[soft${i}];` +
+        `[bcore${i}]crop=${w}:${h}:${ox}:${oy}[core${i}];` +
+        `[soft${i}][core${i}]overlay=${x}:${y}${dst}`,
+    );
   });
 
-  await runVideoOut(
-    file,
-    [
-      "-vf",
-      parts.join(","),
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-c:a",
-      "copy",
-    ],
-    "delogo",
-    onProgress,
+  const filterComplex = `${chains.join("")};[vout]format=yuv420p[outv]`;
+
+  const ffmpeg = await getFFmpeg(onProgress);
+  const input = inputFileName(file, "mp4");
+  const output = "output.mp4";
+  await ffmpeg.writeFile(input, await fetchFile(file));
+  await execOrThrow(ffmpeg, [
+    "-i",
+    input,
+    "-filter_complex",
+    filterComplex,
+    "-map",
+    "[outv]",
+    "-map",
+    "0:a?",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-crf",
+    "22",
+    "-c:a",
+    "copy",
+    "-movflags",
+    "+faststart",
+    output,
+  ]);
+  const data = await ffmpeg.readFile(output);
+  await downloadBlob(
+    toBlob(data, "video/mp4"),
+    `${basename(file.name)}-delogo.mp4`,
   );
+  try {
+    await ffmpeg.deleteFile(input);
+    await ffmpeg.deleteFile(output);
+  } catch {
+    /* ignore */
+  }
+}
+
+function probeVideoSize(file: File): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.onloadedmetadata = () => {
+      const w = video.videoWidth || 0;
+      const h = video.videoHeight || 0;
+      URL.revokeObjectURL(url);
+      if (!w || !h) reject(new Error("أبعاد الفيديو غير صالحة"));
+      else resolve({ w, h });
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر قراءة الفيديو"));
+    };
+    video.src = url;
+  });
 }
 
 export async function stabilizeVideo(file: File, onProgress?: MediaProgress) {

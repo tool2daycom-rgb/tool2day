@@ -14,7 +14,7 @@ function clampBox(
   vh: number,
 ): DelogoBox {
   let { x, y, w, h } = box;
-  // delogo يحتاج أرقاماً زوجية وحدوداً داخل الإطار
+  // حدود آمنة داخل الإطار (أرقام زوجية للمعالجة)
   x = Math.max(1, Math.min(vw - 4, Math.round(x)));
   y = Math.max(1, Math.min(vh - 4, Math.round(y)));
   w = Math.max(4, Math.min(vw - x - 1, Math.round(w)));
@@ -32,10 +32,11 @@ function cornerBox(
   vh: number,
   size: "s" | "m" | "l",
 ): DelogoBox {
-  const frac = size === "s" ? 0.14 : size === "l" ? 0.28 : 0.2;
+  // مناطق أصغر بكثير لتفادي اللطخات الكبيرة
+  const frac = size === "s" ? 0.09 : size === "l" ? 0.16 : 0.12;
   const w = Math.round(vw * frac);
-  const h = Math.round(vh * (frac * 0.65));
-  const m = Math.max(8, Math.round(Math.min(vw, vh) * 0.015));
+  const h = Math.round(vh * (frac * 0.55));
+  const m = Math.max(6, Math.round(Math.min(vw, vh) * 0.012));
   switch (corner) {
     case "top-right":
       return clampBox({ x: vw - w - m, y: m, w, h }, vw, vh);
@@ -65,9 +66,9 @@ type Props = {
 };
 
 export function LogoRemoveControls({ file, onBoxesChange }: Props) {
-  const [mode, setMode] = useState<Mode>("auto");
+  const [mode, setMode] = useState<Mode>("draw");
   const [corner, setCorner] = useState<Corner>("top-right");
-  const [size, setSize] = useState<"s" | "m" | "l">("m");
+  const [size, setSize] = useState<"s" | "m" | "l">("s");
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [drawBox, setDrawBox] = useState<DelogoBox | null>(null);
@@ -170,17 +171,17 @@ export function LogoRemoveControls({ file, onBoxesChange }: Props) {
       <div>
         <p className="text-sm font-bold text-[#111]">إزالة الشعار / العلامة المائية</p>
         <p className="mt-1 text-xs leading-6 text-[#666]">
-          اختر إزالة تلقائية من الزوايا الشائعة، أو زاوية واحدة، أو ارسم المنطقة على
-          المعاينة — بدون إدخال أرقام يدوياً.
+          لأفضل نتيجة بلا أثر واضح: استخدم <strong>تحديد بالرسم</strong> وارسم
+          مربعاً صغيراً يحيط بالشعار فقط (ليس أكبر منه).
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {(
           [
-            ["auto", "تلقائي — كل الزوايا"],
+            ["draw", "⭐ تحديد بالرسم (الأفضل)"],
             ["corner", "زاوية واحدة"],
-            ["draw", "تحديد بالرسم"],
+            ["auto", "تلقائي — الزوايا"],
           ] as const
         ).map(([id, label]) => (
           <button
