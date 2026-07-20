@@ -2,9 +2,18 @@ import type { Metadata } from "next";
 import { VideoEditorWorkspace } from "@/components/video-editor-workspace";
 
 export const metadata: Metadata = {
-  title: "محرر الفيديو",
+  title: "محرر الفيديو مجاناً",
   description:
-    "محرر احترافي بتايملاين ومعاينة: قص، فصل صوت، سرعة، تدوير، قماش، نص وصور ثم تصدير.",
+    "محرر الفيديو مجاناً — تايملاين ومعاينة: قص، فصل صوت، سرعة، تدوير، قماش، نص وصور ثم تصدير. بدون علامة مائية على Tool2Day.",
+  keywords: [
+    "محرر الفيديو",
+    "محرر الفيديو مجاناً",
+    "محرر فيديو أونلاين",
+    "أدوات الفيديو",
+    "Tool2Day",
+    "مجاناً",
+    "بدون علامة مائية",
+  ],
 };
 
 export default function VideoEditorPage() {

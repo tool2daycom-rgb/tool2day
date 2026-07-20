@@ -69,7 +69,9 @@ export function HomeDirectory() {
           />
         </div>
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
-          الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات
+          الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات —{" "}
+          <span className="font-bold text-emerald-700">مجاناً</span> وبدون علامة
+          مائية
         </h1>
       </div>
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Cairo, Syne } from "next/font/google";
 import { CookieConsent } from "@/components/cookie-consent";
+import { getAllSiteKeywords, siteSeo } from "@/lib/seo-keywords";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -18,11 +19,11 @@ const syne = Syne({
 
 export const metadata: Metadata = {
   title: {
-    default: "Tool2Day | أدوات تحويل وتحرير الملفات",
+    default: siteSeo.title,
     template: "%s | Tool2Day",
   },
-  description:
-    "الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات — مثل أدوات التحرير والتحويل أونلاين.",
+  description: siteSeo.description,
+  keywords: getAllSiteKeywords(),
   metadataBase: new URL("https://tool2day.com"),
   alternates: {
     canonical: "https://tool2day.com",
@@ -36,15 +37,13 @@ export const metadata: Metadata = {
     locale: "ar_AR",
     url: "https://tool2day.com",
     siteName: "Tool2Day",
-    title: "Tool2Day | أدوات تحويل وتحرير الملفات",
-    description:
-      "أدوات أونلاين لتحرير الفيديو والصوت وPDF والملفات — سريعة ومجانية في المتصفح.",
+    title: siteSeo.title,
+    description: siteSeo.description,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Tool2Day | أدوات تحويل وتحرير الملفات",
-    description:
-      "أدوات أونلاين لتحرير الفيديو والصوت وPDF والملفات — سريعة ومجانية في المتصفح.",
+    title: siteSeo.title,
+    description: siteSeo.description,
   },
   robots: {
     index: true,

@@ -5,6 +5,11 @@ import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
+import {
+  getToolKeywords,
+  getToolPageDescription,
+  getToolPageTitle,
+} from "@/lib/seo-keywords";
 import { getToolSeoContent } from "@/lib/tool-seo-content";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
 
@@ -21,14 +26,44 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   if (slug === "video-editor") {
-    return { title: "محرر الفيديو" };
+    return {
+      title: "محرر الفيديو مجاناً",
+      description:
+        "محرر الفيديو مجاناً — تايملاين ومعاينة: قص، سرعة، تدوير، صوت، نص وصور ثم تصدير. بدون علامة مائية على Tool2Day.",
+      keywords: [
+        "محرر الفيديو",
+        "محرر الفيديو مجاناً",
+        "أدوات الفيديو",
+        "Tool2Day",
+        "مجاناً",
+      ],
+    };
   }
   const tool = getTool(slug);
   if (!tool) return {};
   const seo = getToolSeoContent(tool);
+  const title = getToolPageTitle(tool);
+  const description = getToolPageDescription(tool, seo.tagline);
   return {
-    title: tool.title,
-    description: seo.tagline,
+    title,
+    description,
+    keywords: getToolKeywords(tool),
+    openGraph: {
+      title: `${title} | Tool2Day`,
+      description,
+      url: `https://tool2day.com/tools/${tool.slug}`,
+      siteName: "Tool2Day",
+      locale: "ar_AR",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${title} | Tool2Day`,
+      description,
+    },
+    alternates: {
+      canonical: `https://tool2day.com/tools/${tool.slug}`,
+    },
   };
 }
 
