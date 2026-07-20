@@ -7,7 +7,8 @@ import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import {
   fetchRatingStats,
   formatRatingAverage,
-  hasRated,
+  getMyStars,
+  hasRatedSite,
   RATING_UPDATED_EVENT,
   submitRating,
   type RatingStats,
@@ -24,7 +25,7 @@ function StarButton({
   index: number;
   filled: boolean;
   half?: boolean;
-  onPick: (n: number) => void;
+  onPick?: (n: number) => void;
   disabled?: boolean;
   size?: "sm" | "md" | "lg" | "xl";
 }) {
@@ -36,28 +37,33 @@ function StarButton({
         : size === "sm"
           ? "h-5 w-5"
           : "h-6 w-6";
+  const interactive = Boolean(onPick) && !disabled;
   return (
     <button
       type="button"
-      disabled={disabled}
+      disabled={!interactive}
       aria-label={`${index} نجوم`}
-      onClick={() => onPick(index)}
-      className={`relative ${dim} transition hover:scale-110 disabled:cursor-default disabled:hover:scale-100`}
+      onClick={() => onPick?.(index)}
+      className={`relative ${dim} ${interactive ? "cursor-pointer transition hover:scale-110" : "cursor-default"}`}
     >
       <Star
-        className={`${dim} fill-[#e5e5e5] text-[#e5e5e5]`}
-        strokeWidth={1.5}
+        className={`${dim} ${
+          filled
+            ? "fill-[#E8874A] text-[#E8874A]"
+            : half
+              ? "fill-[#e5e5e5] text-[#e5e5e5]"
+              : "fill-[#e5e5e5] text-[#e5e5e5]"
+        }`}
+        strokeWidth={1.25}
       />
-      {(filled || half) && (
-        <span
-          className={`absolute inset-0 overflow-hidden ${half ? "w-1/2" : "w-full"}`}
-        >
+      {half && !filled ? (
+        <span className="absolute inset-0 w-1/2 overflow-hidden">
           <Star
-            className={`${dim} fill-[#E8874A] text-[#E8874A] drop-shadow-[0_1px_2px_rgba(232,135,74,0.4)]`}
-            strokeWidth={1.5}
+            className={`${dim} fill-[#E8874A] text-[#E8874A]`}
+            strokeWidth={1.25}
           />
         </span>
-      )}
+      ) : null}
     </button>
   );
 }
@@ -73,7 +79,6 @@ export function StarsRow({
   disabled?: boolean;
   size?: "sm" | "md" | "lg" | "xl";
 }) {
-  const interactive = Boolean(onPick) && !disabled;
   return (
     <div className="flex items-center gap-1 sm:gap-1.5" dir="ltr">
       {[1, 2, 3, 4, 5].map((n) => {
@@ -85,9 +90,9 @@ export function StarsRow({
             index={n}
             filled={filled}
             half={half}
-            disabled={!interactive}
+            disabled={disabled}
             size={size}
-            onPick={(v) => onPick?.(v)}
+            onPick={onPick}
           />
         );
       })}
@@ -95,6 +100,7 @@ export function StarsRow({
   );
 }
 
+/** عرض فقط — التقييم يتم مرة واحدة بعد استخدام الأداة (قبل التنزيل) */
 export function ToolRatingBar({
   target,
   label = "قيّم هذه الأداة",
@@ -105,17 +111,15 @@ export function ToolRatingBar({
   className?: string;
 }) {
   const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
-  const [voted, setVoted] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [hover, setHover] = useState(0);
+  const [myStars, setMyStars] = useState(0);
 
   useEffect(() => {
-    setVoted(hasRated(target));
+    setMyStars(getMyStars(target));
     void fetchRatingStats(target).then(setStats);
     const onUp = (e: Event) => {
       const detail = (e as CustomEvent<{ target: string }>).detail;
       if (detail?.target === target) {
-        setVoted(true);
+        setMyStars(getMyStars(target));
         void fetchRatingStats(target).then(setStats);
       }
     };
@@ -123,64 +127,27 @@ export function ToolRatingBar({
     return () => window.removeEventListener(RATING_UPDATED_EVENT, onUp);
   }, [target]);
 
-  async function pick(stars: number) {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const next = await submitRating(target, stars);
-      setStats(next);
-      setVoted(true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const display = hover || stats.average;
+  const display = stats.average || myStars;
 
   return (
     <div
       className={`flex flex-wrap items-center justify-center gap-3 border-t border-dashed border-[#ddd] pt-8 ${className}`}
     >
       <p className="text-base font-bold text-[#111]">{label}</p>
-      <div
-        onMouseLeave={() => setHover(0)}
-        className="flex flex-wrap items-center justify-center gap-3"
-      >
-        <div
-          className="flex cursor-pointer"
-          onMouseMove={(e) => {
-            if (busy) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const n = Math.min(5, Math.max(1, Math.ceil((x / rect.width) * 5)));
-            setHover(n);
-          }}
-        >
-          <StarsRow
-            value={display}
-            onPick={pick}
-            disabled={busy}
-            size="lg"
-          />
-        </div>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <StarsRow value={display} disabled size="lg" />
         <span className="text-sm font-semibold text-[#333]" dir="ltr">
           {stats.count > 0
             ? `${formatRatingAverage(stats.average)} / 5`
             : "— / 5"}
         </span>
         <span className="text-sm text-[#666]">
-          {stats.count > 0 ? `${stats.count} صوتاً` : "كن أول من يقيّم"}
+          {stats.count > 0 ? `${stats.count} صوتاً` : "لا تقييمات بعد"}
         </span>
       </div>
-      {voted ? (
-        <span className="w-full text-center text-xs font-medium text-emerald-700 sm:w-auto">
-          شكراً لتقييمك — يمكنك تغيير النجوم في أي وقت
-        </span>
-      ) : (
-        <span className="w-full text-center text-xs text-[#888] sm:w-auto">
-          اضغط على النجوم للتقييم
-        </span>
-      )}
+      <p className="w-full text-center text-xs text-[#888]">
+        التقييم مرة واحدة بعد كل استخدام للأداة — عند التنزيل
+      </p>
     </div>
   );
 }
@@ -192,14 +159,17 @@ export function SiteRatingCard() {
   const [voted, setVoted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(0);
+  const [picked, setPicked] = useState(0);
 
   useEffect(() => {
-    setVoted(hasRated("site"));
+    setVoted(hasRatedSite());
+    setPicked(getMyStars("site"));
     void fetchRatingStats("site").then(setStats);
     const onUp = (e: Event) => {
       const detail = (e as CustomEvent<{ target: string }>).detail;
       if (detail?.target === "site") {
-        setVoted(true);
+        setVoted(hasRatedSite());
+        setPicked(getMyStars("site"));
         void fetchRatingStats("site").then(setStats);
       }
     };
@@ -208,11 +178,12 @@ export function SiteRatingCard() {
   }, []);
 
   async function pick(stars: number) {
-    if (busy) return;
+    if (voted || busy) return;
+    setPicked(stars);
+    setHover(0);
     setBusy(true);
     try {
       await submitRating("site", stars);
-      // الموقع يعرض تجميع كل تقييمات الأدوات + تقييم الموقع
       const next = await fetchRatingStats("site");
       setStats(next);
       setVoted(true);
@@ -221,8 +192,11 @@ export function SiteRatingCard() {
     }
   }
 
-  const preview = hover || Math.round(stats.average) || 0;
-  const hint = preview >= 1 ? HINTS[Math.min(5, preview) - 1] : "اضغط على النجوم للتقييم";
+  const preview = voted ? picked || stats.average : hover || picked;
+  const hint =
+    preview >= 1
+      ? HINTS[Math.min(5, Math.round(preview)) - 1]
+      : "اضغط على النجوم للتقييم مرة واحدة";
 
   return (
     <section className="relative mt-14 overflow-hidden border-y border-[#dce8f5] bg-[#eef5fc]">
@@ -252,9 +226,7 @@ export function SiteRatingCard() {
           ما رأيك في الموقع؟
         </h2>
         <p className="mx-auto mt-3 max-w-md text-[15px] leading-8 text-[#3d4f63]">
-          تقييمك من هنا ومن كل الأدوات يتجمّع هنا — ويساعدنا على إبقاء Tool2Day{" "}
-          <span className="font-bold text-[#122033]">مجانياً بالكامل</span> وبدون
-          علامة مائية.
+          تقييمات الأدوات تتجمّع هنا. تقييم الموقع مرة واحدة فقط.
         </p>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -272,7 +244,7 @@ export function SiteRatingCard() {
           {voted ? (
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
               <Check className="h-4 w-4" />
-              شكراً — يمكنك تغيير النجوم في أي وقت
+              شكراً — تم حفظ تقييمك
             </div>
           ) : (
             <p className="mb-5 text-sm font-bold text-[#E8874A]">{hint}</p>
@@ -283,9 +255,9 @@ export function SiteRatingCard() {
             onMouseLeave={() => setHover(0)}
           >
             <div
-              className="flex cursor-pointer justify-center"
+              className={`flex justify-center ${voted ? "" : "cursor-pointer"}`}
               onMouseMove={(e) => {
-                if (busy) return;
+                if (voted || busy) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const n = Math.min(
@@ -296,9 +268,9 @@ export function SiteRatingCard() {
               }}
             >
               <StarsRow
-                value={hover || stats.average}
-                onPick={pick}
-                disabled={busy}
+                value={preview || stats.average}
+                onPick={voted ? undefined : pick}
+                disabled={voted || busy}
                 size="xl"
               />
             </div>
@@ -315,7 +287,7 @@ export function SiteRatingCard() {
             <p className="text-sm text-[#5a6d80]">
               {stats.count > 0
                 ? `تجميع ${stats.count} تقييماً من كل الأدوات والموقع`
-                : "كن أول من يقيّم — التقييمات من الأدوات تظهر هنا أيضاً"}
+                : "تقييمات الأدوات تظهر هنا تلقائياً"}
             </p>
           </div>
         </div>

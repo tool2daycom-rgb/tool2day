@@ -7,6 +7,8 @@ type Body = {
   target?: string;
   stars?: number;
   visitorKey?: string;
+  /** تقييم الموقع مرة واحدة لكل زائر (upsert) */
+  once?: boolean;
 };
 
 function adminClient() {
@@ -20,12 +22,11 @@ function adminClient() {
   });
 }
 
-/** إحصاءات أداة واحدة، أو تجميع كل التقييمات للموقع */
 async function getStats(
   supabase: NonNullable<ReturnType<typeof adminClient>>,
   target: string,
 ) {
-  let query = supabase.from("tool_ratings").select("stars, target");
+  let query = supabase.from("tool_ratings").select("stars");
 
   if (target !== "site") {
     query = query.eq("target", target);
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
   const target = body.target?.trim();
   const stars = Number(body.stars);
   const visitorKey = body.visitorKey?.trim();
+  const once = Boolean(body.once);
 
   if (
     !target ||
@@ -91,26 +93,38 @@ export async function POST(req: Request) {
     });
   }
 
+  const row = {
+    target,
+    stars: Math.round(stars),
+    visitor_key: visitorKey,
+  };
+
   try {
-    const { error } = await supabase.from("tool_ratings").upsert(
-      {
-        target,
-        stars: Math.round(stars),
-        visitor_key: visitorKey,
-      },
-      { onConflict: "target,visitor_key" },
-    );
+    if (once || target === "site") {
+      const { error } = await supabase
+        .from("tool_ratings")
+        .upsert(row, { onConflict: "target,visitor_key" });
+      if (error) throw error;
+    } else {
+      // كل استخدام = صف جديد (مفتاح زائر:useId فريد)
+      const { error } = await supabase.from("tool_ratings").insert(row);
+      if (error) {
+        // إن تكرر نفس المفتاح نحدّث فقط
+        const { error: upErr } = await supabase
+          .from("tool_ratings")
+          .upsert(row, { onConflict: "target,visitor_key" });
+        if (upErr) throw upErr;
+      }
+    }
 
-    if (error) throw error;
-
-    // ردّ بإحصاءات الهدف المطلوب (للأداة نفسها، أو التجميع للموقع)
     const stats = await getStats(supabase, target);
     return NextResponse.json(stats);
   } catch (err) {
     console.error("ratings POST failed", err);
-    return NextResponse.json(
-      { error: "save failed", average: stars, count: 1, localOnly: true },
-      { status: 200 },
-    );
+    return NextResponse.json({
+      average: stars,
+      count: 1,
+      localOnly: true,
+    });
   }
 }

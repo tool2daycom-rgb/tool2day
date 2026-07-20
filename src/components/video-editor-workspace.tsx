@@ -60,7 +60,7 @@ import {
   VIDEO_FONTS,
 } from "@/lib/video-editor-assets";
 import { RecordStudio } from "@/components/record-studio";
-import { setDownloadRatingContext } from "@/lib/ratings";
+import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 
 type Panel =
   | "files"
@@ -3437,6 +3437,7 @@ export function VideoEditorWorkspace({
 
   async function onExport() {
     if (!file) return;
+    beginToolUse("video-editor");
     setBusy(true);
     setError(null);
     setProgress(0);

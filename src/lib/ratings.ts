@@ -1,14 +1,16 @@
-/** تقييمات Tool2Day — بوابة تنزيل + تخزين محلي ومزامنة API */
+/** تقييمات Tool2Day — مرة واحدة بعد كل استخدام أداة قبل التنزيل */
 
 export const SITE_RATING_TARGET = "site";
 export const RATING_NEEDED_EVENT = "tool2day:rating-needed";
 export const RATING_UPDATED_EVENT = "tool2day:rating-updated";
 
-const VOTED_KEY = "tool2day-rated-targets";
 const VISITOR_KEY = "tool2day-visitor-id";
 const CONTEXT_KEY = "tool2day-download-rating-context";
+const USE_ID_PREFIX = "tool2day-use-id-";
+const USE_RATED_PREFIX = "tool2day-use-rated-";
 const LOCAL_PREFIX = "tool2day-rating-local-";
 const MY_STARS_PREFIX = "tool2day-my-stars-";
+const SITE_VOTED_KEY = "tool2day-site-voted";
 
 export type RatingStats = {
   average: number;
@@ -29,6 +31,10 @@ function canUseStorage() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
 
+function canUseSession() {
+  return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
+}
+
 export function getVisitorId(): string {
   if (!canUseStorage()) return "ssr";
   let id = localStorage.getItem(VISITOR_KEY);
@@ -42,44 +48,75 @@ export function getVisitorId(): string {
   return id;
 }
 
-function votedSet(): Set<string> {
-  if (!canUseStorage()) return new Set();
-  try {
-    const raw = localStorage.getItem(VOTED_KEY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
+/** يبدأ استخداماً جديداً للأداة — التقييم مطلوب مرة لكل استخدام */
+export function beginToolUse(toolSlug: string) {
+  if (!canUseSession() || !toolSlug || toolSlug === SITE_RATING_TARGET) return;
+  const useId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `u-${Date.now()}`;
+  sessionStorage.setItem(`${USE_ID_PREFIX}${toolSlug}`, useId);
+  sessionStorage.removeItem(`${USE_RATED_PREFIX}${toolSlug}`);
+}
+
+export function getCurrentUseId(toolSlug: string): string | null {
+  if (!canUseSession()) return null;
+  return sessionStorage.getItem(`${USE_ID_PREFIX}${toolSlug}`);
+}
+
+export function hasRatedCurrentUse(toolSlug: string): boolean {
+  if (!canUseSession()) return false;
+  const useId = getCurrentUseId(toolSlug);
+  if (!useId) return false;
+  return sessionStorage.getItem(`${USE_RATED_PREFIX}${toolSlug}`) === useId;
+}
+
+export function markRatedCurrentUse(toolSlug: string, stars: number) {
+  if (!canUseSession()) return;
+  const useId = getCurrentUseId(toolSlug);
+  if (useId) {
+    sessionStorage.setItem(`${USE_RATED_PREFIX}${toolSlug}`, useId);
   }
-}
-
-function saveVoted(set: Set<string>) {
-  if (!canUseStorage()) return;
-  localStorage.setItem(VOTED_KEY, JSON.stringify([...set]));
-}
-
-export function hasRated(target: string): boolean {
-  return votedSet().has(target);
-}
-
-export function markRated(target: string) {
-  const set = votedSet();
-  set.add(target);
-  saveVoted(set);
+  if (canUseStorage() && stars >= 1 && stars <= 5) {
+    localStorage.setItem(`${MY_STARS_PREFIX}${toolSlug}`, String(stars));
+  }
   window.dispatchEvent(
-    new CustomEvent(RATING_UPDATED_EVENT, { detail: { target } }),
+    new CustomEvent(RATING_UPDATED_EVENT, { detail: { target: toolSlug } }),
   );
-  // أي تقييم أداة يحدّث تجميع الموقع
-  if (target !== SITE_RATING_TARGET) {
-    window.dispatchEvent(
-      new CustomEvent(RATING_UPDATED_EVENT, {
-        detail: { target: SITE_RATING_TARGET },
-      }),
-    );
-  }
+  window.dispatchEvent(
+    new CustomEvent(RATING_UPDATED_EVENT, {
+      detail: { target: SITE_RATING_TARGET },
+    }),
+  );
 }
 
-/** سياق الأداة الحالية للتنزيل */
+export function getMyStars(target: string): number {
+  if (!canUseStorage()) return 0;
+  const n = Number(localStorage.getItem(`${MY_STARS_PREFIX}${target}`) || 0);
+  return n >= 1 && n <= 5 ? n : 0;
+}
+
+export function hasRatedSite(): boolean {
+  if (!canUseStorage()) return false;
+  return localStorage.getItem(SITE_VOTED_KEY) === "1";
+}
+
+export function markRatedSite() {
+  if (!canUseStorage()) return;
+  localStorage.setItem(SITE_VOTED_KEY, "1");
+  window.dispatchEvent(
+    new CustomEvent(RATING_UPDATED_EVENT, {
+      detail: { target: SITE_RATING_TARGET },
+    }),
+  );
+}
+
+/** @deprecated استخدم hasRatedCurrentUse / hasRatedSite */
+export function hasRated(target: string): boolean {
+  if (target === SITE_RATING_TARGET) return hasRatedSite();
+  return hasRatedCurrentUse(target);
+}
+
 export function setDownloadRatingContext(toolSlug: string | null) {
   if (!canUseStorage()) return;
   if (toolSlug) localStorage.setItem(CONTEXT_KEY, toolSlug);
@@ -136,14 +173,24 @@ export function triggerBrowserDownload(blob: Blob, filename: string) {
 }
 
 /**
- * يُستدعى من downloadBlob — إن لم يقيّم المستخدم تظهر النافذة ويُؤجّل التنزيل.
+ * قبل كل تنزيل: تقييم مرة واحدة لهذا الاستخدام.
  */
 export async function requireRatingThenDownload(
   blob: Blob,
   filename: string,
 ): Promise<void> {
   const target = getDownloadRatingContext();
-  if (!target || hasRated(target)) {
+  if (!target) {
+    triggerBrowserDownload(blob, filename);
+    return;
+  }
+
+  // تأكد من وجود استخدام فعّال
+  if (!getCurrentUseId(target)) {
+    beginToolUse(target);
+  }
+
+  if (hasRatedCurrentUse(target)) {
     triggerBrowserDownload(blob, filename);
     return;
   }
@@ -182,7 +229,6 @@ function readLocalEntry(target: string): RatingStats {
   }
 }
 
-/** تجميع كل تقييمات الأدوات (+ الموقع) من التخزين المحلي */
 function localAggregateAll(): RatingStats {
   if (!canUseStorage()) return { average: 0, count: 0 };
   let sum = 0;
@@ -213,27 +259,13 @@ function localFallbackStats(target: string): RatingStats {
 
 function saveLocalFallback(target: string, stars: number) {
   if (!canUseStorage()) return;
-  const myKey = `${MY_STARS_PREFIX}${target}`;
-  const prevMine = Number(localStorage.getItem(myKey) || 0);
   const prev = readLocalEntry(target);
-
-  let count = prev.count;
-  let sum = prev.average * prev.count;
-
-  if (prevMine >= 1 && prevMine <= 5 && count > 0) {
-    sum = sum - prevMine + stars;
-  } else {
-    count += 1;
-    sum += stars;
-  }
-
-  localStorage.setItem(myKey, String(stars));
+  const count = prev.count + 1;
+  const sum = prev.average * prev.count + stars;
+  localStorage.setItem(`${MY_STARS_PREFIX}${target}`, String(stars));
   localStorage.setItem(
     `${LOCAL_PREFIX}${target}`,
-    JSON.stringify({
-      average: count ? sum / count : stars,
-      count: Math.max(1, count),
-    }),
+    JSON.stringify({ average: sum / count, count }),
   );
 }
 
@@ -242,22 +274,39 @@ export async function submitRating(
   stars: number,
 ): Promise<RatingStats> {
   const clamped = Math.min(5, Math.max(1, Math.round(stars)));
-  const visitorKey = getVisitorId();
+  const visitorId = getVisitorId();
+  const useId =
+    target === SITE_RATING_TARGET
+      ? "site"
+      : getCurrentUseId(target) || `once-${Date.now()}`;
+  // مفتاح فريد لكل استخدام حتى يُحسب صوتاً جديداً
+  const visitorKey =
+    target === SITE_RATING_TARGET
+      ? visitorId
+      : `${visitorId}:${useId}`;
 
   try {
     const res = await fetch("/api/ratings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target, stars: clamped, visitorKey }),
+      body: JSON.stringify({
+        target,
+        stars: clamped,
+        visitorKey,
+        once: target === SITE_RATING_TARGET,
+      }),
     });
     if (res.ok) {
       const data = (await res.json()) as RatingStats & { localOnly?: boolean };
-      markRated(target);
+      if (target === SITE_RATING_TARGET) {
+        markRatedSite();
+      } else {
+        markRatedCurrentUse(target, clamped);
+      }
       if (data.localOnly) {
         saveLocalFallback(target, clamped);
         return localFallbackStats(target);
       }
-      // بعد تقييم أداة، أعد جلب تجميع الموقع في الواجهة عبر الحدث
       return {
         average: Number(data.average) || clamped,
         count: Number(data.count) || 1,
@@ -268,7 +317,8 @@ export async function submitRating(
   }
 
   saveLocalFallback(target, clamped);
-  markRated(target);
+  if (target === SITE_RATING_TARGET) markRatedSite();
+  else markRatedCurrentUse(target, clamped);
   return localFallbackStats(target);
 }
 

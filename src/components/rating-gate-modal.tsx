@@ -5,7 +5,7 @@ import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { StarsRow } from "@/components/star-rating";
 import {
   getDownloadRatingContext,
-  hasRated,
+  hasRatedCurrentUse,
   RATING_NEEDED_EVENT,
   resolveRatingGate,
   submitRating,
@@ -23,7 +23,7 @@ export function RatingGateModal() {
       const detail = (e as CustomEvent<{ target: string }>).detail;
       const t = detail?.target || getDownloadRatingContext();
       if (!t) return;
-      if (hasRated(t)) {
+      if (hasRatedCurrentUse(t)) {
         resolveRatingGate(true);
         return;
       }
@@ -37,9 +37,6 @@ export function RatingGateModal() {
   }, []);
 
   if (!open || !target) return null;
-
-  const isSite = target === "site";
-  const title = isSite ? "قيّم الموقع أولاً" : "قيّم الأداة قبل التنزيل";
 
   async function confirm() {
     if (!target) return;
@@ -85,15 +82,25 @@ export function RatingGateModal() {
             id="rating-gate-title"
             className="mt-4 text-xl font-bold text-[#111]"
           >
-            {title}
+            قيّم الأداة قبل التنزيل
           </h2>
           <p className="mt-2 text-sm leading-7 text-[#555]">
-            التقييم إلزامي مرة واحدة لكل أداة قبل تنزيل الملف. يساعدنا على إبقاء
-            Tool2Day مجانياً وبدون علامة مائية.
+            التقييم مرة واحدة بعد كل استخدام — اختر النجوم ثم أكّد للتنزيل. لا يمكن
+            تغيير التقييم لاحقاً لهذا الاستخدام.
           </p>
           <div className="mt-6">
-            <StarsRow value={picked} onPick={setPicked} size="lg" />
+            <StarsRow
+              value={picked}
+              onPick={busy ? undefined : setPicked}
+              disabled={busy}
+              size="xl"
+            />
           </div>
+          {picked > 0 ? (
+            <p className="mt-3 text-sm font-bold text-[#E8874A]">
+              تقييمك: {picked} / 5
+            </p>
+          ) : null}
           {error ? (
             <p className="mt-3 text-sm font-medium text-red-600">{error}</p>
           ) : null}

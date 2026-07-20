@@ -11,7 +11,7 @@ import {
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import { basename, downloadBlob, toBlob } from "@/lib/processors/ffmpeg-client";
-import { setDownloadRatingContext } from "@/lib/ratings";
+import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 
 type Props = {
   title: string;
@@ -958,6 +958,7 @@ export function PdfEditorWorkspace({
       setError("ثبّت العناصر قبل التنزيل");
       return;
     }
+    beginToolUse(slug);
     try {
       await downloadBlob(
         toBlob(cloneBytes(current), "application/pdf"),

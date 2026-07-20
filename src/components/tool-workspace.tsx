@@ -6,7 +6,7 @@ import {
   MAX_CLIENT_FILE_MB,
   type ActiveToolKind,
 } from "@/lib/processors/active-tools";
-import { setDownloadRatingContext } from "@/lib/ratings";
+import { setDownloadRatingContext, beginToolUse } from "@/lib/ratings";
 
 type Props = {
   slug: string;
@@ -95,6 +95,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   }
 
   async function run() {
+    beginToolUse(slug);
     setBusy(true);
     setError(null);
     setProgress(0);
