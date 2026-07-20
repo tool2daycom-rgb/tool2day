@@ -73,6 +73,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [editRotate, setEditRotate] = useState<"0" | "90" | "180" | "270">("0");
   const [overlayText, setOverlayText] = useState("Tool2Day");
   const [ttsText, setTtsText] = useState("مرحباً بك في Tool2Day");
+  const [ttsVoice, setTtsVoice] = useState("ar-SA-ZariyahNeural");
+  const [ttsRate, setTtsRate] = useState("default");
   const [password, setPassword] = useState("");
   const [cropX, setCropX] = useState("0");
   const [cropY, setCropY] = useState("0");
@@ -106,11 +108,24 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
 
     try {
       if (kind === "tts") {
-        setStatus("جارٍ التشغيل…");
-        const { speakText } = await import("@/lib/processors/tts");
-        await speakText(ttsText);
+        setStatus("جارٍ توليد الصوت العصبي وتنزيله…");
+        const { synthesizeAndDownload } = await import("@/lib/processors/tts");
+        const file = await synthesizeAndDownload(ttsText, {
+          voice: ttsVoice,
+          rate: ttsRate,
+        });
         setProgress(100);
-        setStatus("تم تشغيل الصوت في المتصفح");
+        setStatus(`تم التنزيل: ${file.name}`);
+        // معاينة سريعة بعد التنزيل
+        try {
+          const url = URL.createObjectURL(file);
+          const audio = new Audio(url);
+          void audio.play().finally(() => {
+            window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          });
+        } catch {
+          /* ignore preview errors */
+        }
         return;
       }
 
@@ -330,12 +345,55 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   return (
     <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 sm:p-8">
       {kind === "tts" ? (
-        <textarea
-          className={`${sel} min-h-28`}
-          value={ttsText}
-          onChange={(e) => setTtsText(e.target.value)}
-          placeholder="اكتب النص هنا…"
-        />
+        <div className="space-y-4">
+          <textarea
+            className={`${sel} min-h-28`}
+            value={ttsText}
+            onChange={(e) => setTtsText(e.target.value)}
+            placeholder="اكتب النص هنا…"
+            maxLength={2500}
+          />
+          <p className="text-xs text-[#888]">{ttsText.length} / 2500 حرف</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="الصوت (عصبي — أقرب للواقع)">
+              <select
+                className={sel}
+                value={ttsVoice}
+                onChange={(e) => setTtsVoice(e.target.value)}
+              >
+                {(
+                  [
+                    ["ar-SA-ZariyahNeural", "زارية — أنثى (السعودية)"],
+                    ["ar-SA-HamedNeural", "حامد — ذكر (السعودية)"],
+                    ["ar-EG-SalmaNeural", "سلمى — أنثى (مصر)"],
+                    ["ar-EG-ShakirNeural", "شاكر — ذكر (مصر)"],
+                    ["ar-AE-FatimaNeural", "فاطمة — أنثى (الإمارات)"],
+                    ["ar-AE-HamdanNeural", "حمدان — ذكر (الإمارات)"],
+                    ["ar-JO-SanaNeural", "سناء — أنثى (الأردن)"],
+                    ["ar-JO-TaimNeural", "تيم — ذكر (الأردن)"],
+                    ["ar-MA-MounaNeural", "مونة — أنثى (المغرب)"],
+                    ["ar-MA-JamalNeural", "جمال — ذكر (المغرب)"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="سرعة الكلام">
+              <select
+                className={sel}
+                value={ttsRate}
+                onChange={(e) => setTtsRate(e.target.value)}
+              >
+                <option value="slow">أبطأ قليلاً</option>
+                <option value="default">طبيعي</option>
+                <option value="fast">أسرع قليلاً</option>
+              </select>
+            </Field>
+          </div>
+        </div>
       ) : !noFileKinds.has(kind) ? (
         <div
           onDragEnter={(e) => {
@@ -572,7 +630,11 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         onClick={run}
         className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
       >
-        {busy ? "جارٍ العمل…" : "ابدأ المعالجة"}
+        {busy
+          ? "جارٍ العمل…"
+          : kind === "tts"
+            ? "حوّل ونزّل MP3"
+            : "ابدأ المعالجة"}
       </button>
       <p className="mt-3 text-xs text-[#888]">
         {title} — مجاني بالكامل · بدون علامة مائية · معالجة في المتصفح

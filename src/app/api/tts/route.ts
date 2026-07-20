@@ -1,8 +1,32 @@
 import { NextResponse } from "next/server";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
-/** Chunk long text for Google Translate TTS (unofficial, best-effort). */
+/** أصوات عربية عصبية قريبة من الواقع (Microsoft Edge) */
+export const ARABIC_NEURAL_VOICES = [
+  "ar-SA-ZariyahNeural",
+  "ar-SA-HamedNeural",
+  "ar-EG-SalmaNeural",
+  "ar-EG-ShakirNeural",
+  "ar-AE-FatimaNeural",
+  "ar-AE-HamdanNeural",
+  "ar-MA-MounaNeural",
+  "ar-MA-JamalNeural",
+  "ar-JO-SanaNeural",
+  "ar-JO-TaimNeural",
+] as const;
+
+function escapeXml(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 function chunkText(text: string, max = 180): string[] {
   const parts: string[] = [];
   let rest = text.trim();
@@ -16,63 +40,104 @@ function chunkText(text: string, max = 180): string[] {
   return parts;
 }
 
+async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function synthesizeEdge(
+  text: string,
+  voice: string,
+  rate?: string,
+  pitch?: string,
+): Promise<Buffer> {
+  const tts = new MsEdgeTTS();
+  await tts.setMetadata(
+    voice,
+    OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3,
+  );
+  const { audioStream } = tts.toStream(escapeXml(text), {
+    rate: rate || "default",
+    pitch: pitch || "default",
+  });
+  return streamToBuffer(audioStream);
+}
+
+/** احتياطي: Google Translate TTS */
+async function synthesizeGoogle(text: string, lang: string): Promise<Buffer> {
+  const chunks = chunkText(text);
+  const buffers: Buffer[] = [];
+  for (const chunk of chunks) {
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(chunk)}`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://translate.google.com/",
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`google-tts-${res.status}`);
+    }
+    buffers.push(Buffer.from(await res.arrayBuffer()));
+  }
+  return Buffer.concat(buffers);
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
       text?: string;
+      voice?: string;
       lang?: string;
+      rate?: string;
+      pitch?: string;
     };
     const text = (body.text || "").trim();
     if (!text) {
       return NextResponse.json({ error: "النص فارغ" }, { status: 400 });
     }
-    if (text.length > 1200) {
+    if (text.length > 2500) {
       return NextResponse.json(
-        { error: "النص طويل جداً (الحد 1200 حرف)" },
+        { error: "النص طويل جداً (الحد 2500 حرف)" },
         { status: 400 },
       );
     }
 
-    const lang = (body.lang || "ar").split("-")[0] || "ar";
-    const chunks = chunkText(text);
-    const buffers: ArrayBuffer[] = [];
+    const requested = (body.voice || "ar-SA-ZariyahNeural").trim();
+    const voice = (ARABIC_NEURAL_VOICES as readonly string[]).includes(requested)
+      ? requested
+      : "ar-SA-ZariyahNeural";
 
-    for (const chunk of chunks) {
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(chunk)}`;
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Referer: "https://translate.google.com/",
-        },
-      });
-      if (!res.ok) {
-        return NextResponse.json(
-          { error: `تعذر توليد الصوت (${res.status})` },
-          { status: 502 },
-        );
-      }
-      buffers.push(await res.arrayBuffer());
+    let audio: Buffer;
+    try {
+      audio = await synthesizeEdge(text, voice, body.rate, body.pitch);
+    } catch (edgeErr) {
+      console.error("edge-tts failed, fallback google", edgeErr);
+      const lang = (body.lang || "ar").split("-")[0] || "ar";
+      audio = await synthesizeGoogle(text, lang);
     }
 
-    // Concatenate MP3 chunks (works for MPEG frames in practice for short clips)
-    const total = buffers.reduce((n, b) => n + b.byteLength, 0);
-    const out = new Uint8Array(total);
-    let offset = 0;
-    for (const b of buffers) {
-      out.set(new Uint8Array(b), offset);
-      offset += b.byteLength;
+    if (!audio.length || audio.length < 100) {
+      return NextResponse.json({ error: "ملف الصوت فارغ" }, { status: 502 });
     }
 
-    return new NextResponse(out, {
+    return new NextResponse(new Uint8Array(audio), {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
+        "Content-Disposition": 'attachment; filename="tool2day-tts.mp3"',
         "Cache-Control": "no-store",
       },
     });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "فشل التحويل إلى كلام" }, { status: 500 });
+    return NextResponse.json(
+      { error: "فشل التحويل إلى كلام" },
+      { status: 500 },
+    );
   }
 }
