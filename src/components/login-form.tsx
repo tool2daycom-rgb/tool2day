@@ -61,7 +61,13 @@ const providers: {
   },
 ];
 
-export function LoginForm({ error }: { error?: string }) {
+export function LoginForm({
+  error,
+  returnTo,
+}: {
+  error?: string;
+  returnTo?: string;
+}) {
   const [loading, setLoading] = useState<Provider | null>(null);
   const [localError, setLocalError] = useState("");
 
@@ -72,10 +78,16 @@ export function LoginForm({ error }: { error?: string }) {
       const supabase = createClient();
       const origin =
         process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const callback = new URL(
+        `${origin.replace(/\/$/, "")}/auth/callback`,
+      );
+      if (returnTo) {
+        callback.searchParams.set("next", returnTo);
+      }
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${origin.replace(/\/$/, "")}/auth/callback`,
+          redirectTo: callback.toString(),
         },
       });
       if (oauthError) {
@@ -91,6 +103,27 @@ export function LoginForm({ error }: { error?: string }) {
       setLoading(null);
     }
   }
+
+  const backHref =
+    returnTo &&
+    (() => {
+      try {
+        const u = new URL(returnTo, "https://www.tool2day.com");
+        const host = u.hostname;
+        if (
+          host === "lookup.tool2day.com" ||
+          host === "www.tool2day.com" ||
+          host === "tool2day.com" ||
+          host === "aman.tool2day.com" ||
+          returnTo.startsWith("/")
+        ) {
+          return returnTo.startsWith("/") ? returnTo : u.toString();
+        }
+      } catch {
+        /* ignore */
+      }
+      return "/";
+    })();
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center px-4 py-14 sm:px-6">
@@ -140,10 +173,12 @@ export function LoginForm({ error }: { error?: string }) {
       </div>
 
       <Link
-        href="/"
+        href={backHref || "/"}
         className="mt-8 text-sm font-semibold text-[#2563eb] hover:underline"
       >
-        ← العودة للرئيسية
+        {backHref && backHref.includes("lookup.tool2day.com")
+          ? "← العودة لنتائج Lookup"
+          : "← العودة للرئيسية"}
       </Link>
     </div>
   );
