@@ -86,15 +86,24 @@ export const TTS_VOICE_OPTIONS = [
 
 export type TtsVoiceId = (typeof TTS_VOICE_OPTIONS)[number]["id"];
 
-export const TTS_RATE_OPTIONS = [
-  { id: "solemn", label: "رزين ومهيب (موصى به)" },
-  { id: "slow", label: "أبطأ قليلاً" },
-  { id: "default", label: "طبيعي" },
-  { id: "fast", label: "أسرع قليلاً" },
+export const TTS_STYLE_OPTIONS = [
+  {
+    id: "video",
+    label: "للفيديو — بشري ومحفّز (موصى به)",
+  },
+  {
+    id: "solemn",
+    label: "رزين ومهيب",
+  },
+  {
+    id: "natural",
+    label: "طبيعي سريع",
+  },
 ] as const;
 
 export const DEFAULT_TTS_VOICE = "ar-SA-HamedNeural";
-export const DEFAULT_TTS_RATE = "solemn";
+export const DEFAULT_TTS_RATE = "0.92";
+export const DEFAULT_TTS_STYLE = "video";
 
 export async function speakText(
   text: string,
@@ -107,8 +116,8 @@ export async function speakText(
   }
 
   const lang = opts?.lang || "ar-SA";
-  const rate = Math.min(2, Math.max(0.5, opts?.rate ?? 0.85));
-  const pitch = Math.min(2, Math.max(0, opts?.pitch ?? 0.9));
+  const rate = Math.min(2, Math.max(0.5, opts?.rate ?? 0.92));
+  const pitch = Math.min(2, Math.max(0, opts?.pitch ?? 0.95));
 
   await new Promise<void>((resolve, reject) => {
     const utter = new SpeechSynthesisUtterance(value);
@@ -127,6 +136,7 @@ export type SynthesizeOpts = {
   lang?: string;
   rate?: string;
   pitch?: string;
+  style?: string;
 };
 
 /** توليد ملف MP3 عصبي وتنزيله */
@@ -155,7 +165,8 @@ export async function synthesizeToFile(
       voice: opts?.voice || DEFAULT_TTS_VOICE,
       lang: opts?.lang || "ar",
       rate: opts?.rate || DEFAULT_TTS_RATE,
-      pitch: opts?.pitch || "deep",
+      pitch: opts?.pitch || "default",
+      style: opts?.style || DEFAULT_TTS_STYLE,
     }),
   });
 

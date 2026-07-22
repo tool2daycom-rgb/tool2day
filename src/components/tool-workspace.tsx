@@ -81,7 +81,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [overlayText, setOverlayText] = useState("Tool2Day");
   const [ttsText, setTtsText] = useState("مرحباً بك في Tool2Day");
   const [ttsVoice, setTtsVoice] = useState("ar-SA-HamedNeural");
-  const [ttsRate, setTtsRate] = useState("solemn");
+  const [ttsStyle, setTtsStyle] = useState("video");
+  const [ttsSpeed, setTtsSpeed] = useState(0.92);
   const [ttsFile, setTtsFile] = useState<File | null>(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -116,7 +117,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   useEffect(() => {
     clearTtsPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ttsText, ttsVoice, ttsRate]);
+  }, [ttsText, ttsVoice, ttsStyle, ttsSpeed]);
 
   useEffect(() => {
     return () => {
@@ -132,7 +133,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
     const { synthesizeToFile } = await import("@/lib/processors/tts");
     const file = await synthesizeToFile(ttsText, {
       voice: ttsVoice,
-      rate: ttsRate,
+      rate: String(ttsSpeed),
+      style: ttsStyle,
     });
     setTtsFile(file);
     return file;
@@ -478,18 +480,18 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           />
           <p className="text-xs text-[#888]">{ttsText.length} / 2500 حرف</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="الصوت العصبي — الأقرب للحقيقة">
+            <Field label="الصوت البشري العصبي (للفيديو)">
               <select
                 className={sel}
                 value={ttsVoice}
                 onChange={(e) => setTtsVoice(e.target.value)}
               >
-                <optgroup label="⭐ ذكر عميق وهادئ (موصى به)">
+                <optgroup label="⭐ ذكر بشري محفّز (موصى به)">
                   <option value="ar-SA-HamedNeural">
-                    حامد — ذكر عميق وهادئ (فصحى / السعودية)
+                    حامد — ذكر طبيعي عميق (فصحى / السعودية)
                   </option>
                   <option value="ar-EG-ShakirNeural">
-                    شاكر — ذكر رزين (مصر)
+                    شاكر — ذكر محفّز (مصر)
                   </option>
                   <option value="ar-LB-RamiNeural">
                     رامي — ذكر هادئ (لبنان)
@@ -522,19 +524,50 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
                 </optgroup>
               </select>
             </Field>
-            <Field label="سرعة الكلام والنبرة">
+            <Field label="أسلوب السرد">
               <select
                 className={sel}
-                value={ttsRate}
-                onChange={(e) => setTtsRate(e.target.value)}
+                value={ttsStyle}
+                onChange={(e) => setTtsStyle(e.target.value)}
               >
-                <option value="solemn">رزين ومهيب — أبطأ مع فواصل</option>
-                <option value="slow">أبطأ قليلاً</option>
-                <option value="default">طبيعي</option>
-                <option value="fast">أسرع قليلاً</option>
+                <option value="video">للفيديو — بشري ومحفّز</option>
+                <option value="solemn">رزين ومهيب</option>
+                <option value="natural">طبيعي سريع</option>
               </select>
             </Field>
           </div>
+
+          <Field
+            label={`عيار سرعة الصوت (${Math.round(ttsSpeed * 100)}%)`}
+          >
+            <div className="space-y-2">
+              <input
+                type="range"
+                min={50}
+                max={130}
+                step={1}
+                value={Math.round(ttsSpeed * 100)}
+                onChange={(e) => setTtsSpeed(Number(e.target.value) / 100)}
+                className="w-full accent-[#2563eb]"
+                aria-label="سرعة الصوت"
+              />
+              <div className="flex justify-between text-[11px] font-semibold text-[#888]">
+                <span>أبطأ 50%</span>
+                <button
+                  type="button"
+                  className="text-[#2563eb] hover:underline"
+                  onClick={() => setTtsSpeed(0.92)}
+                >
+                  مثالي للفيديو 92%
+                </button>
+                <span>أسرع 130%</span>
+              </div>
+            </div>
+          </Field>
+          <p className="text-xs leading-5 text-[#666]">
+            صوت عصبي حقيقي من Microsoft Edge — مناسب لتعليق فيديوهات بصوت يشبه
+            الإنسان. حرّك العيار لضبط الإيقاع بدقة.
+          </p>
         </div>
       ) : kind === "video-add-image" ? (
         <div className="space-y-4">

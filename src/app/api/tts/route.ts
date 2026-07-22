@@ -101,6 +101,11 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 }
 
 function rateFor(mode?: string): string {
+  if (!mode) return "0.92";
+  const n = Number(mode);
+  if (Number.isFinite(n) && n >= 0.5 && n <= 1.5) {
+    return (Math.round(n * 100) / 100).toFixed(2);
+  }
   switch (mode) {
     case "solemn":
       return "0.78";
@@ -108,22 +113,27 @@ function rateFor(mode?: string): string {
       return "0.86";
     case "fast":
       return "1.08";
+    case "video":
+      return "0.92";
     default:
       return "0.95";
   }
 }
 
-function pitchFor(mode?: string, rate?: string): string {
-  if (mode === "deep" || rate === "solemn" || rate === "slow") return "-4Hz";
+function pitchFor(mode?: string, rate?: string, style?: string): string {
+  if (mode === "deep" || style === "solemn" || rate === "solemn") return "-3Hz";
+  if (style === "video") return "-1Hz"; // أقرب لصوت معلّق بشري محفّز
   if (mode && mode !== "default") return mode;
-  return "-1Hz";
+  return "+0Hz";
 }
 
-function pauseMsFor(rate?: string): number {
-  if (rate === "solemn") return 620;
-  if (rate === "slow") return 420;
-  if (rate === "fast") return 180;
-  return 320;
+function pauseMsFor(rate?: string, style?: string): number {
+  const speed = Number(rateFor(rate));
+  // أبطأ = فواصل أطول؛ أسلوب فيديو = فواصل طبيعية بين الجمل
+  const base =
+    style === "solemn" ? 580 : style === "video" ? 380 : style === "natural" ? 280 : 320;
+  const scaled = Math.round(base * (1.05 / Math.max(0.55, speed)));
+  return Math.min(800, Math.max(160, scaled));
 }
 
 async function synthesizeEdge(
@@ -131,10 +141,11 @@ async function synthesizeEdge(
   voice: string,
   rate?: string,
   pitch?: string,
+  style?: string,
 ): Promise<Buffer> {
   const rateValue = rateFor(rate);
-  const pitchValue = pitchFor(pitch, rate);
-  const pauseMs = pauseMsFor(rate);
+  const pitchValue = pitchFor(pitch, rate, style);
+  const pauseMs = pauseMsFor(rate, style);
   const inner = buildProsodyInner(text, pauseMs);
 
   async function run(input: string): Promise<Buffer> {
@@ -189,6 +200,7 @@ export async function POST(req: Request) {
       lang?: string;
       rate?: string;
       pitch?: string;
+      style?: string;
     };
     const text = (body.text || "").trim();
     if (!text) {
@@ -206,13 +218,17 @@ export async function POST(req: Request) {
       ? requested
       : "ar-SA-HamedNeural";
 
+    const style = body.style || "video";
+    const rate = body.rate || "0.92";
+
     let audio: Buffer;
     try {
       audio = await synthesizeEdge(
         text,
         voice,
-        body.rate || "solemn",
-        body.pitch || "deep",
+        rate,
+        body.pitch || "default",
+        style,
       );
     } catch (edgeErr) {
       console.error("edge-tts failed, fallback google", edgeErr);
