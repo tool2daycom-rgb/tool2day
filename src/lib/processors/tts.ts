@@ -1,60 +1,35 @@
 import { downloadBlob } from "./ffmpeg-client";
 
-/** أصوات عربية عصبية — الأقرب للحقيقة أولاً */
+/** أصوات عربية عصبية — الذكور العميقون أولاً ثم الأقرب للحقيقة */
 export const TTS_VOICE_OPTIONS = [
   {
-    id: "ar-SA-ZariyahNeural",
-    label: "⭐ زارية — أنثى (فصحى / السعودية)",
-    hint: "الأقرب للحقيقة",
-  },
-  {
     id: "ar-SA-HamedNeural",
-    label: "⭐ حامد — ذكر (فصحى / السعودية)",
-    hint: "الأقرب للحقيقة",
-  },
-  {
-    id: "ar-EG-SalmaNeural",
-    label: "⭐ سلمى — أنثى (مصر)",
-    hint: "طبيعي جداً",
+    label: "⭐ حامد — ذكر عميق وهادئ (فصحى / السعودية)",
+    hint: "الأقرب لـ Marcus / Adam",
   },
   {
     id: "ar-EG-ShakirNeural",
-    label: "⭐ شاكر — ذكر (مصر)",
-    hint: "طبيعي جداً",
-  },
-  {
-    id: "ar-LB-LaylaNeural",
-    label: "ليلى — أنثى (لبنان)",
-    hint: "واضح وناعم",
+    label: "⭐ شاكر — ذكر رزين (مصر)",
+    hint: "عميق وواضح",
   },
   {
     id: "ar-LB-RamiNeural",
-    label: "رامي — ذكر (لبنان)",
-    hint: "واضح",
+    label: "رامي — ذكر هادئ (لبنان)",
+    hint: "رزين",
   },
   {
-    id: "ar-AE-FatimaNeural",
-    label: "فاطمة — أنثى (الإمارات)",
-    hint: "خليجي",
+    id: "ar-IQ-BasselNeural",
+    label: "باسل — ذكر عميق (العراق)",
+    hint: "صوت ثقيل",
   },
   {
     id: "ar-AE-HamdanNeural",
     label: "حمدان — ذكر (الإمارات)",
-    hint: "خليجي",
-  },
-  {
-    id: "ar-SY-AmanyNeural",
-    label: "أماني — أنثى (سوريا)",
-    hint: "شامي",
+    hint: "خليجي هادئ",
   },
   {
     id: "ar-SY-LaithNeural",
     label: "ليث — ذكر (سوريا)",
-    hint: "شامي",
-  },
-  {
-    id: "ar-JO-SanaNeural",
-    label: "سناء — أنثى (الأردن)",
     hint: "شامي",
   },
   {
@@ -63,13 +38,43 @@ export const TTS_VOICE_OPTIONS = [
     hint: "شامي",
   },
   {
-    id: "ar-IQ-RanaNeural",
-    label: "رنا — أنثى (العراق)",
-    hint: "عراقي",
+    id: "ar-KW-FahedNeural",
+    label: "فهد — ذكر (الكويت)",
+    hint: "خليجي",
   },
   {
-    id: "ar-IQ-BasselNeural",
-    label: "باسل — ذكر (العراق)",
+    id: "ar-SA-ZariyahNeural",
+    label: "زارية — أنثى (فصحى / السعودية)",
+    hint: "الأقرب للحقيقة",
+  },
+  {
+    id: "ar-EG-SalmaNeural",
+    label: "سلمى — أنثى (مصر)",
+    hint: "طبيعي جداً",
+  },
+  {
+    id: "ar-LB-LaylaNeural",
+    label: "ليلى — أنثى (لبنان)",
+    hint: "واضح وناعم",
+  },
+  {
+    id: "ar-AE-FatimaNeural",
+    label: "فاطمة — أنثى (الإمارات)",
+    hint: "خليجي",
+  },
+  {
+    id: "ar-SY-AmanyNeural",
+    label: "أماني — أنثى (سوريا)",
+    hint: "شامي",
+  },
+  {
+    id: "ar-JO-SanaNeural",
+    label: "سناء — أنثى (الأردن)",
+    hint: "شامي",
+  },
+  {
+    id: "ar-IQ-RanaNeural",
+    label: "رنا — أنثى (العراق)",
     hint: "عراقي",
   },
   {
@@ -77,20 +82,19 @@ export const TTS_VOICE_OPTIONS = [
     label: "نورة — أنثى (الكويت)",
     hint: "خليجي",
   },
-  {
-    id: "ar-KW-FahedNeural",
-    label: "فهد — ذكر (الكويت)",
-    hint: "خليجي",
-  },
 ] as const;
 
 export type TtsVoiceId = (typeof TTS_VOICE_OPTIONS)[number]["id"];
 
 export const TTS_RATE_OPTIONS = [
+  { id: "solemn", label: "رزين ومهيب (موصى به)" },
   { id: "slow", label: "أبطأ قليلاً" },
   { id: "default", label: "طبيعي" },
   { id: "fast", label: "أسرع قليلاً" },
 ] as const;
+
+export const DEFAULT_TTS_VOICE = "ar-SA-HamedNeural";
+export const DEFAULT_TTS_RATE = "solemn";
 
 export async function speakText(
   text: string,
@@ -103,8 +107,8 @@ export async function speakText(
   }
 
   const lang = opts?.lang || "ar-SA";
-  const rate = Math.min(2, Math.max(0.5, opts?.rate ?? 1));
-  const pitch = Math.min(2, Math.max(0, opts?.pitch ?? 1));
+  const rate = Math.min(2, Math.max(0.5, opts?.rate ?? 0.85));
+  const pitch = Math.min(2, Math.max(0, opts?.pitch ?? 0.9));
 
   await new Promise<void>((resolve, reject) => {
     const utter = new SpeechSynthesisUtterance(value);
@@ -148,10 +152,10 @@ export async function synthesizeToFile(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       text: value,
-      voice: opts?.voice || "ar-SA-ZariyahNeural",
+      voice: opts?.voice || DEFAULT_TTS_VOICE,
       lang: opts?.lang || "ar",
-      rate: opts?.rate || "default",
-      pitch: opts?.pitch || "default",
+      rate: opts?.rate || DEFAULT_TTS_RATE,
+      pitch: opts?.pitch || "deep",
     }),
   });
 

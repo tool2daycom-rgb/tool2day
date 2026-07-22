@@ -6,23 +6,22 @@ export const maxDuration = 60;
 
 /** كل الأصوات العربية العصبية المتاحة */
 export const ARABIC_NEURAL_VOICES = [
-  // موصى بها — الأقرب للحقيقة (فصحى/واضحة)
-  "ar-SA-ZariyahNeural",
   "ar-SA-HamedNeural",
-  "ar-EG-SalmaNeural",
   "ar-EG-ShakirNeural",
-  "ar-LB-LaylaNeural",
   "ar-LB-RamiNeural",
-  "ar-AE-FatimaNeural",
-  "ar-AE-HamdanNeural",
-  "ar-JO-SanaNeural",
-  "ar-JO-TaimNeural",
-  "ar-SY-AmanyNeural",
-  "ar-SY-LaithNeural",
-  "ar-IQ-RanaNeural",
   "ar-IQ-BasselNeural",
-  "ar-KW-NouraNeural",
+  "ar-AE-HamdanNeural",
+  "ar-JO-TaimNeural",
+  "ar-SY-LaithNeural",
   "ar-KW-FahedNeural",
+  "ar-SA-ZariyahNeural",
+  "ar-EG-SalmaNeural",
+  "ar-LB-LaylaNeural",
+  "ar-AE-FatimaNeural",
+  "ar-JO-SanaNeural",
+  "ar-SY-AmanyNeural",
+  "ar-IQ-RanaNeural",
+  "ar-KW-NouraNeural",
   "ar-QA-AmalNeural",
   "ar-QA-MoazNeural",
   "ar-BH-LailaNeural",
@@ -50,17 +49,34 @@ function escapeXml(text: string) {
     .replace(/'/g, "&apos;");
 }
 
-/** تحسين الإيقاع ليبدو أقرب للكلام الطبيعي */
-function naturalizeText(text: string) {
-  return text
+/** تنظيف النص وتقسيمه إلى وحدات قراءة مع فواصل هيبة */
+function prepareSpeechUnits(text: string): string[] {
+  const cleaned = text
     .replace(/\r\n/g, "\n")
-    .replace(/\n+/g, "، ")
-    .replace(/([.!?؟۔…])/g, "$1 ")
-    .replace(/،\s*/g, "، ")
-    .replace(/؛\s*/g, "؛ ")
-    .replace(/:\s*/g, ": ")
-    .replace(/\s+/g, " ")
+    .replace(/\n+/g, "\n")
+    .replace(/[ \t]+/g, " ")
     .trim();
+
+  const raw = cleaned
+    .split(/(?<=[.!?؟۔…])\s+|\n+|(?<=[؛])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (raw.length <= 1) {
+    const byComma = cleaned
+      .split(/(?<=،)\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return byComma.length > 1 ? byComma : [cleaned];
+  }
+  return raw;
+}
+
+/** نص داخل prosody مع فواصل زمنية بين الوحدات */
+function buildProsodyInner(text: string, pauseMs: number): string {
+  const units = prepareSpeechUnits(text);
+  const breakTag = ` <break time="${pauseMs}ms"/> `;
+  return units.map((u) => escapeXml(u)).join(breakTag);
 }
 
 function chunkText(text: string, max = 180): string[] {
@@ -84,47 +100,83 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+function rateFor(mode?: string): string {
+  switch (mode) {
+    case "solemn":
+      return "0.78";
+    case "slow":
+      return "0.86";
+    case "fast":
+      return "1.08";
+    default:
+      return "0.95";
+  }
+}
+
+function pitchFor(mode?: string, rate?: string): string {
+  if (mode === "deep" || rate === "solemn" || rate === "slow") return "-4Hz";
+  if (mode && mode !== "default") return mode;
+  return "-1Hz";
+}
+
+function pauseMsFor(rate?: string): number {
+  if (rate === "solemn") return 620;
+  if (rate === "slow") return 420;
+  if (rate === "fast") return 180;
+  return 320;
+}
+
 async function synthesizeEdge(
   text: string,
   voice: string,
   rate?: string,
   pitch?: string,
 ): Promise<Buffer> {
-  const tts = new MsEdgeTTS();
-  // جودة أعلى = أوضح وأقرب للواقع
-  await tts.setMetadata(
-    voice,
-    OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
-  );
+  const rateValue = rateFor(rate);
+  const pitchValue = pitchFor(pitch, rate);
+  const pauseMs = pauseMsFor(rate);
+  const inner = buildProsodyInner(text, pauseMs);
 
-  const rateValue =
-    rate === "slow" ? "0.92" : rate === "fast" ? "1.08" : "1.0";
-  const pitchValue =
-    pitch && pitch !== "default" ? pitch : "+0Hz";
+  async function run(input: string): Promise<Buffer> {
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(
+      voice,
+      OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3,
+    );
+    const { audioStream } = tts.toStream(input, {
+      rate: rateValue,
+      pitch: pitchValue,
+    });
+    return streamToBuffer(audioStream);
+  }
 
-  const { audioStream } = tts.toStream(escapeXml(naturalizeText(text)), {
-    rate: rateValue,
-    pitch: pitchValue,
-  });
-  return streamToBuffer(audioStream);
+  try {
+    return await run(inner);
+  } catch (breakErr) {
+    console.warn("tts break failed, fallback punctuation pauses", breakErr);
+    const units = prepareSpeechUnits(text);
+    return run(escapeXml(units.join(" … — ")));
+  }
 }
 
 async function synthesizeGoogle(text: string, lang: string): Promise<Buffer> {
-  const chunks = chunkText(naturalizeText(text));
+  const units = prepareSpeechUnits(text);
   const buffers: Buffer[] = [];
-  for (const chunk of chunks) {
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(chunk)}`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Referer: "https://translate.google.com/",
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`google-tts-${res.status}`);
+  for (const unit of units) {
+    for (const chunk of chunkText(unit)) {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(chunk)}`;
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://translate.google.com/",
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`google-tts-${res.status}`);
+      }
+      buffers.push(Buffer.from(await res.arrayBuffer()));
     }
-    buffers.push(Buffer.from(await res.arrayBuffer()));
   }
   return Buffer.concat(buffers);
 }
@@ -149,14 +201,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const requested = (body.voice || "ar-SA-ZariyahNeural").trim();
+    const requested = (body.voice || "ar-SA-HamedNeural").trim();
     const voice = (ARABIC_NEURAL_VOICES as readonly string[]).includes(requested)
       ? requested
-      : "ar-SA-ZariyahNeural";
+      : "ar-SA-HamedNeural";
 
     let audio: Buffer;
     try {
-      audio = await synthesizeEdge(text, voice, body.rate, body.pitch);
+      audio = await synthesizeEdge(
+        text,
+        voice,
+        body.rate || "solemn",
+        body.pitch || "deep",
+      );
     } catch (edgeErr) {
       console.error("edge-tts failed, fallback google", edgeErr);
       const lang = (body.lang || "ar").split("-")[0] || "ar";

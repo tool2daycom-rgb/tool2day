@@ -80,8 +80,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [editRotate, setEditRotate] = useState<"0" | "90" | "180" | "270">("0");
   const [overlayText, setOverlayText] = useState("Tool2Day");
   const [ttsText, setTtsText] = useState("مرحباً بك في Tool2Day");
-  const [ttsVoice, setTtsVoice] = useState("ar-SA-ZariyahNeural");
-  const [ttsRate, setTtsRate] = useState("default");
+  const [ttsVoice, setTtsVoice] = useState("ar-SA-HamedNeural");
+  const [ttsRate, setTtsRate] = useState("solemn");
   const [ttsFile, setTtsFile] = useState<File | null>(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -478,50 +478,57 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           />
           <p className="text-xs text-[#888]">{ttsText.length} / 2500 حرف</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="الصوت العصبي (الأقرب للحقيقة)">
+            <Field label="الصوت العصبي — الأقرب للحقيقة">
               <select
                 className={sel}
                 value={ttsVoice}
                 onChange={(e) => setTtsVoice(e.target.value)}
               >
-                <optgroup label="⭐ الأقرب للحقيقة">
-                  <option value="ar-SA-ZariyahNeural">
-                    زارية — أنثى (فصحى / السعودية)
-                  </option>
+                <optgroup label="⭐ ذكر عميق وهادئ (موصى به)">
                   <option value="ar-SA-HamedNeural">
-                    حامد — ذكر (فصحى / السعودية)
+                    حامد — ذكر عميق وهادئ (فصحى / السعودية)
                   </option>
-                  <option value="ar-EG-SalmaNeural">سلمى — أنثى (مصر)</option>
-                  <option value="ar-EG-ShakirNeural">شاكر — ذكر (مصر)</option>
-                </optgroup>
-                <optgroup label="شامي">
-                  <option value="ar-LB-LaylaNeural">ليلى — أنثى (لبنان)</option>
-                  <option value="ar-LB-RamiNeural">رامي — ذكر (لبنان)</option>
-                  <option value="ar-SY-AmanyNeural">أماني — أنثى (سوريا)</option>
-                  <option value="ar-SY-LaithNeural">ليث — ذكر (سوريا)</option>
-                  <option value="ar-JO-SanaNeural">سناء — أنثى (الأردن)</option>
-                  <option value="ar-JO-TaimNeural">تيم — ذكر (الأردن)</option>
-                </optgroup>
-                <optgroup label="خليجي">
-                  <option value="ar-AE-FatimaNeural">
-                    فاطمة — أنثى (الإمارات)
+                  <option value="ar-EG-ShakirNeural">
+                    شاكر — ذكر رزين (مصر)
+                  </option>
+                  <option value="ar-LB-RamiNeural">
+                    رامي — ذكر هادئ (لبنان)
+                  </option>
+                  <option value="ar-IQ-BasselNeural">
+                    باسل — ذكر عميق (العراق)
                   </option>
                   <option value="ar-AE-HamdanNeural">
                     حمدان — ذكر (الإمارات)
                   </option>
-                  <option value="ar-KW-NouraNeural">نورة — أنثى (الكويت)</option>
+                </optgroup>
+                <optgroup label="ذكور آخرون">
+                  <option value="ar-SY-LaithNeural">ليث — ذكر (سوريا)</option>
+                  <option value="ar-JO-TaimNeural">تيم — ذكر (الأردن)</option>
                   <option value="ar-KW-FahedNeural">فهد — ذكر (الكويت)</option>
+                </optgroup>
+                <optgroup label="إناث">
+                  <option value="ar-SA-ZariyahNeural">
+                    زارية — أنثى (فصحى / السعودية)
+                  </option>
+                  <option value="ar-EG-SalmaNeural">سلمى — أنثى (مصر)</option>
+                  <option value="ar-LB-LaylaNeural">ليلى — أنثى (لبنان)</option>
+                  <option value="ar-AE-FatimaNeural">
+                    فاطمة — أنثى (الإمارات)
+                  </option>
+                  <option value="ar-SY-AmanyNeural">أماني — أنثى (سوريا)</option>
+                  <option value="ar-JO-SanaNeural">سناء — أنثى (الأردن)</option>
+                  <option value="ar-KW-NouraNeural">نورة — أنثى (الكويت)</option>
                   <option value="ar-IQ-RanaNeural">رنا — أنثى (العراق)</option>
-                  <option value="ar-IQ-BasselNeural">باسل — ذكر (العراق)</option>
                 </optgroup>
               </select>
             </Field>
-            <Field label="سرعة الكلام">
+            <Field label="سرعة الكلام والنبرة">
               <select
                 className={sel}
                 value={ttsRate}
                 onChange={(e) => setTtsRate(e.target.value)}
               >
+                <option value="solemn">رزين ومهيب — أبطأ مع فواصل</option>
                 <option value="slow">أبطأ قليلاً</option>
                 <option value="default">طبيعي</option>
                 <option value="fast">أسرع قليلاً</option>
