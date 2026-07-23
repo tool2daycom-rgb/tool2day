@@ -186,8 +186,29 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
     }
   }
 
+  async function openMediaItem(itemUrl: string) {
+    try {
+      const {
+        hasRatedCurrentUse,
+        openRatingGate,
+        getCurrentUseId,
+        beginToolUse: startUse,
+      } = await import("@/lib/ratings");
+      if (!getCurrentUseId(slug)) startUse(slug);
+      if (!hasRatedCurrentUse(slug)) {
+        const ok = await openRatingGate(slug);
+        if (!ok) {
+          setError("يجب تقييم الأداة قبل فتح/تنزيل الملف");
+          return;
+        }
+      }
+      window.open(itemUrl, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذّر الفتح");
+    }
+  }
+
   async function downloadMediaItem(itemUrl: string) {
-    beginToolUse(slug);
     setBusy(true);
     setError(null);
     setStatus("جارٍ التحميل…");
@@ -196,23 +217,44 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       const res = await fetch(href);
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "فشل التحميل");
+        throw new Error(data.error || "فشل التحميل عبر الوكيل");
       }
       const blob = await res.blob();
-      const a = document.createElement("a");
-      const obj = URL.createObjectURL(blob);
-      a.href = obj;
       const name =
-        itemUrl.split("/").pop()?.split("?")[0] || `tool2day-media-${Date.now()}`;
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(obj);
-      setStatus("تم بدء التنزيل");
+        itemUrl.split("/").pop()?.split("?")[0] ||
+        `tool2day-media-${Date.now()}`;
+      const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
+      // يفتح بوابة «قيّم الأداة قبل التنزيل» إن لم يُقيَّم هذا الاستخدام
+      await downloadBlob(blob, name);
+      setStatus("تم التنزيل");
     } catch (e) {
-      // Fallback: open original URL
-      window.open(itemUrl, "_blank", "noopener,noreferrer");
-      setStatus("فُتح الرابط الأصلي — احفظه من المتصفح إن لزم");
-      if (e instanceof Error) setError(e.message);
+      const msg = e instanceof Error ? e.message : "فشل التحميل";
+      // إن ألغى المستخدم التقييم
+      if (msg.includes("تقييم")) {
+        setError(msg);
+        setStatus(null);
+        return;
+      }
+      // مسار احتياطي: تقييم ثم فتح الرابط الأصلي
+      try {
+        const { hasRatedCurrentUse, openRatingGate, getCurrentUseId, beginToolUse } =
+          await import("@/lib/ratings");
+        if (!getCurrentUseId(slug)) beginToolUse(slug);
+        if (!hasRatedCurrentUse(slug)) {
+          const ok = await openRatingGate(slug);
+          if (!ok) {
+            setError("يجب تقييم الأداة قبل التنزيل");
+            setStatus(null);
+            return;
+          }
+        }
+        window.open(itemUrl, "_blank", "noopener,noreferrer");
+        setStatus("فُتح الرابط الأصلي — احفظه من المتصفح إن لزم");
+        setError(msg);
+      } catch {
+        setError(msg);
+        setStatus(null);
+      }
     } finally {
       setBusy(false);
     }
@@ -732,14 +774,14 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
                     >
                       تنزيل
                     </button>
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-md border border-[#ddd] bg-white px-3 py-2 text-xs font-bold text-[#333] hover:bg-[#f5f5f5]"
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void openMediaItem(item.url)}
+                      className="rounded-md border border-[#ddd] bg-white px-3 py-2 text-xs font-bold text-[#333] hover:bg-[#f5f5f5] disabled:opacity-50"
                     >
                       فتح
-                    </a>
+                    </button>
                   </div>
                 </li>
               ))}
