@@ -65,7 +65,11 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
       );
       setText(result.text);
       setProvider(result.provider);
-      setStatus("اكتمل التفريغ — راجع النص وعدّل إن لزم");
+      const dur =
+        result.durationSec != null
+          ? ` · مدة الصوت ${result.durationSec.toFixed(1)}ث`
+          : "";
+      setStatus(`اكتمل التفريغ الكامل${dur} — راجع النص وعدّل إن لزم`);
       setProgress(100);
     } catch (e) {
       setError(formatProcessError(e));
@@ -95,9 +99,9 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
       <p className="text-lg font-semibold text-[#111]">{title}</p>
       <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
       <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-950">
-        لأقصى دقة: اختر لغة الكلام في الفيديو بدقة، واستخدم مقطعاً بصوت واضح بلا
-        ضوضاء. التحميل الأول لنموذج التعرف قد يستغرق دقيقة ثم يُحفظ في المتصفح.
-        لا يوجد تفريغ آلي يضمن 100٪ دائماً — راجع النص بعد الاستخراج.
+        يُفرَّغ الفيديو كاملاً بمقاطع متتالية عبر نموذج Whisper Small عالي الدقة.
+        اختر لغة الكلام الصحيحة، وفضّل صوتاً واضحاً. التحميل الأول للنموذج أكبر
+        وقد يستغرق دقائق ثم يُحفظ محلياً. راجع النص بعد الاستخراج.
       </p>
 
       <div
