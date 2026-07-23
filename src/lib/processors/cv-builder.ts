@@ -37,10 +37,13 @@ export type CvData = {
   title: string;
   email: string;
   phone: string;
+  phone2: string;
   address: string;
   website: string;
   city: string;
-  personalNote: string;
+  age: string;
+  maritalStatus: string;
+  children: string;
   summary: string;
   skills: string;
   languages: string;
@@ -52,6 +55,58 @@ export type CvData = {
   courses: string;
   certificates: string;
 };
+
+/** لغات شائعة عالمياً لإضافتها بسرعة */
+export const WORLD_LANGUAGES = [
+  "العربية",
+  "English",
+  "Français",
+  "Deutsch",
+  "Español",
+  "Português",
+  "Italiano",
+  "Türkçe",
+  "Русский",
+  "中文",
+  "日本語",
+  "한국어",
+  "हिन्दी",
+  "اردو",
+  "فارسی",
+  "Bahasa Indonesia",
+  "Bahasa Melayu",
+  "ไทย",
+  "Tiếng Việt",
+  "Polski",
+  "Nederlands",
+  "Svenska",
+  "Norsk",
+  "Dansk",
+  "Suomi",
+  "Ελληνικά",
+  "Čeština",
+  "Română",
+  "Magyar",
+  "Українська",
+  "עברית",
+  "Kiswahili",
+] as const;
+
+export const MARITAL_OPTIONS_AR = [
+  "",
+  "أعزب / عزباء",
+  "متزوج / متزوجة",
+  "مطلق / مطلقة",
+  "أرمل / أرملة",
+];
+
+export const MARITAL_OPTIONS_EN = [
+  "",
+  "Single",
+  "Married",
+  "Divorced",
+  "Widowed",
+];
 
 export const CV_TEMPLATES: Array<{
   id: CvTemplateId;
@@ -95,10 +150,13 @@ export function emptyCv(): CvData {
     title: "",
     email: "",
     phone: "",
+    phone2: "",
     address: "",
     website: "",
     city: "",
-    personalNote: "",
+    age: "",
+    maritalStatus: "",
+    children: "",
     summary: "",
     skills: "",
     languages: "",
@@ -118,10 +176,13 @@ export type CvLabels = {
   photo: string;
   email: string;
   phone: string;
+  phone2: string;
   address: string;
   website: string;
   city: string;
-  personalNote: string;
+  age: string;
+  maritalStatus: string;
+  children: string;
   summary: string;
   about: string;
   contact: string;
@@ -147,6 +208,7 @@ export type CvLabels = {
   addExperience: string;
   addEducation: string;
   addSkill: string;
+  addLanguage: string;
   template: string;
   language: string;
   preview: string;
@@ -154,6 +216,7 @@ export type CvLabels = {
   downloadTxt: string;
   placeholderName: string;
   placeholderTitle: string;
+  pickLanguages: string;
 };
 
 export function cvLabels(lang: CvLang): CvLabels {
@@ -164,10 +227,13 @@ export function cvLabels(lang: CvLang): CvLabels {
       photo: "Profile photo",
       email: "Email",
       phone: "Phone",
+      phone2: "Phone 2 (optional)",
       address: "Address",
       website: "Website",
       city: "City / Country",
-      personalNote: "Personal info (age, status…)",
+      age: "Age",
+      maritalStatus: "Marital status",
+      children: "Children (if any)",
       summary: "Professional summary",
       about: "About me",
       contact: "Contact",
@@ -193,13 +259,15 @@ export function cvLabels(lang: CvLang): CvLabels {
       addExperience: "Add experience",
       addEducation: "Add education",
       addSkill: "Add skill",
+      addLanguage: "Add language",
       template: "Template",
-      language: "Language",
+      language: "CV language",
       preview: "Live preview",
       downloadPdf: "Download PDF",
       downloadTxt: "Download TXT",
       placeholderName: "Your name",
       placeholderTitle: "Your title",
+      pickLanguages: "Quick-add world languages",
     };
   }
   return {
@@ -207,11 +275,14 @@ export function cvLabels(lang: CvLang): CvLabels {
     title: "المسمى الوظيفي",
     photo: "الصورة الشخصية",
     email: "البريد الإلكتروني",
-    phone: "الهاتف",
+    phone: "رقم الهاتف",
+    phone2: "هاتف إضافي (اختياري)",
     address: "العنوان",
     website: "الموقع الإلكتروني",
     city: "المدينة / البلد",
-    personalNote: "معلومات شخصية (العمر، الحالة…)",
+    age: "العمر",
+    maritalStatus: "الحالة الاجتماعية",
+    children: "الأطفال (إن وُجد)",
     summary: "نبذة مهنية",
     about: "نبذة عني",
     contact: "معلومات الاتصال",
@@ -237,21 +308,39 @@ export function cvLabels(lang: CvLang): CvLabels {
     addExperience: "إضافة خبرة",
     addEducation: "إضافة تعليم",
     addSkill: "إضافة مهارة",
+    addLanguage: "إضافة لغة",
     template: "القالب",
-    language: "اللغة",
+    language: "لغة السيرة",
     preview: "معاينة مباشرة",
     downloadPdf: "تنزيل PDF",
     downloadTxt: "تنزيل TXT",
     placeholderName: "اسمك هنا",
     placeholderTitle: "المسمى الوظيفي",
+    pickLanguages: "إضافة سريعة للغات العالم",
   };
 }
 
 export function lines(text: string): string[] {
   return text
     .split(/\r?\n/)
-    .map((l) => l.replace(/^[-•*]\s*/, "").trim())
+    .map((l) => l.replace(/^[-•*◆❖]\s*/, "").trim())
     .filter(Boolean);
+}
+
+export function toggleLanguageLine(current: string, langName: string): string {
+  const list = lines(current);
+  const exists = list.some(
+    (l) => l === langName || l.startsWith(`${langName} `) || l.startsWith(`${langName}(`),
+  );
+  if (exists) {
+    return list
+      .filter(
+        (l) =>
+          !(l === langName || l.startsWith(`${langName} `) || l.startsWith(`${langName}(`)),
+      )
+      .join("\n");
+  }
+  return [...list, langName].join("\n");
 }
 
 export function buildCvPlainText(d: CvData, lang: CvLang): string {
@@ -260,10 +349,14 @@ export function buildCvPlainText(d: CvData, lang: CvLang): string {
   parts.push(d.fullName || L.placeholderName);
   if (d.title) parts.push(d.title);
   parts.push(
-    [d.phone, d.email, d.address || d.city, d.website]
+    [d.phone, d.phone2, d.email, d.address || d.city, d.website]
       .filter(Boolean)
       .join(" · "),
   );
+  const personal = [d.age && `${L.age}: ${d.age}`, d.maritalStatus, d.children && `${L.children}: ${d.children}`]
+    .filter(Boolean)
+    .join(" · ");
+  if (personal) parts.push(personal);
   if (d.summary) parts.push(`\n${L.summary}\n${d.summary}`);
   if (d.experience.some((e) => e.role || e.company)) {
     parts.push(`\n${L.experience}`);
@@ -288,4 +381,49 @@ export function buildCvPlainText(d: CvData, lang: CvLang): string {
   if (d.languages) parts.push(`\n${L.languages}\n${d.languages}`);
   if (d.hobbies) parts.push(`\n${L.hobbies}\n${d.hobbies}`);
   return parts.filter(Boolean).join("\n");
+}
+
+/** إصلاح html2canvas مع ألوان oklab في Tailwind v4 */
+export function hardenCloneColors(originalRoot: HTMLElement, cloneRoot: HTMLElement) {
+  const colorProps = [
+    "color",
+    "backgroundColor",
+    "borderTopColor",
+    "borderRightColor",
+    "borderBottomColor",
+    "borderLeftColor",
+    "outlineColor",
+    "textDecorationColor",
+    "columnRuleColor",
+    "caretColor",
+  ] as const;
+
+  const walk = (orig: Element, clone: Element) => {
+    if (orig instanceof HTMLElement && clone instanceof HTMLElement) {
+      const cs = getComputedStyle(orig);
+      for (const prop of colorProps) {
+        const val = cs[prop];
+        if (val && val !== "rgba(0, 0, 0, 0)" && !val.includes("oklab") && !val.includes("oklch")) {
+          clone.style[prop] = val;
+        } else if (val && (val.includes("oklab") || val.includes("oklch"))) {
+          // احتياطي: شفافية أو لون آمن
+          if (prop === "backgroundColor") clone.style.backgroundColor = "#ffffff";
+          else if (prop === "color") clone.style.color = "#111111";
+        }
+      }
+      // ظلال وحلقات قد تحتوي oklab — أزلها عند التصدير
+      if (cs.boxShadow && (cs.boxShadow.includes("oklab") || cs.boxShadow.includes("oklch"))) {
+        clone.style.boxShadow = "none";
+      }
+      clone.style.opacity = cs.opacity;
+    }
+    const oKids = Array.from(orig.children);
+    const cKids = Array.from(clone.children);
+    for (let i = 0; i < oKids.length; i++) {
+      const o = oKids[i];
+      const c = cKids[i];
+      if (o && c) walk(o, c);
+    }
+  };
+  walk(originalRoot, cloneRoot);
 }

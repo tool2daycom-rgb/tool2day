@@ -9,6 +9,11 @@ import {
   emptyCv,
   emptyEducation,
   emptyExperience,
+  hardenCloneColors,
+  MARITAL_OPTIONS_AR,
+  MARITAL_OPTIONS_EN,
+  toggleLanguageLine,
+  WORLD_LANGUAGES,
   type CvData,
   type CvLang,
   type CvTemplateId,
@@ -77,6 +82,10 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
+        foreignObjectRendering: false,
+        onclone: (_doc, cloned) => {
+          hardenCloneColors(el, cloned as HTMLElement);
+        },
       });
       const img = canvas.toDataURL("image/jpeg", 0.92);
       const pdf = new jsPDF({
@@ -200,10 +209,12 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
               ["title", L.title],
               ["email", L.email],
               ["phone", L.phone],
+              ["phone2", L.phone2],
               ["address", L.address],
               ["city", L.city],
               ["website", L.website],
-              ["personalNote", L.personalNote],
+              ["age", L.age],
+              ["children", L.children],
             ] as const
           ).map(([key, label]) => (
             <label key={key} className="block text-xs font-semibold text-[#555]">
@@ -215,6 +226,22 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
               />
             </label>
           ))}
+          <label className="block text-xs font-semibold text-[#555]">
+            {L.maritalStatus}
+            <select
+              className={`${field} mt-1`}
+              value={data.maritalStatus}
+              onChange={(e) => patch("maritalStatus", e.target.value)}
+            >
+              {(lang === "ar" ? MARITAL_OPTIONS_AR : MARITAL_OPTIONS_EN).map(
+                (opt) => (
+                  <option key={opt || "_"} value={opt}>
+                    {opt || (lang === "ar" ? "— اختر —" : "— Select —")}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
         </div>
 
         <label className="mt-3 block text-xs font-semibold text-[#555]">
@@ -349,6 +376,37 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
                 lang === "ar" ? "العربية\nEnglish (B2)" : "Arabic\nEnglish (B2)"
               }
             />
+            <p className="mt-2 text-[11px] font-semibold text-[#777]">
+              {L.pickLanguages}
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {WORLD_LANGUAGES.map((w) => {
+                const active = data.languages
+                  .split(/\r?\n/)
+                  .some(
+                    (l) =>
+                      l.trim() === w ||
+                      l.trim().startsWith(`${w} `) ||
+                      l.trim().startsWith(`${w}(`),
+                  );
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() =>
+                      patch("languages", toggleLanguageLine(data.languages, w))
+                    }
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+                      active
+                        ? "border-[#111] bg-[#111] text-white"
+                        : "border-[#ddd] bg-white text-[#444] hover:bg-[#f5f5f5]"
+                    }`}
+                  >
+                    {w}
+                  </button>
+                );
+              })}
+            </div>
           </label>
           <label className="block text-xs font-semibold text-[#555]">
             {L.hobbies}
@@ -492,7 +550,8 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="mt-5 mb-2 border-b border-[#eee] pb-1 text-sm font-bold text-[#111]">
+    <h3 className="mt-5 mb-2 flex items-center gap-2 border-b border-[#eee] pb-1 text-base font-extrabold text-[#111]">
+      <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#111]" />
       {children}
     </h3>
   );

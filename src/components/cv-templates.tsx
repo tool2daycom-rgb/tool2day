@@ -22,7 +22,8 @@ function Photo({ src, className }: { src: string; className?: string }) {
   }
   return (
     <div
-      className={`flex items-center justify-center bg-white/20 text-xs opacity-70 ${className || ""}`}
+      className={`flex items-center justify-center text-xs ${className || ""}`}
+      style={{ background: "#cbd5e1", color: "#475569" }}
     >
       Photo
     </div>
@@ -33,11 +34,142 @@ function Bullets({ text }: { text: string }) {
   const items = lines(text);
   if (!items.length) return null;
   return (
-    <ul className="mt-1 list-disc space-y-0.5 ps-4 text-[11px] leading-5">
+    <ul className="mt-1 space-y-0.5 text-[11px] leading-5">
       {items.map((item) => (
-        <li key={item}>{item}</li>
+        <li key={item} className="flex gap-2">
+          <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+          <span>{item}</span>
+        </li>
       ))}
     </ul>
+  );
+}
+
+type IconKind = "phone" | "mail" | "pin" | "web" | "user" | "baby" | "age";
+
+function Icon({ kind, color = "currentColor" }: { kind: IconKind; color?: string }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: color,
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    className: "shrink-0",
+  };
+  if (kind === "phone") {
+    return (
+      <svg {...common}>
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.81.36 1.6.7 2.35a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.75.34 1.54.57 2.35.7A2 2 0 0 1 22 16.92z" />
+      </svg>
+    );
+  }
+  if (kind === "mail") {
+    return (
+      <svg {...common}>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="m22 7-10 7L2 7" />
+      </svg>
+    );
+  }
+  if (kind === "pin") {
+    return (
+      <svg {...common}>
+        <path d="M12 21s-6-5.33-6-10a6 6 0 1 1 12 0c0 4.67-6 10-6 10z" />
+        <circle cx="12" cy="11" r="2" />
+      </svg>
+    );
+  }
+  if (kind === "web") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" />
+      </svg>
+    );
+  }
+  if (kind === "age") {
+    return (
+      <svg {...common}>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4M8 2v4M3 10h18" />
+      </svg>
+    );
+  }
+  if (kind === "baby") {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="8" r="3" />
+        <path d="M6 20v-1a6 6 0 0 1 12 0v1" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
+
+function ContactRow({
+  kind,
+  children,
+  light,
+}: {
+  kind: IconKind;
+  children: ReactNode;
+  light?: boolean;
+}) {
+  if (!children) return null;
+  return (
+    <div
+      className="mb-1.5 flex items-start gap-2 text-[11px] leading-5"
+      style={{ color: light ? "#ffffff" : "inherit" }}
+    >
+      <span
+        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+        style={{
+          background: light ? "rgba(255,255,255,0.18)" : "#e5e7eb",
+        }}
+      >
+        <Icon kind={kind} color={light ? "#ffffff" : "#334155"} />
+      </span>
+      <span className="min-w-0 break-all">{children}</span>
+    </div>
+  );
+}
+
+function ContactBlock({ data, L, light }: { data: CvData; L: ReturnType<typeof cvLabels>; light?: boolean }) {
+  return (
+    <div className="mb-2">
+      <ContactRow kind="mail" light={light}>
+        {data.email}
+      </ContactRow>
+      <ContactRow kind="phone" light={light}>
+        {data.phone}
+      </ContactRow>
+      <ContactRow kind="phone" light={light}>
+        {data.phone2}
+      </ContactRow>
+      <ContactRow kind="pin" light={light}>
+        {data.address || data.city}
+      </ContactRow>
+      <ContactRow kind="web" light={light}>
+        {data.website}
+      </ContactRow>
+      <ContactRow kind="age" light={light}>
+        {data.age ? `${L.age}: ${data.age}` : null}
+      </ContactRow>
+      <ContactRow kind="user" light={light}>
+        {data.maritalStatus}
+      </ContactRow>
+      <ContactRow kind="baby" light={light}>
+        {data.children ? `${L.children}: ${data.children}` : null}
+      </ContactRow>
+    </div>
   );
 }
 
@@ -152,10 +284,7 @@ function NavySidebar({ data, L, name, title, skillList, langList, hobbyList, dir
           className="mx-auto mb-4 h-28 w-28 rounded object-cover"
         />
         <SideTitle>{L.contact}</SideTitle>
-        <SideLine>{data.email}</SideLine>
-        <SideLine>{data.phone}</SideLine>
-        <SideLine>{data.address || data.city}</SideLine>
-        <SideLine>{data.website}</SideLine>
+        <ContactBlock data={data} L={L} light />
         <SideTitle>{L.skills}</SideTitle>
         <ul className="mb-3 space-y-1 text-[11px]">
           {skillList.map((s) => (
@@ -200,11 +329,7 @@ function GreyRibbon({ data, L, name, title, skillList, langList, dir }: Common) 
           ))}
         </ul>
         <Ribbon>{L.contact}</Ribbon>
-        <p className="text-[11px] leading-5">
-          {[data.email, data.phone, data.address || data.city, data.website]
-            .filter(Boolean)
-            .join("\n")}
-        </p>
+        <ContactBlock data={data} L={L} />
         <Ribbon>{L.languages}</Ribbon>
         <ul className="space-y-1 text-[11px]">
           {langList.map((s) => (
@@ -259,13 +384,15 @@ function BlueCircle({ data, L, name, title, skillList, langList, dir }: Common) 
         />
         <h3 className="mb-1 text-xs font-bold uppercase tracking-wide">{L.about}</h3>
         <p className="mb-4 text-[11px] leading-5 opacity-95">{data.summary}</p>
-        <h3 className="mb-1 text-xs font-bold uppercase tracking-wide">{L.contact}</h3>
-        <p className="mb-4 space-y-1 text-[11px] leading-5">
-          <span className="block">{data.phone}</span>
-          <span className="block">{data.email}</span>
-          <span className="block">{data.address || data.city}</span>
-        </p>
-        <h3 className="mb-1 text-xs font-bold uppercase tracking-wide">{L.skills}</h3>
+        <h3 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold uppercase tracking-wide">
+          <span className="inline-block h-2 w-2 rounded-full bg-white" />
+          {L.contact}
+        </h3>
+        <ContactBlock data={data} L={L} light />
+        <h3 className="mb-2 mt-3 flex items-center gap-2 text-[13px] font-extrabold uppercase tracking-wide">
+          <span className="inline-block h-2 w-2 rounded-full bg-white" />
+          {L.skills}
+        </h3>
         <ul className="mb-4 space-y-1 text-[11px]">
           {skillList.map((s) => (
             <li key={s}>• {s}</li>
@@ -281,7 +408,8 @@ function BlueCircle({ data, L, name, title, skillList, langList, dir }: Common) 
       <div className="p-6">
         <h1 className="text-3xl font-bold text-[#0f3d6e]">{name}</h1>
         <p className="text-sm text-[#64748b]">{title}</p>
-        <h2 className="mt-5 mb-2 border-b-2 border-[#0f3d6e] pb-1 text-sm font-bold text-[#0f3d6e]">
+        <h2 className="mt-5 mb-3 flex items-center gap-2 border-b-2 border-[#0f3d6e] pb-1 text-lg font-extrabold text-[#0f3d6e]">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#0f3d6e]" />
           {L.education}
         </h2>
         {data.education.map((e, i) =>
@@ -298,7 +426,8 @@ function BlueCircle({ data, L, name, title, skillList, langList, dir }: Common) 
             </div>
           ) : null,
         )}
-        <h2 className="mt-4 mb-2 border-b-2 border-[#0f3d6e] pb-1 text-sm font-bold text-[#0f3d6e]">
+        <h2 className="mt-4 mb-3 flex items-center gap-2 border-b-2 border-[#0f3d6e] pb-1 text-lg font-extrabold text-[#0f3d6e]">
+          <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#0f3d6e]" />
           {L.experience}
         </h2>
         {data.experience.map((e, i) =>
@@ -339,13 +468,13 @@ function SoftBlue({ data, L, name, title, skillList, langList, hobbyList, dir }:
       </header>
       <div className="grid grid-cols-[240px_1fr]">
         <aside className="bg-[#dbeafe] p-4 text-[11px] leading-5">
-          <h3 className="mb-2 text-xs font-bold uppercase text-[#1e3a8a]">{L.contact}</h3>
-          <p>{data.email}</p>
-          <p>{data.phone}</p>
-          <p>{data.address || data.city}</p>
-          <p>{data.website}</p>
-          <p className="mt-1">{data.personalNote}</p>
-          <h3 className="mt-4 mb-2 text-xs font-bold uppercase text-[#1e3a8a]">
+          <h3 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold uppercase text-[#1e3a8a]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[#1e3a8a]" />
+            {L.contact}
+          </h3>
+          <ContactBlock data={data} L={L} />
+          <h3 className="mt-4 mb-2 flex items-center gap-2 text-[13px] font-extrabold uppercase text-[#1e3a8a]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[#1e3a8a]" />
             {L.skills}
           </h3>
           <ul className="space-y-1">
@@ -431,9 +560,15 @@ function NavyOrange({ data, L, name, title, dir }: Common) {
       </div>
       <div className="grid grid-cols-[1fr_240px]">
         <div className="p-5">
-          <h2 className="mb-2 text-sm font-bold text-[#0b1f3a]">{L.summary}</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#0b1f3a]">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#0b1f3a]" />
+            {L.summary}
+          </h2>
           <p className="mb-4 text-[12px] leading-6">{data.summary}</p>
-          <h2 className="mb-2 text-sm font-bold text-[#0b1f3a]">{L.experience}</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#0b1f3a]">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#0b1f3a]" />
+            {L.experience}
+          </h2>
           {data.experience.map((e, i) =>
             e.role || e.company ? (
               <div key={i} className="mb-3">
@@ -447,13 +582,15 @@ function NavyOrange({ data, L, name, title, dir }: Common) {
           )}
         </div>
         <aside className="bg-[#0b1f3a] p-4 text-white">
-          <h3 className="mb-2 text-xs font-bold text-[#fb923c]">{L.contact}</h3>
-          <p className="mb-3 space-y-1 text-[11px] leading-5">
-            <span className="block">{data.phone}</span>
-            <span className="block">{data.email}</span>
-            <span className="block">{data.address || data.city}</span>
-          </p>
-          <h3 className="mb-2 text-xs font-bold text-[#fb923c]">{L.hardSkills}</h3>
+          <h3 className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-[#fb923c]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[#fb923c]" />
+            {L.contact}
+          </h3>
+          <ContactBlock data={data} L={L} light />
+          <h3 className="mb-2 mt-3 flex items-center gap-2 text-[13px] font-extrabold text-[#fb923c]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[#fb923c]" />
+            {L.hardSkills}
+          </h3>
           {data.hardSkills
             .filter((s) => s.name.trim())
             .map((s) => (
@@ -508,13 +645,15 @@ function CreamModern({ data, L, name, title, skillList, dir }: Common) {
       </div>
       <div className="grid grid-cols-[240px_1fr] gap-5">
         <aside>
-          <h3 className="text-xs font-bold uppercase text-[#92400e]">{L.contact}</h3>
-          <p className="mt-1 text-[11px] leading-5">
-            {[data.phone, data.email, data.address || data.city]
-              .filter(Boolean)
-              .join("\n")}
-          </p>
-          <h3 className="mt-4 text-xs font-bold uppercase text-[#92400e]">
+          <h3 className="flex items-center gap-2 text-[13px] font-extrabold uppercase text-[#92400e]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[#92400e]" />
+            {L.contact}
+          </h3>
+          <div className="mt-1">
+            <ContactBlock data={data} L={L} />
+          </div>
+          <h3 className="mt-4 flex items-center gap-2 text-[13px] font-extrabold uppercase text-[#92400e]">
+            <span className="inline-block h-2 w-2 rounded-full bg-[#92400e]" />
             {L.skills}
           </h3>
           <ul className="mt-1 space-y-1 text-[11px]">
@@ -578,8 +717,15 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <div className="mt-4">
-      <h2 className="mb-2 text-sm font-bold" style={{ color }}>
+    <div className="mt-5">
+      <h2
+        className="mb-3 flex items-center gap-2 text-lg font-extrabold"
+        style={{ color }}
+      >
+        <span
+          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: color }}
+        />
         {title}
       </h2>
       {children}
@@ -589,20 +735,17 @@ function Section({
 
 function SideTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="mb-1 mt-3 border-b border-white/30 pb-1 text-[11px] font-bold uppercase tracking-wide">
+    <h3 className="mb-2 mt-4 flex items-center gap-2 border-b border-white/30 pb-1.5 text-[13px] font-extrabold uppercase tracking-wide">
+      <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-white" />
       {children}
     </h3>
   );
 }
 
-function SideLine({ children }: { children: ReactNode }) {
-  if (!children) return null;
-  return <p className="text-[11px] leading-5 opacity-95">{children}</p>;
-}
-
 function Ribbon({ children }: { children: ReactNode }) {
   return (
-    <div className="my-2 bg-[#374151] px-2 py-1 text-[11px] font-bold text-white">
+    <div className="my-2 flex items-center gap-2 bg-[#374151] px-2 py-1.5 text-[13px] font-extrabold text-white">
+      <span className="inline-block h-2 w-2 rounded-full bg-white" />
       {children}
     </div>
   );
@@ -610,7 +753,8 @@ function Ribbon({ children }: { children: ReactNode }) {
 
 function Banner({ children }: { children: ReactNode }) {
   return (
-    <div className="mt-4 mb-2 bg-[#374151] px-3 py-1.5 text-xs font-bold text-white">
+    <div className="mt-5 mb-3 flex items-center gap-2 bg-[#374151] px-3 py-2 text-base font-extrabold text-white">
+      <span className="inline-block h-2.5 w-2.5 rounded-full bg-white" />
       {children}
     </div>
   );
@@ -618,7 +762,8 @@ function Banner({ children }: { children: ReactNode }) {
 
 function HeadBanner({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-2 mt-3 bg-[#334155] px-3 py-1 text-xs font-bold text-white">
+    <div className="mb-3 mt-4 flex items-center gap-2 bg-[#334155] px-3 py-2 text-base font-extrabold text-white">
+      <span className="inline-block h-2.5 w-2.5 rounded-full bg-white" />
       {children}
     </div>
   );
