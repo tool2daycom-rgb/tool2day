@@ -102,20 +102,87 @@ async function prepareJpegForCloudOcr(file: File): Promise<Blob> {
   }
 }
 
-/** إزالة الخلفية عبر @imgly/background-removal */
+/** إزالة الخلفية في المتصفح — عبر imgly (نفس الأصل) مع احتياطي transformers */
 export async function removeImageBackground(
   file: File,
   onProgress?: (p: number) => void,
 ): Promise<Blob> {
+  onProgress?.(0.03);
+  try {
+    return await removeBackgroundImgly(file, onProgress);
+  } catch (imglyErr) {
+    onProgress?.(0.08);
+    try {
+      return await removeBackgroundTransformers(file, onProgress);
+    } catch {
+      const msg =
+        imglyErr instanceof Error ? imglyErr.message : "فشلت إزالة الخلفية";
+      if (/failed to fetch|network|cors|load/i.test(msg)) {
+        throw new Error(
+          "تعذر تحميل نموذج إزالة الخلفية. تحقق من الاتصال وأعد المحاولة.",
+        );
+      }
+      throw imglyErr instanceof Error
+        ? imglyErr
+        : new Error("فشلت إزالة الخلفية");
+    }
+  }
+}
+
+async function removeBackgroundImgly(
+  file: File,
+  onProgress?: (p: number) => void,
+): Promise<Blob> {
   const { removeBackground } = await import("@imgly/background-removal");
+  const publicPath =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/imgly-bg/`
+      : "/imgly-bg/";
   onProgress?.(0.05);
   const blob = await removeBackground(file, {
+    publicPath,
+    model: "isnet_fp16",
+    output: { format: "image/png", quality: 0.92 },
     progress: (_key, current, total) => {
-      if (total > 0) onProgress?.(Math.min(0.99, current / total));
+      if (total > 0) onProgress?.(0.05 + 0.9 * Math.min(1, current / total));
     },
   });
   onProgress?.(1);
   return blob;
+}
+
+async function removeBackgroundTransformers(
+  file: File,
+  onProgress?: (p: number) => void,
+): Promise<Blob> {
+  const { pipeline, env } = await import("@huggingface/transformers");
+  env.allowLocalModels = false;
+  env.useBrowserCache = true;
+  onProgress?.(0.12);
+  const remover = await pipeline("background-removal", "Xenova/modnet", {
+    device: "wasm",
+    dtype: "fp32",
+    progress_callback: (ev: { progress?: number; status?: string }) => {
+      if (typeof ev.progress === "number") {
+        onProgress?.(0.12 + 0.55 * Math.min(1, ev.progress / 100));
+      }
+    },
+  });
+  onProgress?.(0.72);
+  const url = URL.createObjectURL(file);
+  try {
+    const raw = await remover(url);
+    onProgress?.(0.9);
+    const image = Array.isArray(raw) ? raw[0] : raw;
+    if (!image || typeof image.toBlob !== "function") {
+      throw new Error("لم يُرجع النموذج صورة صالحة");
+    }
+    const blob = await image.toBlob("image/png");
+    onProgress?.(1);
+    return blob as Blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /**
@@ -337,7 +404,10 @@ export function extractiveSummarize(text: string, maxPoints = 8): string {
   }
 
   const title =
-    paragraphs.find((p) => p.length < 90 && /سيرة|CV|مقال|دليل|كيفية|كيف/i.test(p)) ||
+    paragraphs.find(
+      (p) => p.length < 100 && /كيفية|كيف|دليل|خطوات|سيرة ذاتية|CV\b/i.test(p),
+    ) ||
+    paragraphs.find((p) => p.length < 90) ||
     paragraphs[0]?.slice(0, 90) ||
     "";
 

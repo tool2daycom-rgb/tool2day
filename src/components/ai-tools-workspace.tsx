@@ -449,7 +449,12 @@ function RemoveBgPanel({
       <button type="button" className={btnPrimary} disabled={!file || busy} onClick={() => void run()}>
         {busy ? "جارٍ إزالة الخلفية…" : "إزالة الخلفية"}
       </button>
-      {busy ? <ProgressBar value={progress} label="تحميل النموذج والمعالجة…" /> : null}
+      {busy ? (
+        <ProgressBar
+          value={progress}
+          label="تحميل النموذج ثم إزالة الخلفية (قد يستغرق دقيقة في المرة الأولى)…"
+        />
+      ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {resultUrl ? (
         <div className="space-y-3">
