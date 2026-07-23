@@ -923,89 +923,260 @@ function sharpenCanvas(canvas: HTMLCanvasElement, amount: number) {
 }
 
 /**
- * مسح منطقة مظلّلة وملؤها من الجوار (inpainting بسيط سريع).
- * mask: ImageData حيث alpha>0 أو أحمر>0 يعني منطقة للحذف.
+ * مسح منطقة مظلّلة وملؤها من الجوار (inpainting من الحدود حتى اكتمال المنطقة).
+ * mask: بكسلات alpha>0 أو أحمر>0 = منطقة للحذف.
  */
 export async function eraseMaskedRegion(
   imageFile: File,
   maskCanvas: HTMLCanvasElement,
   onProgress?: (p: number) => void,
 ): Promise<Blob> {
-  onProgress?.(0.1);
+  onProgress?.(0.05);
   const img = await loadImageElement(imageFile);
-  const w = img.naturalWidth;
-  const h = img.naturalHeight;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(img, 0, 0);
-  const imgData = ctx.getImageData(0, 0, w, h);
+  const fullW = img.naturalWidth;
+  const fullH = img.naturalHeight;
 
-  const mctx = maskCanvas.getContext("2d")!;
-  // scale mask to image size if needed
-  const scaled = document.createElement("canvas");
-  scaled.width = w;
-  scaled.height = h;
-  const sctx = scaled.getContext("2d")!;
-  sctx.drawImage(maskCanvas, 0, 0, w, h);
-  const mask = sctx.getImageData(0, 0, w, h);
+  // معالجة بدقة معقولة ثم دمج المنطقة على الأصل (أدق + أسرع)
+  const maxEdge = 1536;
+  const scale = Math.min(1, maxEdge / Math.max(fullW, fullH));
+  const w = Math.max(1, Math.round(fullW * scale));
+  const h = Math.max(1, Math.round(fullH * scale));
 
+  const work = document.createElement("canvas");
+  work.width = w;
+  work.height = h;
+  const wctx = work.getContext("2d", { willReadFrequently: true })!;
+  wctx.drawImage(img, 0, 0, w, h);
+  const imgData = wctx.getImageData(0, 0, w, h);
   const data = imgData.data;
-  const md = mask.data;
+
+  const maskScaled = document.createElement("canvas");
+  maskScaled.width = w;
+  maskScaled.height = h;
+  const mctx = maskScaled.getContext("2d", { willReadFrequently: true })!;
+  mctx.drawImage(maskCanvas, 0, 0, w, h);
+  // توسيع بسيط للقناع حتى لا تبقى حواف الجسم
+  const maskBlurSrc = document.createElement("canvas");
+  maskBlurSrc.width = w;
+  maskBlurSrc.height = h;
+  maskBlurSrc.getContext("2d")!.drawImage(maskScaled, 0, 0);
+  mctx.clearRect(0, 0, w, h);
+  mctx.filter = "blur(1.5px)";
+  mctx.drawImage(maskBlurSrc, 0, 0);
+  mctx.filter = "none";
+  const md = mctx.getImageData(0, 0, w, h).data;
+
   const isMask = new Uint8Array(w * h);
+  let maskCount = 0;
   for (let i = 0; i < w * h; i++) {
     const a = md[i * 4 + 3]!;
     const r = md[i * 4]!;
-    isMask[i] = a > 20 || r > 40 ? 1 : 0;
+    if (a > 12 || r > 30) {
+      isMask[i] = 1;
+      maskCount++;
+    }
   }
-  onProgress?.(0.3);
+  if (maskCount === 0) {
+    throw new Error("ظلّل المنطقة المراد حذفها أولاً بالفرشاة الحمراء");
+  }
+  onProgress?.(0.12);
 
-  // عدة تمريرات: متوسط الجيران غير المقنّعين ثم توسيع تدريجي
-  const passes = 40;
-  const filled = new Uint8Array(w * h);
-  for (let pass = 0; pass < passes; pass++) {
+  // known = خارج القناع أو مُملأ
+  const known = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) known[i] = isMask[i] ? 0 : 1;
+
+  let remaining = maskCount;
+  let pass = 0;
+  const maxPasses = Math.max(80, Math.ceil(Math.sqrt(maskCount)) * 3);
+  const radiusGrow = [2, 2, 3, 3, 4, 5, 6];
+
+  while (remaining > 0 && pass < maxPasses) {
+    const radius = radiusGrow[Math.min(pass, radiusGrow.length - 1)]!;
     const copy = new Uint8ClampedArray(data);
+    const newly: number[] = [];
+
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const idx = y * w + x;
-        if (!isMask[idx] || filled[idx]) continue;
+        if (!isMask[idx] || known[idx]) continue;
+
+        // فقط البكسلات الملاصقة لمعلوم (حدود داخلية)
+        let touches = false;
+        for (let dy = -1; dy <= 1 && !touches; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            if (known[ny * w + nx]) touches = true;
+          }
+        }
+        if (!touches) continue;
+
         let r = 0;
         let g = 0;
         let b = 0;
         let n = 0;
-        for (let dy = -2; dy <= 2; dy++) {
-          for (let dx = -2; dx <= 2; dx++) {
+        let wsum = 0;
+        for (let dy = -radius; dy <= radius; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
             if (dx === 0 && dy === 0) continue;
             const nx = x + dx;
             const ny = y + dy;
             if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
             const ni = ny * w + nx;
-            if (isMask[ni] && !filled[ni]) continue;
+            if (!known[ni]) continue;
+            const dist = Math.hypot(dx, dy);
+            const wt = 1 / (dist * dist + 0.25);
             const p = ni * 4;
-            r += copy[p]!;
-            g += copy[p + 1]!;
-            b += copy[p + 2]!;
+            r += copy[p]! * wt;
+            g += copy[p + 1]! * wt;
+            b += copy[p + 2]! * wt;
+            wsum += wt;
             n++;
           }
         }
-        if (n > 0) {
+        if (n === 0 || wsum <= 0) continue;
+        const p = idx * 4;
+        data[p] = Math.round(r / wsum);
+        data[p + 1] = Math.round(g / wsum);
+        data[p + 2] = Math.round(b / wsum);
+        newly.push(idx);
+      }
+    }
+
+    if (newly.length === 0) {
+      // فك أي جيوب معزولة بأخذ أقرب معلوم بأي مسافة
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const idx = y * w + x;
+          if (!isMask[idx] || known[idx]) continue;
+          let best = Infinity;
+          let br = 128;
+          let bg = 128;
+          let bb = 128;
+          const search = Math.min(48, Math.max(w, h));
+          for (let dy = -search; dy <= search; dy += 2) {
+            for (let dx = -search; dx <= search; dx += 2) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+              const ni = ny * w + nx;
+              if (!known[ni]) continue;
+              const d = dx * dx + dy * dy;
+              if (d < best) {
+                best = d;
+                const p = ni * 4;
+                br = data[p]!;
+                bg = data[p + 1]!;
+                bb = data[p + 2]!;
+              }
+            }
+          }
           const p = idx * 4;
-          data[p] = Math.round(r / n);
-          data[p + 1] = Math.round(g / n);
-          data[p + 2] = Math.round(b / n);
-          filled[idx] = 1;
+          data[p] = br;
+          data[p + 1] = bg;
+          data[p + 2] = bb;
+          newly.push(idx);
         }
       }
     }
-    if (pass % 5 === 0) onProgress?.(0.3 + 0.6 * (pass / passes));
+
+    for (const idx of newly) {
+      if (!known[idx]) {
+        known[idx] = 1;
+        remaining--;
+      }
+    }
+    pass++;
+    if (pass % 3 === 0) {
+      onProgress?.(0.12 + 0.7 * (1 - remaining / maskCount));
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 
-  ctx.putImageData(imgData, 0, 0);
-  onProgress?.(0.95);
-  const blob = await canvasToBlob(canvas, "image/png");
+  // تنعيم خفيف داخل المنطقة الممسوحة
+  softenMaskedRegion(data, isMask, w, h);
+  wctx.putImageData(imgData, 0, 0);
+  onProgress?.(0.88);
+
+  // دمج على الصورة الأصلية بدقة كاملة مع حافة ناعمة
+  const out = document.createElement("canvas");
+  out.width = fullW;
+  out.height = fullH;
+  const octx = out.getContext("2d")!;
+  octx.drawImage(img, 0, 0);
+
+  const softFull = document.createElement("canvas");
+  softFull.width = fullW;
+  softFull.height = fullH;
+  const softSrc = document.createElement("canvas");
+  softSrc.width = fullW;
+  softSrc.height = fullH;
+  softSrc.getContext("2d")!.drawImage(maskCanvas, 0, 0, fullW, fullH);
+  const sf = softFull.getContext("2d")!;
+  sf.filter = "blur(3px)";
+  sf.drawImage(softSrc, 0, 0);
+  sf.filter = "none";
+
+  const patched = document.createElement("canvas");
+  patched.width = fullW;
+  patched.height = fullH;
+  const pctx = patched.getContext("2d")!;
+  pctx.drawImage(work, 0, 0, fullW, fullH);
+
+  const base = octx.getImageData(0, 0, fullW, fullH);
+  const over = pctx.getImageData(0, 0, fullW, fullH);
+  const alpha = sf.getImageData(0, 0, fullW, fullH).data;
+  const bd = base.data;
+  const od = over.data;
+  for (let i = 0; i < fullW * fullH; i++) {
+    const a = Math.max(alpha[i * 4 + 3]!, alpha[i * 4]!) / 255;
+    if (a < 0.01) continue;
+    const t = Math.min(1, a * 1.15);
+    const p = i * 4;
+    bd[p] = Math.round(bd[p]! * (1 - t) + od[p]! * t);
+    bd[p + 1] = Math.round(bd[p + 1]! * (1 - t) + od[p + 1]! * t);
+    bd[p + 2] = Math.round(bd[p + 2]! * (1 - t) + od[p + 2]! * t);
+  }
+  octx.putImageData(base, 0, 0);
+
+  onProgress?.(0.97);
+  const blob = await canvasToBlob(out, "image/png");
   onProgress?.(1);
   return blob;
+}
+
+function softenMaskedRegion(
+  data: Uint8ClampedArray,
+  isMask: Uint8Array,
+  w: number,
+  h: number,
+) {
+  const src = new Uint8ClampedArray(data);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      if (!isMask[idx]) continue;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const p = ((y + dy) * w + (x + dx)) * 4;
+          r += src[p]!;
+          g += src[p + 1]!;
+          b += src[p + 2]!;
+          n++;
+        }
+      }
+      const p = idx * 4;
+      data[p] = Math.round(r / n);
+      data[p + 1] = Math.round(g / n);
+      data[p + 2] = Math.round(b / n);
+    }
+  }
 }
 
 /** تلخيص استخراجي محلي منظّم: الهدف + أهم النقاط */

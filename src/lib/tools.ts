@@ -256,7 +256,7 @@ export const tools: Tool[] = [
     slug: "ai-erase",
     title: "حذف أشياء من الصورة",
     description:
-      "ظلّل العنصر غير المرغوب وامسحه من الصورة مع ملء المنطقة تلقائياً.",
+      "ظلّل أي عنصر غير مرغوب وامسحه فوراً من الصورة مع ملء الخلفية من الجوار.",
     category: "ai",
     accept: "image/*",
     icon: Eraser,

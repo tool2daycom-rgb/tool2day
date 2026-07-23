@@ -678,30 +678,62 @@ function ErasePanel({
     mask.getContext("2d")!.clearRect(0, 0, mask.width, mask.height);
   }
 
+  async function applyBlobToEditor(blob: Blob, name: string) {
+    const next = new File([blob], name, { type: blob.type || "image/png" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("تعذر عرض النتيجة"));
+      img.src = url;
+    });
+    URL.revokeObjectURL(url);
+    imgRef.current = img;
+    setFile(next);
+
+    const maxW = 900;
+    const scale = Math.min(1, maxW / img.naturalWidth);
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    for (const ref of [viewRef, maskRef]) {
+      const c = ref.current;
+      if (!c) continue;
+      c.width = w;
+      c.height = h;
+    }
+    const view = viewRef.current;
+    if (view) {
+      const vctx = view.getContext("2d")!;
+      vctx.clearRect(0, 0, w, h);
+      vctx.drawImage(img, 0, 0, w, h);
+    }
+    maskRef.current?.getContext("2d")?.clearRect(0, 0, w, h);
+  }
+
   async function run() {
     if (!file || !maskRef.current) return;
     setBusy(true);
     setError(null);
+    setProgress(0);
     beginToolUse(slug);
     try {
-      // rebuild full-res mask
       const img = imgRef.current!;
       const fullMask = document.createElement("canvas");
       fullMask.width = img.naturalWidth;
       fullMask.height = img.naturalHeight;
       fullMask
         .getContext("2d")!
-        .drawImage(
-          maskRef.current,
-          0,
-          0,
-          fullMask.width,
-          fullMask.height,
-        );
+        .drawImage(maskRef.current, 0, 0, fullMask.width, fullMask.height);
       const blob = await eraseMaskedRegion(file, fullMask, setProgress);
       if (resultUrl) URL.revokeObjectURL(resultUrl);
+      const preview = URL.createObjectURL(blob);
       setResultBlob(blob);
-      setResultUrl(URL.createObjectURL(blob));
+      setResultUrl(preview);
+      // حدّث اللوحة فوراً حتى يظهر الحذف مكان التظليل
+      await applyBlobToEditor(
+        blob,
+        file.name.replace(/\.[^.]+$/, "") + "-erased.png",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل المسح");
     } finally {
@@ -734,7 +766,7 @@ function ErasePanel({
         />
       </label>
       <p className="text-xs font-semibold text-[#666]">
-        ظلّل المنطقة المراد حذفها بالفرشاة الحمراء ثم اضغط «امسح».
+        ظلّل الشيء المراد حذفه بالفرشاة الحمراء ثم اضغط «امسح المنطقة» — النتيجة تظهر مباشرة على الصورة.
       </p>
       <div className="overflow-auto rounded-xl border border-[#eee] bg-[#fafafa] p-2">
         <canvas
