@@ -404,7 +404,6 @@ function RemoveBgPanel({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [personOnly, setPersonOnly] = useState(true);
 
   useEffect(() => {
     if (!file) {
@@ -429,7 +428,7 @@ function RemoveBgPanel({
     beginToolUse(slug);
     try {
       const blob = await removeImageBackground(file, setProgress, {
-        personOnly,
+        personOnly: true,
       });
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       const u = URL.createObjectURL(blob);
@@ -449,19 +448,6 @@ function RemoveBgPanel({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={preview} alt="" className="mx-auto max-h-56 rounded-lg object-contain" />
       ) : null}
-      <label className="flex cursor-pointer items-center gap-2 text-sm font-bold text-[#222]">
-        <input
-          type="checkbox"
-          checked={personOnly}
-          disabled={busy}
-          onChange={(e) => setPersonOnly(e.target.checked)}
-          className="size-4 accent-[#111]"
-        />
-        الشخص فقط (بدون جدار أو درابزين أو أشياء)
-      </label>
-      <p className="text-[11px] font-semibold text-[#777]">
-        الوضع «الشخص فقط» يحافظ على ألوان الملابس بالكامل ويزيل الجدار/الدرابزين. أول تشغيل أبطأ لجودة أعلى.
-      </p>
       <button type="button" className={btnPrimary} disabled={!file || busy} onClick={() => void run()}>
         {busy ? "جارٍ إزالة الخلفية…" : "إزالة الخلفية"}
       </button>
