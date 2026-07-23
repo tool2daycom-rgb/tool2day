@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { AiToolsWorkspace } from "@/components/ai-tools-workspace";
 import { CalculatorsWorkspace } from "@/components/calculators-workspace";
 import { GeneratorsWorkspace } from "@/components/generators-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
@@ -109,10 +110,16 @@ export default async function ToolPage({ params }: Props) {
     kind === "crypto-calculator" ||
     kind === "timezone-calculator" ||
     kind === "currency-exchange";
+  const isAiTool =
+    kind === "ai-ocr" ||
+    kind === "ai-summarize" ||
+    kind === "ai-remove-bg" ||
+    kind === "ai-upscale" ||
+    kind === "ai-erase";
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const seo = getToolSeoContent(tool);
-  const isWide = isPdf || isCv || isCurrency;
+  const isWide = isPdf || isCv || isCurrency || kind === "ai-erase";
   const tagline = cleanTagline(seo.tagline);
 
   return (
@@ -207,6 +214,20 @@ export default async function ToolPage({ params }: Props) {
                 | "crypto-calculator"
                 | "timezone-calculator"
                 | "currency-exchange"
+            }
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : isAiTool ? (
+          <AiToolsWorkspace
+            kind={
+              kind as
+                | "ai-ocr"
+                | "ai-summarize"
+                | "ai-remove-bg"
+                | "ai-upscale"
+                | "ai-erase"
             }
             slug={tool.slug}
             title={tool.title}

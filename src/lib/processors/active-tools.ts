@@ -60,6 +60,11 @@ export type ActiveToolKind =
   | "crypto-calculator"
   | "timezone-calculator"
   | "currency-exchange"
+  | "ai-ocr"
+  | "ai-summarize"
+  | "ai-remove-bg"
+  | "ai-upscale"
+  | "ai-erase"
   | "archive-extract"
   | "archive-convert"
   | "ebook-convert"
@@ -101,6 +106,11 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "crypto-calculator": "crypto-calculator",
   "timezone-calculator": "timezone-calculator",
   "currency-exchange": "currency-exchange",
+  "ai-ocr": "ai-ocr",
+  "ai-summarize": "ai-summarize",
+  "ai-remove-bg": "ai-remove-bg",
+  "ai-upscale": "ai-upscale",
+  "ai-erase": "ai-erase",
   "audio-converter": "audio-convert",
   "trim-audio": "audio-trim",
   "change-audio-volume": "audio-volume",

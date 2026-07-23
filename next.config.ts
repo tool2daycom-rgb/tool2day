@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "@ffmpeg/util",
     "@huggingface/transformers",
   ],
+  transpilePackages: ["@imgly/background-removal", "tesseract.js"],
 };
 
 export default nextConfig;

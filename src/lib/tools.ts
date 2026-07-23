@@ -46,11 +46,17 @@ import {
   Video,
   Volume2,
   WandSparkles,
+  ScanText,
+  FileSearch,
+  ImageMinus,
+  Maximize2,
+  Eraser,
 } from "lucide-react";
 
 export type ToolCategory =
   | "generators"
   | "calculators"
+  | "ai"
   | "video"
   | "audio"
   | "pdf"
@@ -79,6 +85,11 @@ export const categoryMeta: Record<
     label: "حسابات",
     sectionTitle: "التحويل الرياضي والحسابي",
     anchor: "calculators",
+  },
+  ai: {
+    label: "ذكاء اصطناعي",
+    sectionTitle: "أدوات الذكاء الاصطناعي السريعة",
+    anchor: "ai",
   },
   video: {
     label: "الفيديو",
@@ -110,6 +121,7 @@ export const categoryMeta: Record<
 export const navCategories: ToolCategory[] = [
   "generators",
   "calculators",
+  "ai",
   "converters",
   "pdf",
   "audio",
@@ -201,6 +213,53 @@ export const tools: Tool[] = [
     category: "calculators",
     accept: "text/plain",
     icon: Coins,
+  },
+
+  // AI micro-tools
+  {
+    slug: "ai-ocr",
+    title: "استخراج النص من الصور",
+    description:
+      "OCR سريع: ارفع صورة واستخرج النص العربي والإنجليزي بضغطة زر داخل المتصفح.",
+    category: "ai",
+    accept: "image/*",
+    icon: ScanText,
+  },
+  {
+    slug: "ai-summarize",
+    title: "تلخيص المقالات والروابط",
+    description:
+      "الصق رابطاً أو نصاً واحصل على ملخص واضح فوري للمقال أو الصفحة.",
+    category: "ai",
+    accept: "text/plain",
+    icon: FileSearch,
+  },
+  {
+    slug: "ai-remove-bg",
+    title: "إزالة خلفية الصور",
+    description:
+      "أزل خلفية أي صورة أونلاين بدقة عالية وصدّر PNG شفافاً جاهزاً للاستخدام.",
+    category: "ai",
+    accept: "image/*",
+    icon: ImageMinus,
+  },
+  {
+    slug: "ai-upscale",
+    title: "تكبير الصور إلى 4K",
+    description:
+      "ارفع جودة الصورة وكبّرها حتى دقة 4K مع تنعيم وتحسين الحواف.",
+    category: "ai",
+    accept: "image/*",
+    icon: Maximize2,
+  },
+  {
+    slug: "ai-erase",
+    title: "حذف أشياء من الصورة",
+    description:
+      "ظلّل العنصر غير المرغوب وامسحه من الصورة مع ملء المنطقة تلقائياً.",
+    category: "ai",
+    accept: "image/*",
+    icon: Eraser,
   },
 
   // Video
@@ -675,6 +734,7 @@ export const tools: Tool[] = [
 export const categoryOrder: ToolCategory[] = [
   "generators",
   "calculators",
+  "ai",
   "video",
   "audio",
   "pdf",
