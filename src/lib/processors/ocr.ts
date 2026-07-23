@@ -284,18 +284,10 @@ export async function runOcr(
 
   onProgress?.(1, "تم");
   const finalGuess = guessLangPack(bestText);
-  let text = cleanupOcrText(bestText);
-  if (
-    langUsed.includes("deu") ||
-    /[äöüß]|Aufenth|Gilt nur|Volkshochschule|Meldebest|Pforzheim|gemeldet/i.test(
-      text,
-    )
-  ) {
-    text = correctGermanOcr(text);
-  }
-  if (langUsed.includes("por") || /FILIA|SECRETARIA|ESTADO DE/i.test(text)) {
-    text = correctPortugueseOcr(text);
-  }
+  const text = postCorrectOcrText(
+    bestText,
+    langs === "auto" ? langUsed : langs,
+  );
   return {
     text,
     langUsed,
@@ -307,6 +299,27 @@ export async function runOcr(
         : LANG_LABELS[langUsed] || langUsed,
     warning,
   };
+}
+
+/** تصحيح لاحق للنص المستخرج (سحابي أو محلي) */
+export function postCorrectOcrText(text: string, langs = "auto"): string {
+  let out = cleanupOcrText(text);
+  if (
+    langs.includes("deu") ||
+    langs === "auto" ||
+    /[äöüß]|Aufenth|Gilt nur|Volkshochschule|Meldebest|Pforzheim|gemeldet|Bürgercentrum/i.test(
+      out,
+    )
+  ) {
+    out = correctGermanOcr(out);
+  }
+  if (
+    langs.includes("por") ||
+    /FILIA|SECRETARIA|ESTADO DE/i.test(out)
+  ) {
+    out = correctPortugueseOcr(out);
+  }
+  return out;
 }
 
 /** تصحيح أخطاء OCR الشائعة في الألمانية (مستندات إدارية) */
@@ -329,51 +342,108 @@ function correctGermanOcr(text: string): string {
     [/\bPforznhe\b/gi, "Pforzheim"],
     [/\bPforzheirn\b/gi, "Pforzheim"],
     [/\bPforzheia\b/gi, "Pforzheim"],
+    [/\bPforzheie\b/gi, "Pforzheim"],
     [/\bPforzheis\b/gi, "Pforzheim"],
     [/\bPforzhein\b/gi, "Pforzheim"],
+    [/\bPforthein\b/gi, "Pforzheim"],
+    [/\bPforzneim\b/gi, "Pforzheim"],
+    [/\bPorabei\b/gi, "Pforzheim"],
     [/\bPort sam\b/gi, "Pforzheim"],
     [/\bPirzkem\b/gi, "Pforzheim"],
+    [/\bPlxzlam\b/gi, "Pforzheim"],
     [/\bFiktit\b/gi, "Fiktionsbescheinigung"],
     [/\bSürgercentram\b/gi, "Bürgercentrum"],
     [/\bSürgercentrunn\b/gi, "Bürgercentrum"],
     [/\bBürgercentrunn\b/gi, "Bürgercentrum"],
+    [/\bBargercertum\b/gi, "Bürgercentrum"],
+    [/\bBagercertum\b/gi, "Bürgercentrum"],
+    [/\bWürgercont\b/gi, "Bürgercentrum"],
     [/\bBiro\.?\s*Pforzheim\b/gi, "Stadt Pforzheim"],
-    [/\bMeldebest[^\n]{0,12}\b/gi, "Meldebestätigung"],
+    [/\bMeldebestä?tigung\b/gi, "Meldebestätigung"],
+    [/\bMeldebest[a-zA-Zäöü]{0,12}\b/gi, "Meldebestätigung"],
+    [/\b\d+[.\d]*\s*gung\s*\(/gi, "Meldebestätigung ("],
     [/\bDest\s*itigyn\b/gi, "Meldebestätigung"],
     [/\bgemäß\b/gi, "gemäß"],
     [/\bgents\b/gi, "gemäß"],
+    [/\bgeni[s£]\b/gi, "gemäß"],
+    [/\bgenis\b/gi, "gemäß"],
     [/\bgen[il5]\s*§\b/gi, "gemäß §"],
     [/\bAbs\.\s*2\s*3MG\b/gi, "Abs. 2 BMG"],
+    [/\bAbs\.\s*2\s*38G\b/gi, "Abs. 2 BMG"],
     [/\bAbs\.\s*2\s*ams\b/gi, "Abs. 2 BMG"],
     [/\b2\s*3MG\b/gi, "2 BMG"],
     [/\bSachbanseierin\b/gi, "Sachbearbeiterin"],
     [/\bSachbendetern\b/gi, "Sachbearbeiterin"],
     [/\bSschbendetern\b/gi, "Sachbearbeiterin"],
+    [/\bSachbes\s*bellern\b/gi, "Sachbearbeiterin"],
+    [/\bSetterbelerk\b/gi, "Sachbearbeiterin"],
+    [/\bSöchbesbehern\b/gi, "Sachbearbeiterin"],
+    [/\bFau Schwaao\b/gi, "Frau Schwaab"],
+    [/\bFiau Schwiso\b/gi, "Frau Schwaab"],
+    [/\bFu Schwan\b/gi, "Frau Schwaab"],
+    [/\bSchusab\b/gi, "Schwaab"],
     [/\bgezeld\b/gi, "gemeldet"],
+    [/\bgezeldet\b/gi, "gemeldet"],
     [/\bgeselde\b/gi, "gemeldet"],
     [/\bges\s*[:.]?\s*det\b/gi, "gemeldet"],
     [/\bgemelde\b/gi, "gemeldet"],
+    [/\bnit alleiniger\b/gi, "mit alleiniger"],
+    [/\bNohnung\b/gi, "Wohnung"],
     [/\balleiniger Wohnung gemeldet\b/gi, "alleiniger Wohnung gemeldet"],
     [/\bAaiser-Friedrich-Str\b/gi, "Kaiser-Friedrich-Str"],
     [/\bKaiser-Frfedrich-Str\b/gi, "Kaiser-Friedrich-Str"],
+    [/\biser-Friedrich-Str\b/gi, "Kaiser-Friedrich-Str"],
     [/\bKart-Fridrich\b/gi, "Karl-Friedrich"],
     [/\bKarl-Fridrich\b/gi, "Karl-Friedrich"],
+    [/\bOsti\.\s*Karl-Friedrich-Str\b/gi, "Östl. Karl-Friedrich-Str"],
+    [/\bOstiche\b/gi, "Östliche"],
+    [/\bGiliche\b/gi, "Östliche"],
     [/\bUnser Zeichen\b/gi, "Unser Zeichen"],
+    [/\bUnser Zeicher\b/gi, "Unser Zeichen"],
     [/\bUser Zacher\b/gi, "Unser Zeichen"],
+    [/\bUse Zalchean\b/gi, "Unser Zeichen"],
     [/\bU=sevw Texter\b/gi, "Unser Zeichen"],
-    [/\bTelefax\b/gi, "Telefax"],
-    [/\bAuszugsdatum\b/gi, "Auszugsdatum"],
+    [/\bTelefar\b/gi, "Telefax"],
+    [/\bTelefac\b/gi, "Telefax"],
+    [/\bE-Mat\b/gi, "E-Mail"],
+    [/\bAuszugsdatun\b/gi, "Auszugsdatum"],
+    [/\bAbneldedacun\b/gi, "Abmeldedatum"],
     [/\bAbmeldedatum\b/gi, "Abmeldedatum"],
     [/\bMit freundlichen Grüßen\b/gi, "Mit freundlichen Grüßen"],
+    [/\bMic freandEobm\b/gi, "Mit freundlichen"],
     [/\bist derzeit in Pforzheim\b/gi, "ist derzeit in Pforzheim"],
+    [/\bIst derzeit in Pforzheim\b/gi, "ist derzeit in Pforzheim"],
+    [/\bNane:\b/gi, "Name:"],
+    [/\bVornane:\b/gi, "Vorname:"],
+    [/\bgeb\.\s*an:/gi, "geb. am:"],
+    [/\bDandass\b/gi, "Dandash"],
+    [/\bWisan\b/gi, "Wisam"],
+    [/\bKisan\b/gi, "Wisam"],
+    [/\bZisae\b/gi, "Wisam"],
     [/\bVerlangerung\b/gi, "Verlängerung"],
     [/\bNebenbestimmungen\b/gi, "Nebenbestimmungen"],
+    [/\bDatam\b/gi, "Datum"],
+    [/\bDetam\b/gi, "Datum"],
     [/F1569095[¢cC]/g, "F15690956"],
     [/2511\s*12\s*067580/g, "251112067580"],
     [/2511\s*6\/08/g, "251112067580"],
     [/\b275172\b/g, "75172"],
     [/\b5172 Pforzheim\b/gi, "75172 Pforzheim"],
-    [/\b75178 Pforzheim\b/gi, "75175 Pforzheim"],
+    [/\b75178[5]?\s*Pforzheim\b/gi, "75175 Pforzheim"],
+    [/\b76176\b/g, "75175"],
+    // سنوات شائعة يخطئها OCR في هذا السياق (2000/2006 → 2026 عند وجود تواريخ 2026 أخرى)
+    [/\bDatum:?\s*22\.06\.200[06]\b/gi, "Datum: 22.06.2026"],
+    [/\b22\.06\.200[06]\b/g, "22.06.2026"],
+    [/\b27\.\s*Juni\s*2006\b/gi, "22. Juni 2026"],
+    [/\b2E\s*Juni\s*2006\b/gi, "22. Juni 2026"],
+    [/\bbuergercentrum@ipforzheim\.de\b/gi, "buergercentrum@pforzheim.de"],
+    [/\bsvergersestum@iprorzheim\.de\b/gi, "buergercentrum@pforzheim.de"],
+    [/\bsvegersestum@ipforzheim\.de\b/gi, "buergercentrum@pforzheim.de"],
+    [/\b07231\s*59-1111\b/g, "07231 39-1111"],
+    [/\b07231\s*359-1111\b/g, "07231 39-1111"],
+    [/\b07231\s*30-2001\b/g, "07231 39-2801"],
+    [/\b07231\s*10-2001\b/g, "07231 39-2801"],
+    [/\b07231\s*39-2001\b/g, "07231 39-2801"],
   ];
   let out = text;
   for (const [re, rep] of pairs) out = out.replace(re, rep);

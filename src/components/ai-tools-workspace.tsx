@@ -12,6 +12,7 @@ import {
   eraseMaskedRegion,
   extractiveSummarize,
   removeImageBackground,
+  runCloudOcr,
   runOcr,
   upscaleImageTo4k,
 } from "@/lib/processors/ai-micro-tools";
@@ -153,8 +154,25 @@ function OcrPanel({
     setDetected(null);
     setHint(null);
     beginToolUse(slug);
+    const lang = langOverride ?? langs;
     try {
-      const out = await runOcr(f, langOverride ?? langs, (p, s) => {
+      // سحابي أولاً (دقة أعلى للمستندات الألمانية والصور الضعيفة)
+      try {
+        const cloud = await runCloudOcr(f, lang, (p, s) => {
+          setProgress(p);
+          setStatus(s);
+        });
+        if (cloud?.text) {
+          setText(cloud.text);
+          setDetected(cloud.langLabel);
+          return;
+        }
+      } catch {
+        /* fall through to local */
+      }
+
+      setStatus("استخراج محلي…");
+      const out = await runOcr(f, lang, (p, s) => {
         setProgress(p);
         setStatus(s);
       });
@@ -201,7 +219,7 @@ function OcrPanel({
         </select>
       </label>
       <p className="text-[11px] font-semibold text-[#777]">
-        للمستندات الألمانية اختر Deutsch + English. ارفع صورة واضحة بحجم كبير (يفضّل أكثر من 1500 بكسل) وليس لقطة شاشة مصغّرة.
+        للمستندات الألمانية اختر Deutsch + English. الاستخراج السحابي أدق على الصور الضعيفة؛ إن تعذّر يُستخدم المحلّي تلقائياً.
       </p>
       {hint ? (
         <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">

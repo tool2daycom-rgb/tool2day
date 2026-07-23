@@ -31,7 +31,76 @@ export function canvasToBlob(
 }
 
 export type { OcrResult } from "./ocr";
-export { runOcr, guessLangPack } from "./ocr";
+export { runOcr, guessLangPack, postCorrectOcrText } from "./ocr";
+import type { OcrResult } from "./ocr";
+
+/** OCR سحابي بدقة أعلى للمستندات (مع تكبير محلي ثم /api/ocr) */
+export async function runCloudOcr(
+  file: File,
+  langs = "auto",
+  onProgress?: (p: number, status: string) => void,
+): Promise<OcrResult | null> {
+  onProgress?.(0.05, "تحسين الصورة للإرسال…");
+  const prepared = await prepareJpegForCloudOcr(file);
+  onProgress?.(0.2, "استخراج سحابي…");
+  const body = new FormData();
+  body.append("file", prepared, "document.jpg");
+  body.append("langs", langs);
+  const res = await fetch("/api/ocr", { method: "POST", body });
+  if (res.status === 501) return null;
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `فشل OCR السحابي (${res.status})`);
+  }
+  const data = (await res.json()) as {
+    text?: string;
+    langLabel?: string;
+    provider?: string;
+  };
+  const text = (data.text || "").trim();
+  if (!text) return null;
+  onProgress?.(1, "تم");
+  return {
+    text,
+    langUsed: langs === "auto" ? "cloud" : langs,
+    langLabel: data.langLabel || "سحابي",
+  };
+}
+
+async function prepareJpegForCloudOcr(file: File): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("تعذر قراءة الصورة"));
+      img.src = url;
+    });
+    const long = Math.max(img.naturalWidth, img.naturalHeight);
+    const target = long < 900 ? Math.round(long * 5) : long < 1600 ? Math.round(long * 2.5) : Math.min(3600, long);
+    const scale = target / long;
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("فشل تصدير JPEG"))),
+        "image/jpeg",
+        0.92,
+      );
+    });
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 /** إزالة الخلفية عبر @imgly/background-removal */
 export async function removeImageBackground(
