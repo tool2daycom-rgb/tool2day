@@ -4,6 +4,7 @@ import {
   Clapperboard,
   Combine,
   Crop,
+  Download,
   FileArchive,
   FileImage,
   FileSpreadsheet,
@@ -105,6 +106,15 @@ export const tools: Tool[] = [
     category: "video",
     accept: "text/plain",
     icon: Type,
+  },
+  {
+    slug: "media-downloader",
+    title: "تحميل الوسائط من رابط",
+    description:
+      "الصق رابط صفحة أو ملف واستخرج فيديو/صورة/صوت عاماً للتنزيل — مجاناً وبدون علامة مائية.",
+    category: "video",
+    accept: "text/plain",
+    icon: Download,
   },
   {
     slug: "merge-videos",

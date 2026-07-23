@@ -37,6 +37,7 @@ const noFileKinds = new Set<ActiveToolKind>([
   "voice-recorder",
   "video-recorder",
   "tts",
+  "media-downloader",
 ]);
 
 const sel = "block w-full rounded-md border border-[#ddd] bg-white px-3 py-2";
@@ -83,6 +84,18 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   const [ttsVoice, setTtsVoice] = useState("ar-SA-HamedNeural");
   const [ttsStyle, setTtsStyle] = useState("video");
   const [ttsSpeed, setTtsSpeed] = useState(0.92);
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaNote, setMediaNote] = useState("");
+  const [mediaItems, setMediaItems] = useState<
+    Array<{
+      url: string;
+      type: string;
+      title?: string;
+      thumbnail?: string;
+      source: string;
+    }>
+  >([]);
   const [ttsFile, setTtsFile] = useState<File | null>(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -127,6 +140,83 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
   }, []);
 
   const multiple = multiKinds.has(kind);
+
+  async function extractMedia() {
+    beginToolUse(slug);
+    setMediaBusy(true);
+    setBusy(true);
+    setError(null);
+    setMediaNote("");
+    setMediaItems([]);
+    setProgress(20);
+    setStatus("جارٍ فحص الرابط واستخراج الوسائط…");
+    try {
+      const res = await fetch("/api/media-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: mediaUrl.trim() }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        note?: string;
+        title?: string;
+        items?: Array<{
+          url: string;
+          type: string;
+          title?: string;
+          thumbnail?: string;
+          source: string;
+        }>;
+      };
+      if (!res.ok) throw new Error(data.error || "فشل الاستخراج");
+      setMediaItems(data.items || []);
+      setMediaNote(data.note || (data.title ? `صفحة: ${data.title}` : ""));
+      setProgress(100);
+      setStatus(
+        data.items?.length
+          ? `وُجد ${data.items.length} وسيط/وسائط`
+          : "لا نتائج عامة في هذه الصفحة",
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "فشل الاستخراج");
+      setStatus(null);
+    } finally {
+      setMediaBusy(false);
+      setBusy(false);
+    }
+  }
+
+  async function downloadMediaItem(itemUrl: string) {
+    beginToolUse(slug);
+    setBusy(true);
+    setError(null);
+    setStatus("جارٍ التحميل…");
+    try {
+      const href = `/api/media-proxy?url=${encodeURIComponent(itemUrl)}`;
+      const res = await fetch(href);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || "فشل التحميل");
+      }
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      const obj = URL.createObjectURL(blob);
+      a.href = obj;
+      const name =
+        itemUrl.split("/").pop()?.split("?")[0] || `tool2day-media-${Date.now()}`;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(obj);
+      setStatus("تم بدء التنزيل");
+    } catch (e) {
+      // Fallback: open original URL
+      window.open(itemUrl, "_blank", "noopener,noreferrer");
+      setStatus("فُتح الرابط الأصلي — احفظه من المتصفح إن لزم");
+      if (e instanceof Error) setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function ensureTtsFile(): Promise<File> {
     if (ttsFile) return ttsFile;
@@ -227,6 +317,10 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
     try {
       if (kind === "tts") {
         // التشغيل يتم عبر playTts / التنزيل عبر downloadTts
+        return;
+      }
+      if (kind === "media-downloader") {
+        await extractMedia();
         return;
       }
 
@@ -568,6 +662,89 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             صوت عصبي حقيقي من Microsoft Edge — مناسب لتعليق فيديوهات بصوت يشبه
             الإنسان. حرّك العيار لضبط الإيقاع بدقة.
           </p>
+        </div>
+      ) : kind === "media-downloader" ? (
+        <div className="space-y-4">
+          <Field label="رابط الصفحة أو الملف">
+            <input
+              className={sel}
+              dir="ltr"
+              type="url"
+              placeholder="https://example.com/page-or-file.mp4"
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void extractMedia();
+                }
+              }}
+            />
+          </Field>
+          <p className="text-xs leading-6 text-[#666]">
+            يستخرج الروابط العامة الظاهرة في الصفحة (Open Graph / فيديو HTML /
+            صور / ملفات مباشرة). لا يتجاوز الحماية أو حقوق النشر — استخدمه فقط
+            للمحتوى الذي يحق لك حفظه.
+          </p>
+          {mediaNote ? (
+            <p className="rounded-lg bg-[#f5f5f5] px-3 py-2 text-xs text-[#555]">
+              {mediaNote}
+            </p>
+          ) : null}
+          {mediaItems.length > 0 ? (
+            <ul className="space-y-2">
+              {mediaItems.map((item) => (
+                <li
+                  key={item.url}
+                  className="flex flex-col gap-2 rounded-lg border border-[#e5e5e5] bg-[#fafafa] p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-[#111]">
+                      {item.type === "video"
+                        ? "فيديو"
+                        : item.type === "audio"
+                          ? "صوت"
+                          : item.type === "image"
+                            ? "صورة"
+                            : "ملف"}
+                      {item.title ? ` — ${item.title}` : ""}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-[#888]" dir="ltr">
+                      {item.url}
+                    </p>
+                    <p className="text-[10px] text-[#aaa]">مصدر: {item.source}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    {item.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.thumbnail}
+                        alt=""
+                        className="h-12 w-12 rounded object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void downloadMediaItem(item.url)}
+                      className="rounded-md bg-[#16a34a] px-3 py-2 text-xs font-bold text-white hover:bg-[#15803d] disabled:opacity-50"
+                    >
+                      تنزيل
+                    </button>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border border-[#ddd] bg-white px-3 py-2 text-xs font-bold text-[#333] hover:bg-[#f5f5f5]"
+                    >
+                      فتح
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : kind === "video-add-image" ? (
         <div className="space-y-4">
@@ -991,6 +1168,15 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             {ttsFile ? "تنزيل MP3" : "نزّل بعد التشغيل"}
           </button>
         </div>
+      ) : kind === "media-downloader" ? (
+        <button
+          type="button"
+          disabled={busy || mediaBusy || !mediaUrl.trim()}
+          onClick={() => void extractMedia()}
+          className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+        >
+          {busy || mediaBusy ? "جارٍ الاستخراج…" : "استخراج الوسائط"}
+        </button>
       ) : (
         <button
           type="button"
@@ -1012,7 +1198,9 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         </p>
       ) : null}
       <p className="mt-3 text-xs text-[#888]">
-        {title} — مجاني بالكامل · بدون علامة مائية · معالجة في المتصفح
+        {kind === "media-downloader"
+          ? `${title} — مجاني · استخراج الروابط العامة فقط · احترم حقوق النشر`
+          : `${title} — مجاني بالكامل · بدون علامة مائية · معالجة في المتصفح`}
       </p>
     </div>
   );

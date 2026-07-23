@@ -146,6 +146,15 @@ const toolExtraKeywords: Record<string, string[]> = {
     "تحويل كتابة إلى صوت",
     "text to speech arabic",
   ],
+  "media-downloader": [
+    "تحميل فيديو من رابط",
+    "تحميل صورة من رابط",
+    "استخراج وسائط",
+    "media downloader",
+    "download video from url",
+    "تحميل ميديا",
+    "حفظ فيديو من صفحة",
+  ],
   "merge-videos": [
     "دمج فيديوهات",
     "جمع فيديوهات",
