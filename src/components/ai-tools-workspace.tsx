@@ -141,7 +141,7 @@ function OcrPanel({
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [langs, setLangs] = useState("ara+eng");
+  const [langs, setLangs] = useState("por+eng");
 
   async function run() {
     if (!file) return;
@@ -172,14 +172,20 @@ function OcrPanel({
           value={langs}
           onChange={(e) => setLangs(e.target.value)}
         >
+          <option value="por+eng">Português + English (هويات / مستندات)</option>
+          <option value="eng">English فقط</option>
           <option value="ara+eng">العربية + English</option>
           <option value="ara">العربية فقط</option>
-          <option value="eng">English فقط</option>
+          <option value="spa+eng">Español + English</option>
           <option value="fra+eng">Français + English</option>
           <option value="deu+eng">Deutsch + English</option>
           <option value="tur+eng">Türkçe + English</option>
+          <option value="ita+eng">Italiano + English</option>
         </select>
       </label>
+      <p className="text-[11px] font-semibold text-[#777]">
+        يتم تدوير الصورة تلقائياً وتحسينها قبل القراءة — للبطاقات المقلوبة اختر لغة المستند الصحيحة.
+      </p>
       <button type="button" className={btnPrimary} disabled={!file || busy} onClick={() => void run()}>
         {busy ? "جارٍ الاستخراج…" : "استخراج النص"}
       </button>

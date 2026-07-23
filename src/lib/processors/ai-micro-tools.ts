@@ -30,23 +30,178 @@ export function canvasToBlob(
   });
 }
 
-/** OCR عبر Tesseract في المتصفح */
+/** OCR عبر Tesseract مع تدوير تلقائي وتحسين الصورة */
 export async function runOcr(
   file: File,
   langs = "ara+eng",
   onProgress?: (p: number, status: string) => void,
 ): Promise<string> {
   const Tesseract = await import("tesseract.js");
-  const result = await Tesseract.recognize(file, langs, {
+  onProgress?.(0.02, "تحسين الصورة…");
+  const prepared = await prepareImageForOcr(file);
+
+  onProgress?.(0.08, "كشف اتجاه النص…");
+  let angle = 0;
+  try {
+    const detected = await Tesseract.detect(prepared.blob, {
+      logger: (m) => {
+        if (m.status) {
+          onProgress?.(0.08 + (m.progress || 0) * 0.1, "كشف الاتجاه…");
+        }
+      },
+    });
+    const deg = Number(detected.data.orientation_degrees) || 0;
+    const conf = Number(detected.data.orientation_confidence) || 0;
+    const norm = ((deg % 360) + 360) % 360;
+    if (conf >= 1.2 && [90, 180, 270].includes(norm)) {
+      angle = norm;
+    }
+  } catch {
+    /* نتابع بدون OSD */
+  }
+
+  // إن فشل OSD على بطاقة مقلوبة، جرّب الاتجاهات الأخرى
+  const anglesToTry =
+    angle === 0 ? [0, 90, 270, 180] : [angle, (angle + 180) % 360, 0];
+
+  onProgress?.(0.2, "تحميل نموذج اللغة…");
+  const worker = await Tesseract.createWorker(langs, 1, {
     logger: (m) => {
-      if (m.status === "recognizing text" && typeof m.progress === "number") {
-        onProgress?.(m.progress, "جارٍ استخراج النص…");
-      } else if (m.status) {
-        onProgress?.(m.progress ?? 0, m.status);
+      if (m.status === "recognizing text") {
+        onProgress?.(0.4 + (m.progress || 0) * 0.5, "استخراج النص…");
+      } else if (m.status === "loading language traineddata") {
+        onProgress?.(0.22, "تحميل اللغة…");
       }
     },
   });
-  return (result.data.text || "").trim();
+
+  let bestText = "";
+  let bestScore = -1;
+
+  try {
+    for (let ai = 0; ai < anglesToTry.length; ai++) {
+      const a = anglesToTry[ai]!;
+      onProgress?.(0.3 + ai * 0.08, a ? `قراءة بزاوية ${a}°…` : "قراءة أفقية…");
+      const oriented =
+        a === 0 ? prepared.blob : await rotateImageBlob(prepared.blob, a);
+
+      // أول زاوية: وضعان؛ الباقي: AUTO فقط لتوفير الوقت
+      const psms =
+        ai === 0
+          ? [Tesseract.PSM.AUTO, Tesseract.PSM.SINGLE_BLOCK]
+          : [Tesseract.PSM.AUTO];
+
+      for (const psm of psms) {
+        await worker.setParameters({
+          tessedit_pageseg_mode: psm,
+          preserve_interword_spaces: "1",
+        });
+        const { data } = await worker.recognize(oriented);
+        const text = (data.text || "").trim();
+        const score = scoreOcrText(text, Number(data.confidence) || 0);
+        if (score > bestScore) {
+          bestScore = score;
+          bestText = text;
+        }
+      }
+
+      if (bestScore >= 50 && hasLetterRatio(bestText) > 0.5) break;
+    }
+  } finally {
+    await worker.terminate();
+  }
+
+  onProgress?.(1, "تم");
+  return cleanupOcrText(bestText);
+}
+
+function hasLetterRatio(text: string): number {
+  const letters = (text.match(/\p{L}/gu) || []).length;
+  const total = text.replace(/\s/g, "").length || 1;
+  return letters / total;
+}
+
+function scoreOcrText(text: string, confidence: number): number {
+  if (!text) return -1;
+  const ratio = hasLetterRatio(text);
+  const words = text.split(/\s+/).filter((w) => /\p{L}{2,}/u.test(w)).length;
+  const junk = (text.match(/[|=»«¢£¥§©®°±×÷]/g) || []).length;
+  return (
+    confidence * 0.5 +
+    words * 2.5 +
+    ratio * 45 -
+    junk * 2 +
+    Math.min(25, text.length / 25)
+  );
+}
+
+function cleanupOcrText(text: string): string {
+  return text
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[^\S\n]{2,}/g, " ")
+    .trim();
+}
+
+/** تحضير الصورة: تكبير، تدرج رمادي، تباين أعلى */
+async function prepareImageForOcr(file: File): Promise<{
+  blob: Blob;
+  width: number;
+  height: number;
+}> {
+  const img = await loadImageElement(file);
+  const srcW = img.naturalWidth;
+  const srcH = img.naturalHeight;
+  const long = Math.max(srcW, srcH);
+  const targetLong = Math.max(
+    1800,
+    Math.min(3200, long < 1200 ? long * 2.2 : long),
+  );
+  const scale = targetLong / long;
+  const w = Math.round(srcW * scale);
+  const h = Math.round(srcH * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h);
+
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const contrast = 1.35;
+  const intercept = 128 * (1 - contrast);
+  for (let i = 0; i < d.length; i += 4) {
+    const g = 0.299 * d[i]! + 0.587 * d[i + 1]! + 0.114 * d[i + 2]!;
+    const v = Math.max(0, Math.min(255, g * contrast + intercept));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  const blob = await canvasToBlob(canvas, "image/png");
+  return { blob, width: w, height: h };
+}
+
+async function rotateImageBlob(blob: Blob, degrees: number): Promise<Blob> {
+  const file = new File([blob], "ocr.png", { type: "image/png" });
+  const img = await loadImageElement(file);
+  const rad = (degrees * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(rad));
+  const cos = Math.abs(Math.cos(rad));
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const nw = Math.round(w * cos + h * sin);
+  const nh = Math.round(w * sin + h * cos);
+  const canvas = document.createElement("canvas");
+  canvas.width = nw;
+  canvas.height = nh;
+  const ctx = canvas.getContext("2d")!;
+  ctx.translate(nw / 2, nh / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(img, -w / 2, -h / 2);
+  return canvasToBlob(canvas, "image/png");
 }
 
 /** إزالة الخلفية عبر @imgly/background-removal */
