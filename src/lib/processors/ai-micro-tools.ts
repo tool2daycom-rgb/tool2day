@@ -102,87 +102,383 @@ async function prepareJpegForCloudOcr(file: File): Promise<Blob> {
   }
 }
 
-/** إزالة الخلفية في المتصفح — عبر imgly (نفس الأصل) مع احتياطي transformers */
+export type RemoveBgOptions = {
+  /** إخراج الشخص فقط (بدون جدار/درابزين/أشياء) — افتراضي true */
+  personOnly?: boolean;
+};
+
+/** إزالة خلفية عالية الجودة مع الحفاظ على ألوان الصورة الأصلية */
 export async function removeImageBackground(
   file: File,
   onProgress?: (p: number) => void,
+  opts: RemoveBgOptions = {},
 ): Promise<Blob> {
-  onProgress?.(0.03);
-  try {
-    return await removeBackgroundImgly(file, onProgress);
-  } catch (imglyErr) {
-    onProgress?.(0.08);
+  const personOnly = opts.personOnly !== false;
+  onProgress?.(0.02);
+
+  const original = await loadImageElement(file);
+  const w = original.naturalWidth;
+  const h = original.naturalHeight;
+  const srcCanvas = document.createElement("canvas");
+  srcCanvas.width = w;
+  srcCanvas.height = h;
+  const srcCtx = srcCanvas.getContext("2d", { willReadFrequently: true })!;
+  srcCtx.drawImage(original, 0, 0);
+  const srcData = srcCtx.getImageData(0, 0, w, h);
+
+  onProgress?.(0.08);
+  let matte = await tryImglyAlphaMask(file, onProgress);
+  if (!matte) {
+    onProgress?.(0.2);
+    matte = await tryRmbgAlphaMask(file, w, h, onProgress);
+  }
+  if (!matte) {
+    throw new Error(
+      "تعذر تحميل نموذج إزالة الخلفية. تحقق من الاتصال وأعد المحاولة.",
+    );
+  }
+
+  onProgress?.(0.72);
+  let alpha = resizeAlphaTo(matte.data, w, h, matte.width, matte.height);
+
+  if (personOnly) {
     try {
-      return await removeBackgroundTransformers(file, onProgress);
-    } catch {
-      const msg =
-        imglyErr instanceof Error ? imglyErr.message : "فشلت إزالة الخلفية";
-      if (/failed to fetch|network|cors|load/i.test(msg)) {
-        throw new Error(
-          "تعذر تحميل نموذج إزالة الخلفية. تحقق من الاتصال وأعد المحاولة.",
-        );
+      const person = await getPersonAlphaMask(original, w, h, onProgress);
+      if (person) {
+        for (let i = 0; i < alpha.length; i++) {
+          const p = person[i]! / 255;
+          const m = alpha[i]! / 255;
+          // خارج الشخص يُزال بالكامل؛ داخل الشخص نستخدم القناع الدقيق للألوان والحواف
+          const a = p < 0.18 ? 0 : m * Math.min(1, (p - 0.05) / 0.75);
+          alpha[i] = Math.round(Math.max(0, Math.min(255, a * 255)));
+        }
       }
-      throw imglyErr instanceof Error
-        ? imglyErr
-        : new Error("فشلت إزالة الخلفية");
+    } catch {
+      /* إن فشل قناع الشخص نكمل بالمatte فقط */
+    }
+  }
+
+  onProgress?.(0.88);
+  alpha = refineAlphaEdges(alpha, w, h);
+  const out = applyAlphaToOriginal(srcData, alpha);
+  onProgress?.(1);
+  return canvasImageDataToPng(out);
+}
+
+type AlphaMask = {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+};
+
+async function tryImglyAlphaMask(
+  file: File,
+  onProgress?: (p: number) => void,
+): Promise<AlphaMask | null> {
+  try {
+    const { segmentForeground } = await import("@imgly/background-removal");
+    const publicPath =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/imgly-bg/`
+        : "/imgly-bg/";
+    const maskBlob = await segmentForeground(file, {
+      publicPath,
+      model: "isnet",
+      rescale: true,
+      output: { format: "image/png", quality: 1 },
+      progress: (_key, current, total) => {
+        if (total > 0) onProgress?.(0.08 + 0.55 * Math.min(1, current / total));
+      },
+    });
+    return await blobToAlphaMask(maskBlob);
+  } catch {
+    try {
+      const { removeBackground } = await import("@imgly/background-removal");
+      const publicPath =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/imgly-bg/`
+          : "/imgly-bg/";
+      const fg = await removeBackground(file, {
+        publicPath,
+        model: "isnet_fp16",
+        output: { format: "image/png", quality: 1 },
+        progress: (_key, current, total) => {
+          if (total > 0)
+            onProgress?.(0.08 + 0.55 * Math.min(1, current / total));
+        },
+      });
+      return await blobToAlphaMask(fg);
+    } catch {
+      return null;
     }
   }
 }
 
-async function removeBackgroundImgly(
+async function tryRmbgAlphaMask(
   file: File,
+  _w: number,
+  _h: number,
   onProgress?: (p: number) => void,
-): Promise<Blob> {
-  const { removeBackground } = await import("@imgly/background-removal");
-  const publicPath =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/imgly-bg/`
-      : "/imgly-bg/";
-  onProgress?.(0.05);
-  const blob = await removeBackground(file, {
-    publicPath,
-    model: "isnet_fp16",
-    output: { format: "image/png", quality: 0.92 },
-    progress: (_key, current, total) => {
-      if (total > 0) onProgress?.(0.05 + 0.9 * Math.min(1, current / total));
-    },
-  });
-  onProgress?.(1);
-  return blob;
+): Promise<AlphaMask | null> {
+  try {
+    const { pipeline, env } = await import("@huggingface/transformers");
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    onProgress?.(0.25);
+    const remover = await pipeline("background-removal", "briaai/RMBG-1.4", {
+      device: "wasm",
+    });
+    onProgress?.(0.5);
+    const url = URL.createObjectURL(file);
+    try {
+      const raw = await remover(url);
+      const img = Array.isArray(raw) ? raw[0] : raw;
+      if (!img) return null;
+      const blob = await img.toBlob("image/png");
+      onProgress?.(0.65);
+      return await blobToAlphaMask(blob as Blob);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    try {
+      const { pipeline, env } = await import("@huggingface/transformers");
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+      const remover = await pipeline("background-removal", "Xenova/modnet", {
+        device: "wasm",
+        dtype: "fp32",
+      });
+      const url = URL.createObjectURL(file);
+      try {
+        const raw = await remover(url);
+        const img = Array.isArray(raw) ? raw[0] : raw;
+        if (!img) return null;
+        const blob = await img.toBlob("image/png");
+        return await blobToAlphaMask(blob as Blob);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      return null;
+    }
+  }
 }
 
-async function removeBackgroundTransformers(
-  file: File,
+let personSegmenterPromise: Promise<unknown> | null = null;
+
+async function getPersonAlphaMask(
+  img: HTMLImageElement,
+  w: number,
+  h: number,
   onProgress?: (p: number) => void,
-): Promise<Blob> {
-  const { pipeline, env } = await import("@huggingface/transformers");
-  env.allowLocalModels = false;
-  env.useBrowserCache = true;
-  onProgress?.(0.12);
-  const remover = await pipeline("background-removal", "Xenova/modnet", {
-    device: "wasm",
-    dtype: "fp32",
-    progress_callback: (ev: { progress?: number; status?: string }) => {
-      if (typeof ev.progress === "number") {
-        onProgress?.(0.12 + 0.55 * Math.min(1, ev.progress / 100));
+): Promise<Uint8ClampedArray | null> {
+  onProgress?.(0.78);
+  const { ImageSegmenter, FilesetResolver } = await import(
+    "@mediapipe/tasks-vision"
+  );
+
+  if (!personSegmenterPromise) {
+    personSegmenterPromise = (async () => {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+      );
+      return ImageSegmenter.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite",
+          delegate: "GPU",
+        },
+        runningMode: "IMAGE",
+        outputCategoryMask: true,
+        outputConfidenceMasks: false,
+      });
+    })().catch((e) => {
+      personSegmenterPromise = null;
+      throw e;
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const segmenter = (await personSegmenterPromise) as any;
+  const result = segmenter.segment(img);
+  const cat = result.categoryMask;
+  if (!cat) return null;
+
+  const mw = cat.width as number;
+  const mh = cat.height as number;
+  const raw = cat.getAsUint8Array() as Uint8Array;
+  // 0 خلفية، 1 شعر، 2 جلد جسم، 3 وجه، 4 ملابس، 5 أخرى
+  const person = new Uint8ClampedArray(mw * mh);
+  for (let i = 0; i < person.length; i++) {
+    const c = raw[i]!;
+    person[i] = c >= 1 && c <= 4 ? 255 : 0;
+  }
+  const dilated = dilateAlpha(person, mw, mh, 2);
+  return resizeAlphaTo(dilated, w, h, mw, mh);
+}
+
+function dilateAlpha(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+  radius: number,
+): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(alpha.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let max = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const v = alpha[ny * w + nx]!;
+          if (v > max) max = v;
+        }
       }
-    },
-  });
-  onProgress?.(0.72);
-  const url = URL.createObjectURL(file);
-  try {
-    const raw = await remover(url);
-    onProgress?.(0.9);
-    const image = Array.isArray(raw) ? raw[0] : raw;
-    if (!image || typeof image.toBlob !== "function") {
-      throw new Error("لم يُرجع النموذج صورة صالحة");
+      out[y * w + x] = max;
     }
-    const blob = await image.toBlob("image/png");
-    onProgress?.(1);
-    return blob as Blob;
+  }
+  return out;
+}
+
+function refineAlphaEdges(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+): Uint8ClampedArray {
+  const blurred = new Uint8ClampedArray(alpha.length);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      let sum = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          sum += alpha[(y + dy) * w + (x + dx)]!;
+        }
+      }
+      blurred[y * w + x] = Math.round(sum / 9);
+    }
+  }
+  for (let i = 0; i < w; i++) {
+    blurred[i] = alpha[i]!;
+    blurred[(h - 1) * w + i] = alpha[(h - 1) * w + i]!;
+  }
+  for (let y = 0; y < h; y++) {
+    blurred[y * w] = alpha[y * w]!;
+    blurred[y * w + w - 1] = alpha[y * w + w - 1]!;
+  }
+  const out = new Uint8ClampedArray(alpha.length);
+  for (let i = 0; i < out.length; i++) {
+    const v = blurred[i]! / 255;
+    const t = v < 0.12 ? 0 : v > 0.88 ? 1 : (v - 0.12) / 0.76;
+    const smooth = t * t * (3 - 2 * t);
+    out[i] = Math.round(smooth * 255);
+  }
+  return out;
+}
+
+function applyAlphaToOriginal(
+  src: ImageData,
+  alpha: Uint8ClampedArray,
+): ImageData {
+  const out = new ImageData(src.width, src.height);
+  const s = src.data;
+  const d = out.data;
+  for (let i = 0, p = 0; i < s.length; i += 4, p++) {
+    d[i] = s[i]!;
+    d[i + 1] = s[i + 1]!;
+    d[i + 2] = s[i + 2]!;
+    d[i + 3] = alpha[p]!;
+  }
+  return out;
+}
+
+async function canvasImageDataToPng(data: ImageData): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = data.width;
+  canvas.height = data.height;
+  canvas.getContext("2d")!.putImageData(data, 0, 0);
+  return canvasToBlob(canvas, "image/png", 1);
+}
+
+async function blobToAlphaMask(blob: Blob): Promise<AlphaMask> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.decoding = "async";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("تعذر قراءة القناع"));
+      img.src = url;
+    });
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+    const c = document.createElement("canvas");
+    c.width = width;
+    c.height = height;
+    const ctx = c.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, width, height);
+    const alpha = new Uint8ClampedArray(width * height);
+    let hasAlpha = false;
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] !== 255) {
+        hasAlpha = true;
+        break;
+      }
+    }
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      alpha[p] = hasAlpha
+        ? data[i + 3]!
+        : Math.round(
+            0.299 * data[i]! + 0.587 * data[i + 1]! + 0.114 * data[i + 2]!,
+          );
+    }
+    return { data: alpha, width, height };
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+function resizeAlphaTo(
+  src: Uint8ClampedArray,
+  dstW: number,
+  dstH: number,
+  srcW?: number,
+  srcH?: number,
+): Uint8ClampedArray {
+  let sw = srcW;
+  let sh = srcH;
+  if (!sw || !sh) {
+    const n = src.length;
+    if (n === dstW * dstH) return src;
+    sw = Math.round(Math.sqrt(n));
+    sh = Math.max(1, Math.round(n / sw));
+  }
+  if (sw === dstW && sh === dstH) return src;
+
+  const out = new Uint8ClampedArray(dstW * dstH);
+  for (let y = 0; y < dstH; y++) {
+    const sy = ((y + 0.5) * sh) / dstH - 0.5;
+    const y0 = Math.max(0, Math.floor(sy));
+    const y1 = Math.min(sh - 1, y0 + 1);
+    const fy = sy - y0;
+    for (let x = 0; x < dstW; x++) {
+      const sx = ((x + 0.5) * sw) / dstW - 0.5;
+      const x0 = Math.max(0, Math.floor(sx));
+      const x1 = Math.min(sw - 1, x0 + 1);
+      const fx = sx - x0;
+      const v00 = src[y0 * sw + x0]!;
+      const v10 = src[y0 * sw + x1]!;
+      const v01 = src[y1 * sw + x0]!;
+      const v11 = src[y1 * sw + x1]!;
+      const v0 = v00 * (1 - fx) + v10 * fx;
+      const v1 = v01 * (1 - fx) + v11 * fx;
+      out[y * dstW + x] = Math.round(v0 * (1 - fy) + v1 * fy);
+    }
+  }
+  return out;
 }
 
 /**

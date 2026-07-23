@@ -238,7 +238,7 @@ export const tools: Tool[] = [
     slug: "ai-remove-bg",
     title: "إزالة خلفية الصور",
     description:
-      "أزل خلفية أي صورة أونلاين بدقة عالية وصدّر PNG شفافاً جاهزاً للاستخدام.",
+      "أزل الخلفية بجودة عالية مع ألوان الصورة الأصلية، وخيار إخراج الشخص فقط بدون أشياء محيطة.",
     category: "ai",
     accept: "image/*",
     icon: ImageMinus,
