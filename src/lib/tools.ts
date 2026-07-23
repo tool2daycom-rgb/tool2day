@@ -2,12 +2,16 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AudioLines,
+  Bitcoin,
   Bug,
+  Calculator,
   Clapperboard,
   Code2,
+  Coins,
   Combine,
   Crop,
   Download,
+  Dumbbell,
   FileArchive,
   FileImage,
   FileSpreadsheet,
@@ -15,7 +19,9 @@ import {
   Film,
   FlipHorizontal2,
   Gauge,
+  Globe2,
   ImagePlus,
+  Landmark,
   Lock,
   LockOpen,
   Mail,
@@ -44,6 +50,7 @@ import {
 
 export type ToolCategory =
   | "generators"
+  | "calculators"
   | "video"
   | "audio"
   | "pdf"
@@ -68,6 +75,11 @@ export const categoryMeta: Record<
     label: "مولدات",
     sectionTitle: "المولدات",
     anchor: "generators",
+  },
+  calculators: {
+    label: "حسابات",
+    sectionTitle: "التحويل الرياضي والحسابي",
+    anchor: "calculators",
   },
   video: {
     label: "الفيديو",
@@ -103,6 +115,7 @@ export const categoryMeta: Record<
 
 export const navCategories: ToolCategory[] = [
   "generators",
+  "calculators",
   "converters",
   "pdf",
   "audio",
@@ -148,6 +161,53 @@ export const tools: Tool[] = [
     category: "generators",
     accept: "text/plain",
     icon: Code2,
+  },
+
+  // Calculators hub
+  {
+    slug: "calorie-calculator",
+    title: "حاسبة السعرات والكتلة العضلية",
+    description:
+      "احسب السعرات اليومية، الكتلة العضلية التقريبية، وتوزيع البروتين والكربوهيدرات والدهون على الوجبات.",
+    category: "calculators",
+    accept: "text/plain",
+    icon: Dumbbell,
+  },
+  {
+    slug: "loan-calculator",
+    title: "حاسبة القروض والفوائد",
+    description:
+      "احسب القسط الشهري، إجمالي الفائدة، وجدول السداد التقريبي لأي قرض بنكي.",
+    category: "calculators",
+    accept: "text/plain",
+    icon: Landmark,
+  },
+  {
+    slug: "crypto-calculator",
+    title: "حاسبة العملات الرقمية",
+    description:
+      "حوّل بين البيتكوين والإيثريوم والعملات الرقمية الشائعة والعملات الورقية بأسعار محدّثة.",
+    category: "calculators",
+    accept: "text/plain",
+    icon: Bitcoin,
+  },
+  {
+    slug: "timezone-calculator",
+    title: "حاسبة فرق التوقيت",
+    description:
+      "اعرف فرق التوقيت بين المدن والدول للمسافرين والعاملين عن بُعد، مع الوقت الحالي في كل مدينة.",
+    category: "calculators",
+    accept: "text/plain",
+    icon: Globe2,
+  },
+  {
+    slug: "currency-exchange",
+    title: "محوّل العملات والذهب",
+    description:
+      "أسعار صرف لحظية لكل دول العالم مع الذهب والفضة، مخطط تاريخي، وقائمة أزواج شائعة.",
+    category: "calculators",
+    accept: "text/plain",
+    icon: Coins,
   },
 
   // Video
@@ -623,6 +683,7 @@ export const tools: Tool[] = [
 
 export const categoryOrder: ToolCategory[] = [
   "generators",
+  "calculators",
   "video",
   "audio",
   "pdf",

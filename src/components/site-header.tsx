@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  Calculator,
   ChevronDown,
   FileText,
   Globe,
@@ -21,9 +22,10 @@ import {
   type ToolCategory,
 } from "@/lib/tools";
 
-/** مولدات أولاً مكان أمان، ثم باقي الفئات */
+/** مولدات أولاً، ثم الحسابات، ثم باقي الفئات */
 const desktopNavOrder: ToolCategory[] = [
   "generators",
+  "calculators",
   "video",
   "audio",
   "pdf",
@@ -34,6 +36,7 @@ const desktopNavOrder: ToolCategory[] = [
 
 const categoryIcon: Record<ToolCategory, typeof Video> = {
   generators: Sparkles,
+  calculators: Calculator,
   video: Video,
   audio: Music2,
   pdf: FileText,

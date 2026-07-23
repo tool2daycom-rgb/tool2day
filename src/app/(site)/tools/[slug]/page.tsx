@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { CalculatorsWorkspace } from "@/components/calculators-workspace";
 import { GeneratorsWorkspace } from "@/components/generators-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
@@ -94,13 +95,20 @@ export default async function ToolPage({ params }: Props) {
     kind === "fancy-text" ||
     kind === "email-generator" ||
     kind === "css-generator";
+  const isCalculator =
+    kind === "calorie-calculator" ||
+    kind === "loan-calculator" ||
+    kind === "crypto-calculator" ||
+    kind === "timezone-calculator" ||
+    kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const seo = getToolSeoContent(tool);
+  const isWide = isPdf || isCv || kind === "currency-exchange";
 
   return (
     <div
       className={`mx-auto w-full px-4 py-10 sm:px-6 sm:py-14 ${
-        isPdf || isCv ? "max-w-[1400px]" : "max-w-3xl"
+        isWide ? "max-w-[1400px]" : "max-w-3xl"
       }`}
     >
       <Link
@@ -148,6 +156,20 @@ export default async function ToolPage({ params }: Props) {
                 | "fancy-text"
                 | "email-generator"
                 | "css-generator"
+            }
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : isCalculator ? (
+          <CalculatorsWorkspace
+            kind={
+              kind as
+                | "calorie-calculator"
+                | "loan-calculator"
+                | "crypto-calculator"
+                | "timezone-calculator"
+                | "currency-exchange"
             }
             slug={tool.slug}
             title={tool.title}
