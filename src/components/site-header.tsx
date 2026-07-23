@@ -52,18 +52,19 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0a0a] text-white">
       <div
         dir="ltr"
-        className="relative mx-auto flex h-14 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8"
+        className="flex h-14 w-full items-center gap-2 px-2 sm:gap-3 sm:px-3 lg:px-4"
       >
+        {/* الشعار مثبت في أقصى يسار الصفحة لإفساح الشريط للقوائم */}
         <Link
           href="/"
-          className="relative z-10 flex shrink-0 items-center"
+          className="relative z-10 -ms-0.5 flex shrink-0 items-center pe-1"
           aria-label="Tool2Day — الصفحة الرئيسية"
         >
-          <BrandLogo size="md" showWord />
+          <BrandLogo size="sm" showWord />
         </Link>
 
-        <nav className="pointer-events-none absolute inset-x-0 top-0 hidden h-14 items-center justify-center md:flex">
-          <div className="pointer-events-auto flex items-center gap-0.5">
+        <nav className="hidden min-w-0 flex-1 items-center overflow-x-auto md:flex">
+          <div className="flex items-center gap-0">
             {desktopNavOrder.map((category) => {
               const items = getToolsByCategory(category);
               const isOpen = open === category;
@@ -77,7 +78,7 @@ export function SiteHeader() {
                 >
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold text-white transition hover:bg-white/10"
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-2 text-[13px] font-bold text-white transition hover:bg-white/10 lg:gap-1.5 lg:px-2.5 lg:text-sm"
                     aria-expanded={isOpen}
                   >
                     <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
@@ -92,8 +93,8 @@ export function SiteHeader() {
                       dir="rtl"
                       className={`absolute top-full z-50 mt-0 min-w-56 rounded-md border border-white/10 bg-[#1c1c1c] py-2 shadow-xl ${
                         category === "video"
-                          ? "left-1/2 w-[34rem] -translate-x-1/2"
-                          : "left-1/2 w-64 -translate-x-1/2"
+                          ? "left-0 w-[34rem] lg:left-1/2 lg:-translate-x-1/2"
+                          : "left-0 w-64 lg:left-1/2 lg:-translate-x-1/2"
                       }`}
                     >
                       <ul
@@ -126,7 +127,7 @@ export function SiteHeader() {
           </div>
         </nav>
 
-        <div className="relative z-10 ml-auto flex shrink-0 items-center gap-4 text-sm font-bold text-white">
+        <div className="relative z-10 ms-auto flex shrink-0 items-center gap-3 pe-0.5 text-sm font-bold text-white sm:gap-4">
           <button
             type="button"
             className="inline-flex items-center gap-1.5 transition hover:opacity-80"
