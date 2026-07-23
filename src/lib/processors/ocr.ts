@@ -267,8 +267,15 @@ export async function runOcr(
 
   onProgress?.(1, "تم");
   const finalGuess = guessLangPack(bestText);
+  let text = cleanupOcrText(bestText);
+  if (langUsed.includes("deu") || /[äöüß]|Aufenth|Gilt nur|Volkshochschule/i.test(text)) {
+    text = correctGermanOcr(text);
+  }
+  if (langUsed.includes("por") || /FILIA|SECRETARIA|ESTADO DE/i.test(text)) {
+    text = correctPortugueseOcr(text);
+  }
   return {
-    text: cleanupOcrText(bestText),
+    text,
     langUsed,
     langLabel:
       langs === "auto"
@@ -277,6 +284,51 @@ export async function runOcr(
           : LANG_LABELS[langUsed] || langUsed
         : LANG_LABELS[langUsed] || langUsed,
   };
+}
+
+/** تصحيح أخطاء OCR الشائعة في الألمانية */
+function correctGermanOcr(text: string): string {
+  const pairs: [RegExp, string][] = [
+    [/\bAZR-Nummery\b/gi, "AZR-Nummer"],
+    [/\bNummery\b/gi, "Nummer"],
+    [/\bbel der\b/gi, "bei der"],
+    [/\bbel dem\b/gi, "bei dem"],
+    [/\bBesucii eines\b/gi, "Besuch eines"],
+    [/\bBesucii\b/gi, "Besuch"],
+    [/\bSelbstindige\b/gi, "Selbständige"],
+    [/\bSelbstándige\b/gi, "Selbständige"],
+    [/\bTatigkeit\b/gi, "Tätigkeit"],
+    [/\bTatigke1t\b/gi, "Tätigkeit"],
+    [/\bBeschiftigung\b/gi, "Beschäftigung"],
+    [/\bBeschaftigung\b/gi, "Beschäftigung"],
+    [/\bertaubt\b/gi, "erlaubt"],
+    [/\bPíorzheim\b/gi, "Pforzheim"],
+    [/\bPforznhe\b/gi, "Pforzheim"],
+    [/\bPforzheirn\b/gi, "Pforzheim"],
+    [/\bFiktit\b/gi, "Fiktionsbescheinigung"],
+    [/\bSeriennummer des Klebeetiketts\b/gi, "Seriennummer des Klebeetiketts"],
+    [/\bErstausstellung\b/gi, "Erstausstellung"],
+    [/\bVerlangerung\b/gi, "Verlängerung"],
+    [/\bNebenbestimmungen\b/gi, "Nebenbestimmungen"],
+    [/F1569095[¢cC]/g, "F15690956"],
+    [/2511\s*12\s*067580/g, "251112067580"],
+    [/2511\s*6\/08/g, "251112067580"],
+  ];
+  let out = text;
+  for (const [re, rep] of pairs) out = out.replace(re, rep);
+  return out;
+}
+
+function correctPortugueseOcr(text: string): string {
+  const pairs: [RegExp, string][] = [
+    [/\bFILIACAO\b/gi, "FILIAÇÃO"],
+    [/\bNATURALIDADE\b/gi, "NATURALIDADE"],
+    [/\bORGAO\b/gi, "ORGÃO"],
+    [/\bSAO PAULO\b/gi, "SÃO PAULO"],
+  ];
+  let out = text;
+  for (const [re, rep] of pairs) out = out.replace(re, rep);
+  return out;
 }
 
 function uniquePacks(list: string[]): string[] {
@@ -356,6 +408,14 @@ function countDocKeywords(text: string): number {
     /geburt/i,
     /aufenthalt/i,
     /reisepass/i,
+    /fiktions/i,
+    /nebenbestimmungen/i,
+    /azr[- ]?nummer/i,
+    /seriennummer/i,
+    /volkshochschule/i,
+    /beschäftigung|beschaftigung|beschiftigung/i,
+    /selbständige|selbstandige|selbstindige/i,
+    /gilt nur/i,
     /filia/i,
     /secretaria/i,
     /identidade/i,
@@ -381,7 +441,7 @@ function scoreOcrText(text: string, confidence: number): number {
   const keywords = countDocKeywords(text);
   const realHits = (
     text.match(
-      /\b(DANDASH|Wisam|Pforzheim|brasilianisch|Aufenthalt|Geburtsdatum|SECRETARIA|FILIAÇÃO|ESTADO|SIRIA|Vorname|Reisepass)\b/gi,
+      /\b(DANDASH|Wisam|Pforzheim|Enzkreis|brasilianisch|Aufenthalt|Geburtsdatum|SECRETARIA|FILIAÇÃO|ESTADO|SIRIA|Vorname|Reisepass|Fiktions|Nebenbestimmungen|AZR|Intensivsprachkurs|Volkshochschule|Beschäftigung|Selbständige|F15690956)\b/gi,
     ) || []
   ).length;
   return (

@@ -15,6 +15,7 @@ import {
   runOcr,
   upscaleImageTo4k,
 } from "@/lib/processors/ai-micro-tools";
+import { OCR_LANG_OPTIONS } from "@/lib/processors/ocr-languages";
 
 export type AiToolKind =
   | "ai-ocr"
@@ -169,35 +170,34 @@ function OcrPanel({
     setText("");
     setError(null);
     setDetected(null);
-    if (f) void run(f, "auto");
+    if (f) void run(f);
+  }
+
+  function onLangChange(code: string) {
+    setLangs(code);
+    if (file && !busy) void run(file, code);
   }
 
   return (
     <Shell title={title} description={description}>
       <FilePick accept="image/*" file={file} onPick={onPick} />
       <label className="block text-xs font-bold text-[#444]">
-        اللغة
+        اللغة (يدوي)
         <select
           className={`${field} mt-1`}
           value={langs}
           disabled={busy}
-          onChange={(e) => setLangs(e.target.value)}
+          onChange={(e) => onLangChange(e.target.value)}
         >
-          <option value="auto">تلقائي — اكتشاف لغة الصورة</option>
-          <option value="deu+eng">Deutsch + English (ألمانية)</option>
-          <option value="por+eng">Português + English</option>
-          <option value="eng">English فقط</option>
-          <option value="ara+eng">العربية + English</option>
-          <option value="ara">العربية فقط</option>
-          <option value="spa+eng">Español + English</option>
-          <option value="fra+eng">Français + English</option>
-          <option value="ita+eng">Italiano + English</option>
-          <option value="tur+eng">Türkçe + English</option>
-          <option value="eng+por+spa+fra+deu+ita">لاتينية متعددة</option>
+          {OCR_LANG_OPTIONS.map((opt) => (
+            <option key={opt.code} value={opt.code}>
+              {opt.labelNative} — {opt.labelAr}
+            </option>
+          ))}
         </select>
       </label>
       <p className="text-[11px] font-semibold text-[#777]">
-        عند اختيار الصورة يبدأ الاستخراج تلقائياً مع اكتشاف اللغة واتجاه النص.
+        اختر اللغة يدوياً من القائمة الكاملة، أو اترك «تلقائي». للمستندات الألمانية: Deutsch + English.
       </p>
       {detected ? (
         <p className="text-xs font-bold text-emerald-800">
