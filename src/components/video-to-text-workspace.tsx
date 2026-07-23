@@ -96,7 +96,8 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
       <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
       <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-950">
         لأقصى دقة: اختر لغة الكلام في الفيديو بدقة، واستخدم مقطعاً بصوت واضح بلا
-        ضوضاء. لا يوجد تفريغ آلي يضمن 100٪ دائماً — راجع النص بعد الاستخراج.
+        ضوضاء. التحميل الأول لنموذج التعرف قد يستغرق دقيقة ثم يُحفظ في المتصفح.
+        لا يوجد تفريغ آلي يضمن 100٪ دائماً — راجع النص بعد الاستخراج.
       </p>
 
       <div

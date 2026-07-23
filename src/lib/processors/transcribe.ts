@@ -87,20 +87,77 @@ type WhisperPipeline = (
   opts?: Record<string, unknown>,
 ) => Promise<{ text?: string } | string>;
 
-let pipelinePromise: Promise<WhisperPipeline> | null = null;
+let pipelinePromise: Promise<{
+  pipe: WhisperPipeline;
+  label: string;
+}> | null = null;
 
-async function getLocalWhisper(): Promise<WhisperPipeline> {
+/**
+ * q8 معقدّم معطل على transformers.js 4.2 + ORT 1.25
+ * (Missing required scale / MatMulNBits) — نستخدم fp32.
+ */
+async function getLocalWhisper(
+  onStatus?: (msg: string) => void,
+): Promise<{ pipe: WhisperPipeline; label: string }> {
   if (!pipelinePromise) {
     pipelinePromise = (async () => {
       const { pipeline, env } = await import("@huggingface/transformers");
       env.allowLocalModels = false;
       env.useBrowserCache = true;
-      const pipe = await pipeline(
-        "automatic-speech-recognition",
-        "onnx-community/whisper-small",
-        { dtype: "q8", device: "wasm" },
-      );
-      return pipe as unknown as WhisperPipeline;
+
+      const attempts: Array<{
+        model: string;
+        device: "webgpu" | "wasm";
+        dtype: "fp32" | "fp16";
+        label: string;
+      }> = [
+        {
+          model: "onnx-community/whisper-base",
+          device: "webgpu",
+          dtype: "fp32",
+          label: "whisper-base-webgpu",
+        },
+        {
+          model: "onnx-community/whisper-base",
+          device: "wasm",
+          dtype: "fp32",
+          label: "whisper-base-wasm",
+        },
+        {
+          model: "Xenova/whisper-base",
+          device: "wasm",
+          dtype: "fp32",
+          label: "xenova-whisper-base",
+        },
+      ];
+
+      let lastErr: unknown;
+      for (const attempt of attempts) {
+        try {
+          onStatus?.(
+            `تحميل نموذج التعرف (${attempt.label}) — مرة واحدة ثم يُخزَّن…`,
+          );
+          const pipe = await pipeline(
+            "automatic-speech-recognition",
+            attempt.model,
+            {
+              dtype: attempt.dtype,
+              device: attempt.device,
+            },
+          );
+          return {
+            pipe: pipe as unknown as WhisperPipeline,
+            label: attempt.label,
+          };
+        } catch (e) {
+          lastErr = e;
+          // إفراغ سلسلة التهيئة الفاشلة قبل المحاولة التالية
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
+      throw lastErr instanceof Error
+        ? lastErr
+        : new Error("تعذّر تحميل نموذج التعرف على الكلام");
     })().catch((err) => {
       pipelinePromise = null;
       throw err;
@@ -115,7 +172,6 @@ async function decodeWavToFloat32(file: File): Promise<Float32Array> {
   try {
     const decoded = await ctx.decodeAudioData(buf.slice(0));
     const ch0 = decoded.getChannelData(0);
-    // إعادة عيّنة بسيطة إن لزم
     if (decoded.sampleRate === 16000) return new Float32Array(ch0);
     const ratio = decoded.sampleRate / 16000;
     const len = Math.floor(ch0.length / ratio);
@@ -133,9 +189,8 @@ export async function transcribeLocally(
   audio: File,
   languageCode: string,
   onStatus?: (msg: string) => void,
-): Promise<string> {
-  onStatus?.("تحميل نموذج التعرف على الكلام (مرة واحدة)…");
-  const pipe = await getLocalWhisper();
+): Promise<{ text: string; provider: string }> {
+  const { pipe, label } = await getLocalWhisper(onStatus);
   onStatus?.("تحليل الصوت…");
   const samples = await decodeWavToFloat32(audio);
   const lang = TRANSCRIBE_LANGUAGES.find((l) => l.code === languageCode);
@@ -152,7 +207,7 @@ export async function transcribeLocally(
   const text =
     typeof result === "string" ? result : (result.text || "").trim();
   if (!text) throw new Error("لم يُكتشف كلام واضح في الملف");
-  return text;
+  return { text, provider: label };
 }
 
 export async function transcribeMediaFile(
@@ -170,7 +225,6 @@ export async function transcribeMediaFile(
   } catch {
     // سقوط إلى النموذج المحلي
   }
-  onStatus?.("التفريغ داخل المتصفح (نموذج Whisper)…");
-  const text = await transcribeLocally(audio, languageCode, onStatus);
-  return { text, provider: "whisper-small-local" };
+  onStatus?.("التفريغ داخل المتصفح…");
+  return transcribeLocally(audio, languageCode, onStatus);
 }
