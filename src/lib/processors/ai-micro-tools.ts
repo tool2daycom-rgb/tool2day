@@ -30,23 +30,50 @@ export function canvasToBlob(
   });
 }
 
-/** OCR عبر Tesseract مع تدوير تلقائي وتحسين الصورة */
+export type OcrResult = {
+  text: string;
+  langUsed: string;
+  langLabel: string;
+};
+
+const LANG_LABELS: Record<string, string> = {
+  auto: "تلقائي",
+  eng: "English",
+  ara: "العربية",
+  "ara+eng": "العربية + English",
+  "por+eng": "Português + English",
+  "spa+eng": "Español + English",
+  "fra+eng": "Français + English",
+  "deu+eng": "Deutsch + English",
+  "tur+eng": "Türkçe + English",
+  "ita+eng": "Italiano + English",
+  "eng+por+spa+fra+deu+ita": "لاتينية متعددة",
+};
+
+/** حزم مرشّحة للوضع التلقائي (من الأشيع للمستندات) */
+const AUTO_LANG_PACKS = [
+  "eng+por+spa+fra+deu+ita",
+  "ara+eng",
+  "tur+eng",
+] as const;
+
+/** OCR عبر Tesseract مع تدوير تلقائي واكتشاف لغة */
 export async function runOcr(
   file: File,
-  langs = "ara+eng",
+  langs = "auto",
   onProgress?: (p: number, status: string) => void,
-): Promise<string> {
+): Promise<OcrResult> {
   const Tesseract = await import("tesseract.js");
   onProgress?.(0.02, "تحسين الصورة…");
   const prepared = await prepareImageForOcr(file);
 
-  onProgress?.(0.08, "كشف اتجاه النص…");
+  onProgress?.(0.06, "كشف اتجاه النص…");
   let angle = 0;
   try {
     const detected = await Tesseract.detect(prepared.blob, {
       logger: (m) => {
         if (m.status) {
-          onProgress?.(0.08 + (m.progress || 0) * 0.1, "كشف الاتجاه…");
+          onProgress?.(0.06 + (m.progress || 0) * 0.08, "كشف الاتجاه…");
         }
       },
     });
@@ -60,59 +87,221 @@ export async function runOcr(
     /* نتابع بدون OSD */
   }
 
-  // إن فشل OSD على بطاقة مقلوبة، جرّب الاتجاهات الأخرى
   const anglesToTry =
     angle === 0 ? [0, 90, 270, 180] : [angle, (angle + 180) % 360, 0];
 
-  onProgress?.(0.2, "تحميل نموذج اللغة…");
-  const worker = await Tesseract.createWorker(langs, 1, {
-    logger: (m) => {
-      if (m.status === "recognizing text") {
-        onProgress?.(0.4 + (m.progress || 0) * 0.5, "استخراج النص…");
-      } else if (m.status === "loading language traineddata") {
-        onProgress?.(0.22, "تحميل اللغة…");
+  // أولاً: إيجاد أفضل زاوية بإنجليزي سريع
+  onProgress?.(0.15, "تحديد اتجاه القراءة…");
+  let bestAngle = anglesToTry[0]!;
+  let probeText = "";
+  let probeScore = -1;
+  {
+    const probe = await Tesseract.createWorker("eng", 1, {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          onProgress?.(0.15 + (m.progress || 0) * 0.15, "مسح أولي…");
+        }
+      },
+    });
+    try {
+      for (const a of anglesToTry) {
+        const oriented =
+          a === 0 ? prepared.blob : await rotateImageBlob(prepared.blob, a);
+        await probe.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.AUTO,
+          preserve_interword_spaces: "1",
+        });
+        const { data } = await probe.recognize(oriented);
+        const text = (data.text || "").trim();
+        const score = scoreOcrText(text, Number(data.confidence) || 0);
+        if (score > probeScore) {
+          probeScore = score;
+          probeText = text;
+          bestAngle = a;
+        }
+        if (score >= 45 && hasLetterRatio(text) > 0.5) break;
       }
-    },
-  });
+    } finally {
+      await probe.terminate();
+    }
+  }
+
+  const orientedBlob =
+    bestAngle === 0
+      ? prepared.blob
+      : await rotateImageBlob(prepared.blob, bestAngle);
+
+  // اختيار حزم اللغات
+  let packs: string[];
+  if (langs === "auto") {
+    const guessed = guessLangPack(probeText);
+    // ابدأ بالتخمين ثم الحزم الأخرى كاحتياط
+    packs = [
+      guessed.code,
+      ...AUTO_LANG_PACKS.filter((p) => p !== guessed.code),
+    ];
+    onProgress?.(0.32, `لغة محتملة: ${guessed.label}…`);
+  } else {
+    packs = [langs];
+  }
 
   let bestText = "";
   let bestScore = -1;
+  let langUsed = packs[0]!;
 
-  try {
-    for (let ai = 0; ai < anglesToTry.length; ai++) {
-      const a = anglesToTry[ai]!;
-      onProgress?.(0.3 + ai * 0.08, a ? `قراءة بزاوية ${a}°…` : "قراءة أفقية…");
-      const oriented =
-        a === 0 ? prepared.blob : await rotateImageBlob(prepared.blob, a);
-
-      // أول زاوية: وضعان؛ الباقي: AUTO فقط لتوفير الوقت
-      const psms =
-        ai === 0
-          ? [Tesseract.PSM.AUTO, Tesseract.PSM.SINGLE_BLOCK]
-          : [Tesseract.PSM.AUTO];
-
-      for (const psm of psms) {
+  for (let i = 0; i < packs.length; i++) {
+    const pack = packs[i]!;
+    onProgress?.(
+      0.35 + (i / packs.length) * 0.55,
+      `قراءة بـ ${LANG_LABELS[pack] || pack}…`,
+    );
+    const worker = await Tesseract.createWorker(pack, 1, {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          onProgress?.(
+            0.35 + ((i + (m.progress || 0)) / packs.length) * 0.55,
+            "استخراج النص…",
+          );
+        } else if (m.status === "loading language traineddata") {
+          onProgress?.(0.35, `تحميل ${LANG_LABELS[pack] || pack}…`);
+        }
+      },
+    });
+    try {
+      for (const psm of [Tesseract.PSM.AUTO, Tesseract.PSM.SINGLE_BLOCK]) {
         await worker.setParameters({
           tessedit_pageseg_mode: psm,
           preserve_interword_spaces: "1",
         });
-        const { data } = await worker.recognize(oriented);
+        const { data } = await worker.recognize(orientedBlob);
         const text = (data.text || "").trim();
         const score = scoreOcrText(text, Number(data.confidence) || 0);
         if (score > bestScore) {
           bestScore = score;
           bestText = text;
+          langUsed = pack;
         }
       }
-
-      if (bestScore >= 50 && hasLetterRatio(bestText) > 0.5) break;
+    } finally {
+      await worker.terminate();
     }
-  } finally {
-    await worker.terminate();
+
+    // في الوضع التلقائي: إن كانت الجودة جيدة لا نحمّل حزماً أخرى
+    if (
+      langs === "auto" &&
+      bestScore >= 52 &&
+      hasLetterRatio(bestText) > 0.5
+    ) {
+      break;
+    }
+    // في الوضع اليدوي حزمة واحدة فقط
+    if (langs !== "auto") break;
+  }
+
+  // إن بقيت النتيجة ضعيفة جداً، أعِد التخمين من النص النهائي
+  if (langs === "auto" && bestText) {
+    const refined = guessLangPack(bestText);
+    if (refined.code !== langUsed) {
+      onProgress?.(0.92, `تحسين بـ ${refined.label}…`);
+      const worker = await Tesseract.createWorker(refined.code, 1);
+      try {
+        await worker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.AUTO,
+          preserve_interword_spaces: "1",
+        });
+        const { data } = await worker.recognize(orientedBlob);
+        const text = (data.text || "").trim();
+        const score = scoreOcrText(text, Number(data.confidence) || 0);
+        if (score > bestScore) {
+          bestText = text;
+          langUsed = refined.code;
+        }
+      } finally {
+        await worker.terminate();
+      }
+    }
   }
 
   onProgress?.(1, "تم");
-  return cleanupOcrText(bestText);
+  const finalGuess = guessLangPack(bestText);
+  return {
+    text: cleanupOcrText(bestText),
+    langUsed,
+    langLabel:
+      langs === "auto"
+        ? finalGuess.label
+        : LANG_LABELS[langUsed] || langUsed,
+  };
+}
+
+/** تخمين حزمة Tesseract من نص أوّلي */
+export function guessLangPack(text: string): { code: string; label: string } {
+  const t = text || "";
+  const arabic = (t.match(/[\u0600-\u06FF]/g) || []).length;
+  const latin = (t.match(/[A-Za-zÀ-ÿ]/g) || []).length;
+  const cyrillic = (t.match(/[\u0400-\u04FF]/g) || []).length;
+  const lower = t.toLowerCase();
+
+  if (arabic >= 12 && arabic >= latin * 0.25) {
+    return { code: "ara+eng", label: "العربية" };
+  }
+  if (cyrillic >= 20 && cyrillic > latin) {
+    return { code: "eng", label: "English" }; // لا نحمّل الروسية افتراضياً
+  }
+
+  // تركي
+  if (/[ğüşıöçĞÜŞİÖÇ]/.test(t) || /\b(ve|için|türkiye|tc)\b/i.test(t)) {
+    return { code: "tur+eng", label: "Türkçe" };
+  }
+  // برتغالي — هويات ومستندات BR
+  if (
+    /[ãõ]/i.test(t) ||
+    /ção|ões|ã|õ/.test(lower) ||
+    /\b(brasil|são paulo|secretaria|filiação|naturalidade|carteira|identidade|órgão|expedidor|nascimento)\b/i.test(
+      t,
+    )
+  ) {
+    return { code: "por+eng", label: "Português" };
+  }
+  // إسباني
+  if (
+    /[ñ¿¡]/i.test(t) ||
+    /\b(español|méxico|identidad|apellido|nacimiento|documento)\b/i.test(t)
+  ) {
+    return { code: "spa+eng", label: "Español" };
+  }
+  // فرنسي
+  if (
+    /[àâçéèêëîïôùûü]/i.test(t) ||
+    /\b(république|française|naissance|prénom|monsieur|madame)\b/i.test(t)
+  ) {
+    return { code: "fra+eng", label: "Français" };
+  }
+  // ألماني
+  if (
+    /[äöüß]/i.test(t) ||
+    /\b(der|die|das|und|straße|geburt|ausweis|bundesrepublik)\b/i.test(t)
+  ) {
+    return { code: "deu+eng", label: "Deutsch" };
+  }
+  // إيطالي
+  if (/\b(italia|cognome|nascita|documento|repubblica)\b/i.test(t)) {
+    return { code: "ita+eng", label: "Italiano" };
+  }
+
+  // لاتيني عام — حزمة واسعة للمستندات المختلطة
+  if (latin > 30) {
+    return {
+      code: "eng+por+spa+fra+deu+ita",
+      label: "لاتينية (تلقائي)",
+    };
+  }
+
+  // افتراضي: جرب اللاتينية الواسعة + العربية كمرشح لاحق في AUTO_LANG_PACKS
+  return {
+    code: "eng+por+spa+fra+deu+ita",
+    label: "تلقائي",
+  };
 }
 
 function hasLetterRatio(text: string): number {

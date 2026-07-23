@@ -141,20 +141,22 @@ function OcrPanel({
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [langs, setLangs] = useState("por+eng");
+  const [langs, setLangs] = useState("auto");
+  const [detected, setDetected] = useState<string | null>(null);
 
-  async function run() {
-    if (!file) return;
+  async function run(f: File, langOverride?: string) {
     setBusy(true);
     setError(null);
     setText("");
+    setDetected(null);
     beginToolUse(slug);
     try {
-      const out = await runOcr(file, langs, (p, s) => {
+      const out = await runOcr(f, langOverride ?? langs, (p, s) => {
         setProgress(p);
         setStatus(s);
       });
-      setText(out || "لم يُعثر على نص واضح في الصورة.");
+      setText(out.text || "لم يُعثر على نص واضح في الصورة.");
+      setDetected(out.langLabel);
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل الاستخراج");
     } finally {
@@ -162,17 +164,28 @@ function OcrPanel({
     }
   }
 
+  function onPick(f: File | null) {
+    setFile(f);
+    setText("");
+    setError(null);
+    setDetected(null);
+    if (f) void run(f, "auto");
+  }
+
   return (
     <Shell title={title} description={description}>
-      <FilePick accept="image/*" file={file} onPick={setFile} />
+      <FilePick accept="image/*" file={file} onPick={onPick} />
       <label className="block text-xs font-bold text-[#444]">
         اللغة
         <select
           className={`${field} mt-1`}
           value={langs}
+          disabled={busy}
           onChange={(e) => setLangs(e.target.value)}
         >
-          <option value="por+eng">Português + English (هويات / مستندات)</option>
+          <option value="auto">تلقائي — اكتشاف لغة الصورة</option>
+          <option value="eng+por+spa+fra+deu+ita">لاتينية متعددة</option>
+          <option value="por+eng">Português + English</option>
           <option value="eng">English فقط</option>
           <option value="ara+eng">العربية + English</option>
           <option value="ara">العربية فقط</option>
@@ -184,10 +197,20 @@ function OcrPanel({
         </select>
       </label>
       <p className="text-[11px] font-semibold text-[#777]">
-        يتم تدوير الصورة تلقائياً وتحسينها قبل القراءة — للبطاقات المقلوبة اختر لغة المستند الصحيحة.
+        عند اختيار الصورة يبدأ الاستخراج تلقائياً مع اكتشاف اللغة واتجاه النص.
       </p>
-      <button type="button" className={btnPrimary} disabled={!file || busy} onClick={() => void run()}>
-        {busy ? "جارٍ الاستخراج…" : "استخراج النص"}
+      {detected ? (
+        <p className="text-xs font-bold text-emerald-800">
+          اللغة المكتشفة: {detected}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        className={btnPrimary}
+        disabled={!file || busy}
+        onClick={() => file && void run(file)}
+      >
+        {busy ? "جارٍ الاستخراج…" : "إعادة الاستخراج"}
       </button>
       {busy ? <ProgressBar value={progress} label={status || "…"} /> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

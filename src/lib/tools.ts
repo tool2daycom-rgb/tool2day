@@ -220,7 +220,7 @@ export const tools: Tool[] = [
     slug: "ai-ocr",
     title: "استخراج النص من الصور",
     description:
-      "OCR سريع: ارفع صورة واستخرج النص العربي والإنجليزي بضغطة زر داخل المتصفح.",
+      "OCR ذكي: ارفع أي صورة فيُكتشف الاتجاه واللغة تلقائياً ويُستخرج النص فوراً.",
     category: "ai",
     accept: "image/*",
     icon: ScanText,
