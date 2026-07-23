@@ -126,11 +126,12 @@ export async function removeImageBackground(
   srcCtx.drawImage(original, 0, 0);
   const srcData = srcCtx.getImageData(0, 0, w, h);
 
-  onProgress?.(0.08);
-  let matte = await tryImglyAlphaMask(file, onProgress);
+  // RMBG أولاً لجودة أعلى، ثم imgly
+  onProgress?.(0.06);
+  let matte = await tryRmbgAlphaMask(file, w, h, onProgress);
   if (!matte) {
     onProgress?.(0.2);
-    matte = await tryRmbgAlphaMask(file, w, h, onProgress);
+    matte = await tryImglyAlphaMask(file, onProgress);
   }
   if (!matte) {
     throw new Error(
@@ -138,28 +139,23 @@ export async function removeImageBackground(
     );
   }
 
-  onProgress?.(0.72);
+  onProgress?.(0.7);
   let alpha = resizeAlphaTo(matte.data, w, h, matte.width, matte.height);
 
   if (personOnly) {
     try {
       const person = await getPersonAlphaMask(original, w, h, onProgress);
       if (person) {
-        for (let i = 0; i < alpha.length; i++) {
-          const p = person[i]! / 255;
-          const m = alpha[i]! / 255;
-          // خارج الشخص يُزال بالكامل؛ داخل الشخص نستخدم القناع الدقيق للألوان والحواف
-          const a = p < 0.18 ? 0 : m * Math.min(1, (p - 0.05) / 0.75);
-          alpha[i] = Math.round(Math.max(0, Math.min(255, a * 255)));
-        }
+        alpha = combinePersonAndMatte(alpha, person, w, h);
       }
     } catch {
       /* إن فشل قناع الشخص نكمل بالمatte فقط */
     }
+  } else {
+    alpha = refineAlphaEdges(alpha, w, h);
   }
 
-  onProgress?.(0.88);
-  alpha = refineAlphaEdges(alpha, w, h);
+  onProgress?.(0.92);
   const out = applyAlphaToOriginal(srcData, alpha);
   onProgress?.(1);
   return canvasImageDataToPng(out);
@@ -267,6 +263,58 @@ async function tryRmbgAlphaMask(
 
 let personSegmenterPromise: Promise<unknown> | null = null;
 
+/**
+ * يدمج قناع الشخص مع قناع الجودة:
+ * - داخل الجسم: ألفا كاملة (لا ثقوب في القميص الداكن)
+ * - الحواف: نعومة من نموذج الـ matte
+ * - خارج الشخص: شفاف (يزيل الدرابزين)
+ */
+function combinePersonAndMatte(
+  matte: Uint8ClampedArray,
+  person: Uint8ClampedArray,
+  w: number,
+  h: number,
+): Uint8ClampedArray {
+  // عمليات الشكل على نسخة مصغّرة للسرعة ثم تكبير ناعم
+  const mw = Math.min(512, w);
+  const mh = Math.max(1, Math.round((h * mw) / w));
+  let pSmall = resizeAlphaTo(person, mw, mh, w, h);
+  for (let i = 0; i < pSmall.length; i++) {
+    pSmall[i] = pSmall[i]! >= 110 ? 255 : 0;
+  }
+  pSmall = morphOpen(pSmall, mw, mh, 1);
+  pSmall = morphClose(pSmall, mw, mh, 3);
+  pSmall = dilateAlpha(pSmall, mw, mh, 1);
+
+  const coreSmall = erodeAlpha(
+    pSmall,
+    mw,
+    mh,
+    Math.max(2, Math.round(Math.min(mw, mh) / 40)),
+  );
+  const softSmall = boxBlurAlpha(pSmall, mw, mh, 1);
+
+  const softPerson = resizeAlphaTo(softSmall, w, h, mw, mh);
+  const core = resizeAlphaTo(coreSmall, w, h, mw, mh);
+
+  const out = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < out.length; i++) {
+    const sp = softPerson[i]! / 255;
+    if (core[i]! > 200) {
+      out[i] = 255;
+      continue;
+    }
+    if (sp < 0.06) {
+      out[i] = 0;
+      continue;
+    }
+    const m = matte[i]! / 255;
+    const a = sp * Math.max(m, sp * 0.92);
+    out[i] = Math.round(Math.max(0, Math.min(255, a * 255)));
+  }
+  return boxBlurAlpha(out, w, h, 1);
+}
+
 async function getPersonAlphaMask(
   img: HTMLImageElement,
   w: number,
@@ -291,7 +339,7 @@ async function getPersonAlphaMask(
         },
         runningMode: "IMAGE",
         outputCategoryMask: true,
-        outputConfidenceMasks: false,
+        outputConfidenceMasks: true,
       });
     })().catch((e) => {
       personSegmenterPromise = null;
@@ -302,20 +350,116 @@ async function getPersonAlphaMask(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const segmenter = (await personSegmenterPromise) as any;
   const result = segmenter.segment(img);
+
+  // فضّل أقنعة الثقة الناعمة لفئات الشخص (1–4)، وتجاهل «أخرى» (5) والدرابزين
+  const confMasks = result.confidenceMasks as
+    | { width: number; height: number; getAsFloat32Array: () => Float32Array }[]
+    | undefined;
+
+  if (confMasks && confMasks.length >= 5) {
+    const mw = confMasks[1]!.width;
+    const mh = confMasks[1]!.height;
+    const hair = confMasks[1]!.getAsFloat32Array();
+    const body = confMasks[2]!.getAsFloat32Array();
+    const face = confMasks[3]!.getAsFloat32Array();
+    const clothes = confMasks[4]!.getAsFloat32Array();
+    const person = new Uint8ClampedArray(mw * mh);
+    for (let i = 0; i < person.length; i++) {
+      const v = Math.max(
+        hair[i] ?? 0,
+        body[i] ?? 0,
+        face[i] ?? 0,
+        clothes[i] ?? 0,
+      );
+      // عتبة أعلى: تقلل التقاط الدرابزين/الجدار
+      person[i] = v >= 0.42 ? Math.round(Math.min(1, v) * 255) : 0;
+    }
+    return resizeAlphaTo(person, w, h, mw, mh);
+  }
+
   const cat = result.categoryMask;
   if (!cat) return null;
-
   const mw = cat.width as number;
   const mh = cat.height as number;
   const raw = cat.getAsUint8Array() as Uint8Array;
-  // 0 خلفية، 1 شعر، 2 جلد جسم، 3 وجه، 4 ملابس، 5 أخرى
   const person = new Uint8ClampedArray(mw * mh);
   for (let i = 0; i < person.length; i++) {
     const c = raw[i]!;
     person[i] = c >= 1 && c <= 4 ? 255 : 0;
   }
-  const dilated = dilateAlpha(person, mw, mh, 2);
-  return resizeAlphaTo(dilated, w, h, mw, mh);
+  return resizeAlphaTo(person, w, h, mw, mh);
+}
+
+function morphOpen(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+  r: number,
+): Uint8ClampedArray {
+  return dilateAlpha(erodeAlpha(alpha, w, h, r), w, h, r);
+}
+
+function morphClose(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+  r: number,
+): Uint8ClampedArray {
+  return erodeAlpha(dilateAlpha(alpha, w, h, r), w, h, r);
+}
+
+function erodeAlpha(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+  radius: number,
+): Uint8ClampedArray {
+  if (radius <= 0) return alpha;
+  const out = new Uint8ClampedArray(alpha.length);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let min = 255;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) {
+            min = 0;
+            continue;
+          }
+          const v = alpha[ny * w + nx]!;
+          if (v < min) min = v;
+        }
+      }
+      out[y * w + x] = min;
+    }
+  }
+  return out;
+}
+
+function boxBlurAlpha(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+  radius: number,
+): Uint8ClampedArray {
+  if (radius <= 0) return alpha;
+  const out = new Uint8ClampedArray(alpha.length);
+  const area = (2 * radius + 1) ** 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = Math.min(w - 1, Math.max(0, x + dx));
+          const ny = Math.min(h - 1, Math.max(0, y + dy));
+          sum += alpha[ny * w + nx]!;
+        }
+      }
+      out[y * w + x] = Math.round(sum / area);
+    }
+  }
+  return out;
 }
 
 function dilateAlpha(

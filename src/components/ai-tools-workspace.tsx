@@ -460,7 +460,7 @@ function RemoveBgPanel({
         الشخص فقط (بدون جدار أو درابزين أو أشياء)
       </label>
       <p className="text-[11px] font-semibold text-[#777]">
-        الألوان تُؤخذ من الصورة الأصلية بدقة كاملة. أول تشغيل يحمّل نموذجاً أكبر لجودة أعلى.
+        الوضع «الشخص فقط» يحافظ على ألوان الملابس بالكامل ويزيل الجدار/الدرابزين. أول تشغيل أبطأ لجودة أعلى.
       </p>
       <button type="button" className={btnPrimary} disabled={!file || busy} onClick={() => void run()}>
         {busy ? "جارٍ إزالة الخلفية…" : "إزالة الخلفية"}
