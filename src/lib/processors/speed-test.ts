@@ -158,7 +158,10 @@ export async function measureUpload(opts: {
       try {
         const res = await fetch(`/api/speed-test?t=${Date.now()}`, {
           method: "POST",
-          body: payload,
+          body: payload.buffer.slice(
+            payload.byteOffset,
+            payload.byteOffset + payload.byteLength,
+          ) as ArrayBuffer,
           headers: { "Content-Type": "application/octet-stream" },
           cache: "no-store",
         });
