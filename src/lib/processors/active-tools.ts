@@ -51,6 +51,10 @@ export type ActiveToolKind =
   | "text-tools"
   | "error-detector"
   | "speed-test"
+  | "cv-builder"
+  | "fancy-text"
+  | "email-generator"
+  | "css-generator"
   | "archive-extract"
   | "archive-convert"
   | "ebook-convert"
@@ -83,6 +87,10 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "text-tools": "text-tools",
   "error-detector": "error-detector",
   "speed-test": "speed-test",
+  "cv-builder": "cv-builder",
+  "fancy-text": "fancy-text",
+  "email-generator": "email-generator",
+  "css-generator": "css-generator",
   "audio-converter": "audio-convert",
   "trim-audio": "audio-trim",
   "change-audio-volume": "audio-volume",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { GeneratorsWorkspace } from "@/components/generators-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
@@ -87,6 +88,11 @@ export default async function ToolPage({ params }: Props) {
     kind === "text-tools" ||
     kind === "error-detector" ||
     kind === "speed-test";
+  const isGenerator =
+    kind === "cv-builder" ||
+    kind === "fancy-text" ||
+    kind === "email-generator" ||
+    kind === "css-generator";
   const isVideoToText = kind === "video-to-text";
   const seo = getToolSeoContent(tool);
 
@@ -129,6 +135,19 @@ export default async function ToolPage({ params }: Props) {
         ) : isUtility ? (
           <UtilityToolWorkspace
             kind={kind as "text-tools" | "error-detector" | "speed-test"}
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : isGenerator ? (
+          <GeneratorsWorkspace
+            kind={
+              kind as
+                | "cv-builder"
+                | "fancy-text"
+                | "email-generator"
+                | "css-generator"
+            }
             slug={tool.slug}
             title={tool.title}
             description={tool.description}

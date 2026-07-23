@@ -30,6 +30,7 @@ export const brandKeywords = [
   "المحولات",
   "النص",
   "أدوات يومية",
+  "مولدات",
   "أدوات الفيديو",
   "أدوات الصوت",
   "أدوات PDF",
@@ -44,6 +45,19 @@ export const brandKeywords = [
 
 /** كلمات إضافية لكل فئة */
 const categoryExtraKeywords: Record<ToolCategory, string[]> = {
+  generators: [
+    "مولدات",
+    "مولد نصوص",
+    "مولد سيرة ذاتية",
+    "زخرفة أسماء",
+    "مولد رسائل",
+    "مولد CSS",
+    "generators",
+    "fancy text",
+    "cv builder",
+    "email generator",
+    "css generator",
+  ],
   video: [
     "تحرير فيديو",
     "محرر فيديو أونلاين",
@@ -206,6 +220,35 @@ const toolExtraKeywords: Record<string, string[]> = {
     "speed test",
     "قياس سرعة التحميل",
     "ping",
+  ],
+  "cv-builder": [
+    "مولد سيرة ذاتية",
+    "سيرة ذاتية أونلاين",
+    "cv builder",
+    "resume generator",
+    "كتابة CV",
+  ],
+  "fancy-text": [
+    "زخرفة أسماء",
+    "زخرفة نص",
+    "أسماء ألعاب",
+    "fancy text",
+    "nickname generator",
+    "أسماء انستغرام",
+  ],
+  "email-generator": [
+    "مولد رسائل بريد",
+    "رسالة تقديم وظيفة",
+    "رسالة اعتذار",
+    "email templates",
+    "cover email",
+  ],
+  "css-generator": [
+    "مولد CSS",
+    "مولد أزرار CSS",
+    "تدرج لوني CSS",
+    "box shadow generator",
+    "css button generator",
   ],
   "merge-videos": [
     "دمج فيديوهات",

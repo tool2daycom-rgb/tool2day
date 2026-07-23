@@ -7,7 +7,7 @@ import {
   Globe,
   Music2,
   RefreshCcw,
-  Shield,
+  Sparkles,
   Type,
   Video,
   Wrench,
@@ -21,8 +21,9 @@ import {
   type ToolCategory,
 } from "@/lib/tools";
 
-/** ترتيب قوائم سطح المكتب مثل 123apps */
+/** مولدات أولاً مكان أمان، ثم باقي الفئات */
 const desktopNavOrder: ToolCategory[] = [
+  "generators",
   "video",
   "audio",
   "pdf",
@@ -32,6 +33,7 @@ const desktopNavOrder: ToolCategory[] = [
 ];
 
 const categoryIcon: Record<ToolCategory, typeof Video> = {
+  generators: Sparkles,
   video: Video,
   audio: Music2,
   pdf: FileText,
@@ -39,8 +41,6 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
   text: Type,
   utilities: Wrench,
 };
-
-const AMAN_BASE = "https://aman.tool2day.com";
 
 export function SiteHeader() {
   const [open, setOpen] = useState<ToolCategory | null>(null);
@@ -61,14 +61,6 @@ export function SiteHeader() {
 
         <nav className="pointer-events-none absolute inset-x-0 top-0 hidden h-14 items-center justify-center md:flex">
           <div className="pointer-events-auto flex items-center gap-0.5">
-            <a
-              href={AMAN_BASE}
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-bold text-white transition hover:bg-white/10"
-            >
-              <Shield className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-              <span>أمان</span>
-            </a>
-
             {desktopNavOrder.map((category) => {
               const items = getToolsByCategory(category);
               const isOpen = open === category;
@@ -148,17 +140,15 @@ export function SiteHeader() {
         dir="rtl"
         className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-2 md:hidden"
       >
-        <a
-          href={AMAN_BASE}
-          className="shrink-0 rounded-full border border-[#f5c518]/40 bg-[#f5c518]/10 px-3 py-1 text-xs font-bold text-[#f5c518]"
-        >
-          أمان
-        </a>
         {desktopNavOrder.map((category) => (
           <Link
             key={category}
             href={`/#${categoryMeta[category].anchor}`}
-            className="shrink-0 rounded-full border border-white/20 px-3 py-1 text-xs font-bold text-white"
+            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-bold ${
+              category === "generators"
+                ? "border-[#f5c518]/40 bg-[#f5c518]/10 text-[#f5c518]"
+                : "border-white/20 text-white"
+            }`}
           >
             {categoryMeta[category].label}
           </Link>

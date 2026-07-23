@@ -4,6 +4,7 @@ import {
   AudioLines,
   Bug,
   Clapperboard,
+  Code2,
   Combine,
   Crop,
   Download,
@@ -17,6 +18,7 @@ import {
   ImagePlus,
   Lock,
   LockOpen,
+  Mail,
   Merge,
   Mic,
   Monitor,
@@ -30,6 +32,7 @@ import {
   Scissors,
   SlidersHorizontal,
   FolderOpen,
+  Sparkles,
   Speaker,
   Split,
   Subtitles,
@@ -40,6 +43,7 @@ import {
 } from "lucide-react";
 
 export type ToolCategory =
+  | "generators"
   | "video"
   | "audio"
   | "pdf"
@@ -60,6 +64,11 @@ export const categoryMeta: Record<
   ToolCategory,
   { label: string; sectionTitle: string; anchor: string }
 > = {
+  generators: {
+    label: "مولدات",
+    sectionTitle: "المولدات",
+    anchor: "generators",
+  },
   video: {
     label: "الفيديو",
     sectionTitle: "أدوات الفيديو",
@@ -93,6 +102,7 @@ export const categoryMeta: Record<
 };
 
 export const navCategories: ToolCategory[] = [
+  "generators",
   "converters",
   "pdf",
   "audio",
@@ -102,6 +112,44 @@ export const navCategories: ToolCategory[] = [
 ];
 
 export const tools: Tool[] = [
+  // Generators
+  {
+    slug: "cv-builder",
+    title: "مولد السيرة الذاتية",
+    description:
+      "ابنِ سيرة ذاتية نصية بسيطة: بيانات، خبرة، تعليم ومهارات ثم انسخ أو نزّل TXT.",
+    category: "generators",
+    accept: "text/plain",
+    icon: FileText,
+  },
+  {
+    slug: "fancy-text",
+    title: "مولد زخرفة الأسماء",
+    description:
+      "زخرف الأسماء والنصوص لألعاب الفيديو والسوشيال ميديا بأنماط يونيكود وإطارات عربية.",
+    category: "generators",
+    accept: "text/plain",
+    icon: Sparkles,
+  },
+  {
+    slug: "email-generator",
+    title: "مولد رسائل البريد",
+    description:
+      "رسائل جاهزة للعمل، التقدم لوظائف، الاعتذار، المتابعة والشكر — خصّصها وانسخها.",
+    category: "generators",
+    accept: "text/plain",
+    icon: Mail,
+  },
+  {
+    slug: "css-generator",
+    title: "مولد أكواد CSS",
+    description:
+      "ولّد CSS جاهزاً لأزرار وتدرجات وظلال وبطاقات وحقول إدخال مع معاينة مباشرة.",
+    category: "generators",
+    accept: "text/plain",
+    icon: Code2,
+  },
+
   // Video
   {
     slug: "video-editor",
@@ -574,6 +622,7 @@ export const tools: Tool[] = [
 ];
 
 export const categoryOrder: ToolCategory[] = [
+  "generators",
   "video",
   "audio",
   "pdf",
