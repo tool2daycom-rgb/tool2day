@@ -262,6 +262,9 @@ function SpeedTestPanel({
   description: string;
 }) {
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "ping" | "down" | "up" | "done">(
+    "idle",
+  );
   const [ping, setPing] = useState<number | null>(null);
   const [down, setDown] = useState<number | null>(null);
   const [up, setUp] = useState<number | null>(null);
@@ -275,84 +278,103 @@ function SpeedTestPanel({
     setPing(null);
     setDown(null);
     setUp(null);
+    setPhase("ping");
     try {
-      setStatus("قياس زمن الاستجابة…");
-      const pings: number[] = [];
-      for (let i = 0; i < 4; i++) {
-        const t0 = performance.now();
-        const res = await fetch(`/api/speed-test?ping=1&n=${i}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error("فشل قياس الاستجابة");
-        await res.json();
-        pings.push(performance.now() - t0);
-      }
-      pings.sort((a, b) => a - b);
-      setPing(Math.round(pings[1] ?? pings[0] ?? 0));
-
-      setStatus("قياس سرعة التنزيل…");
-      const downBytes = 4 * 1024 * 1024;
-      const t1 = performance.now();
-      const dRes = await fetch(`/api/speed-test?bytes=${downBytes}`, {
-        cache: "no-store",
+      const { runFullSpeedTest } = await import("@/lib/processors/speed-test");
+      await runFullSpeedTest({
+        onPhase: (p) => {
+          setStatus(p);
+          if (p.includes("الاستجابة")) setPhase("ping");
+          else if (p.includes("التنزيل")) setPhase("down");
+          else if (p.includes("الرفع")) setPhase("up");
+          else if (p.includes("اكتمل")) setPhase("done");
+        },
+        onPing: (ms) => setPing(ms),
+        onDownload: (v) => setDown(v),
+        onUpload: (v) => setUp(v),
       });
-      if (!dRes.ok) throw new Error("فشل قياس التنزيل");
-      const buf = await dRes.arrayBuffer();
-      const dt = (performance.now() - t1) / 1000;
-      setDown(Number(((buf.byteLength * 8) / dt / 1_000_000).toFixed(1)));
-
-      setStatus("قياس سرعة الرفع…");
-      const upBytes = 1 * 1024 * 1024;
-      const payload = new Uint8Array(upBytes);
-      crypto.getRandomValues(payload);
-      const t2 = performance.now();
-      const uRes = await fetch("/api/speed-test", {
-        method: "POST",
-        body: payload,
-        headers: { "Content-Type": "application/octet-stream" },
-        cache: "no-store",
-      });
-      if (!uRes.ok) throw new Error("فشل قياس الرفع");
-      await uRes.json();
-      const ut = (performance.now() - t2) / 1000;
-      setUp(Number(((upBytes * 8) / ut / 1_000_000).toFixed(1)));
-      setStatus("اكتمل الفحص");
+      setPhase("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل فحص السرعة");
       setStatus(null);
+      setPhase("idle");
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <PanelShell title={title} description={description}>
-      <Action onClick={() => void runTest()} primary disabled={busy}>
-        {busy ? "جارٍ الفحص…" : "ابدأ فحص السرعة"}
-      </Action>
-      {status ? <p className="text-xs text-[#666]">{status}</p> : null}
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Metric label="الاستجابة (Ping)" value={ping != null ? `${ping} ms` : "—"} />
-        <Metric
-          label="التنزيل"
-          value={down != null ? `${down} Mbps` : "—"}
-        />
-        <Metric label="الرفع" value={up != null ? `${up} Mbps` : "—"} />
-      </div>
-      <p className="text-[11px] leading-5 text-[#888]">
-        القياس يتم عبر خوادم Tool2Day ويعكس سرعة اتصالك بالموقع — قد يختلف عن
-        اختبارات مزوّد الإنترنت العامة.
-      </p>
-    </PanelShell>
-  );
-}
+  const hero =
+    phase === "up" || (phase === "done" && up != null && down == null)
+      ? up
+      : down;
+  const heroLabel =
+    phase === "up" ? "الرفع" : phase === "ping" ? "…" : "التنزيل";
 
-function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-[#eee] bg-[#fafafa] px-4 py-5 text-center">
-      <p className="text-2xl font-bold text-[#111]">{value}</p>
-      <p className="mt-1 text-xs text-[#777]">{label}</p>
+    <div className="rounded-2xl border border-[#e8e8e8] bg-white p-5 shadow-sm sm:p-8">
+      <p className="text-center text-lg font-semibold text-[#111]">{title}</p>
+      <p className="mx-auto mt-1 max-w-md text-center text-sm leading-7 text-[#666]">
+        {description}
+      </p>
+
+      <div className="mt-8 flex flex-col items-center justify-center py-6">
+        <p
+          className="tabular-nums text-[5.5rem] font-bold leading-none tracking-tight text-[#222] sm:text-[7rem]"
+          dir="ltr"
+        >
+          {hero != null ? hero.toFixed(hero >= 100 ? 0 : 1) : busy ? "…" : "—"}
+        </p>
+        <p className="mt-2 text-lg font-semibold text-[#888]">
+          Mbps{" "}
+          <span className="text-sm font-medium text-[#aaa]">
+            {busy ? heroLabel : phase === "done" ? "التنزيل" : ""}
+          </span>
+        </p>
+      </div>
+
+      <div className="mx-auto flex max-w-md justify-center gap-8 border-t border-[#eee] pt-5 text-center">
+        <div>
+          <p className="tabular-nums text-xl font-bold text-[#111]" dir="ltr">
+            {ping != null ? `${ping}` : "—"}
+          </p>
+          <p className="text-[11px] text-[#888]">ms · Ping</p>
+        </div>
+        <div>
+          <p className="tabular-nums text-xl font-bold text-[#111]" dir="ltr">
+            {down != null ? down.toFixed(down >= 100 ? 0 : 1) : "—"}
+          </p>
+          <p className="text-[11px] text-[#888]">Mbps · تنزيل</p>
+        </div>
+        <div>
+          <p className="tabular-nums text-xl font-bold text-[#111]" dir="ltr">
+            {up != null ? up.toFixed(up >= 100 ? 0 : 1) : "—"}
+          </p>
+          <p className="text-[11px] text-[#888]">Mbps · رفع</p>
+        </div>
+      </div>
+
+      <div className="mt-8 flex flex-col items-center gap-3">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void runTest()}
+          className="min-w-48 rounded-full bg-[#111] px-8 py-3 text-sm font-bold text-white hover:bg-[#333] disabled:opacity-50"
+        >
+          {busy ? "جارٍ القياس…" : phase === "done" ? "أعد الفحص" : "ابدأ فحص السرعة"}
+        </button>
+        {status ? (
+          <p className="text-xs text-[#666]">{status}</p>
+        ) : null}
+        {error ? (
+          <p className="max-w-md text-center text-sm text-red-600">{error}</p>
+        ) : null}
+      </div>
+
+      <p className="mx-auto mt-6 max-w-lg text-center text-[11px] leading-5 text-[#999]">
+        قياس حقيقي عبر عدة اتصالات متوازية لعدة ثوانٍ (مثل اختبارات السرعة
+        المعروفة). الرقم يعكس سرعة اتصالك بخوادم Tool2Day وقد يختلف قليلاً عن
+        fast.com حسب مسار الشبكة.
+      </p>
     </div>
   );
 }

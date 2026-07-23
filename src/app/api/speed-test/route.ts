@@ -1,52 +1,77 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
-/** نقاط نهاية خفيفة لقياس زمن الاستجابة وسرعة التنزيل/الرفع */
+const MAX_DOWNLOAD = 16 * 1024 * 1024;
+const CHUNK = 64 * 1024;
+
+/**
+ * توليد تدفق غير قابل للضغط لقياس تنزيل حقيقي
+ * (بيانات عشوائية + منع gzip على الاستجابة)
+ */
+function randomChunk(): Uint8Array {
+  const buf = new Uint8Array(CHUNK);
+  crypto.getRandomValues(buf);
+  return buf;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+
   if (searchParams.has("ping")) {
-    return NextResponse.json(
-      { ok: true, t: Date.now() },
-      {
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-        },
+    return new NextResponse(JSON.stringify({ ok: true, t: Date.now() }), {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
       },
-    );
+    });
   }
 
   const bytes = Math.min(
-    12 * 1024 * 1024,
-    Math.max(64 * 1024, Number(searchParams.get("bytes") || 2 * 1024 * 1024)),
+    MAX_DOWNLOAD,
+    Math.max(256 * 1024, Number(searchParams.get("bytes") || 4 * 1024 * 1024)),
   );
-  const chunk = new Uint8Array(64 * 1024);
-  crypto.getRandomValues(chunk);
-  const parts: Uint8Array[] = [];
-  let left = bytes;
-  while (left > 0) {
-    const n = Math.min(left, chunk.length);
-    parts.push(chunk.subarray(0, n));
-    left -= n;
-  }
-  const body = Buffer.concat(parts.map((p) => Buffer.from(p)));
-  return new NextResponse(body, {
+
+  let sent = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent >= bytes) {
+        controller.close();
+        return;
+      }
+      const n = Math.min(CHUNK, bytes - sent);
+      const chunk = randomChunk();
+      controller.enqueue(n === CHUNK ? chunk : chunk.subarray(0, n));
+      sent += n;
+    },
+  });
+
+  return new NextResponse(stream, {
     headers: {
       "Content-Type": "application/octet-stream",
-      "Content-Length": String(body.length),
-      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "Content-Length": String(bytes),
+      "Content-Encoding": "identity",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      "CDN-Cache-Control": "no-store",
+      "Vercel-CDN-Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }
 
 export async function POST(req: NextRequest) {
+  // قراءة كاملة للجسم حتى يُحسب الرفع من طرف العميل بشكل صحيح
   const buf = await req.arrayBuffer();
   return NextResponse.json(
     { ok: true, received: buf.byteLength, t: Date.now() },
     {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
       },
     },
   );
