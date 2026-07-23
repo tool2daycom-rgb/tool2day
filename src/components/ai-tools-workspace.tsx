@@ -184,16 +184,16 @@ function OcrPanel({
           onChange={(e) => setLangs(e.target.value)}
         >
           <option value="auto">تلقائي — اكتشاف لغة الصورة</option>
-          <option value="eng+por+spa+fra+deu+ita">لاتينية متعددة</option>
+          <option value="deu+eng">Deutsch + English (ألمانية)</option>
           <option value="por+eng">Português + English</option>
           <option value="eng">English فقط</option>
           <option value="ara+eng">العربية + English</option>
           <option value="ara">العربية فقط</option>
           <option value="spa+eng">Español + English</option>
           <option value="fra+eng">Français + English</option>
-          <option value="deu+eng">Deutsch + English</option>
-          <option value="tur+eng">Türkçe + English</option>
           <option value="ita+eng">Italiano + English</option>
+          <option value="tur+eng">Türkçe + English</option>
+          <option value="eng+por+spa+fra+deu+ita">لاتينية متعددة</option>
         </select>
       </label>
       <p className="text-[11px] font-semibold text-[#777]">
