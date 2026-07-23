@@ -626,8 +626,8 @@ function resizeAlphaTo(
 }
 
 /**
- * تكبير الصورة نحو عرض/ارتفاع هدف (افتراضي عرض 4K = 3840)
- * مع تنعيم عالي الجودة وتحسين حواف بسيط.
+ * تكبير وتحسين جودة الصورة لأقصى حد ممكن حتى الضلع المستهدف (افتراضي 4K).
+ * يفضّل Swin2SR (ذكاء اصطناعي) ثم يُكمَل بالتكبير عالي الجودة إن لزم.
  */
 export async function upscaleImageTo4k(
   file: File,
@@ -635,8 +635,126 @@ export async function upscaleImageTo4k(
 ): Promise<{ blob: Blob; width: number; height: number }> {
   const targetLong = opts?.targetLongEdge ?? 3840;
   const onProgress = opts?.onProgress;
+  onProgress?.(0.04);
+
+  try {
+    const ai = await upscaleWithAiSr(file, targetLong, onProgress);
+    if (ai) return ai;
+  } catch {
+    /* احتياطي canvas محسّن */
+  }
+
+  return upscaleCanvasMaxQuality(file, targetLong, onProgress);
+}
+
+async function upscaleWithAiSr(
+  file: File,
+  targetLong: number,
+  onProgress?: (p: number) => void,
+): Promise<{ blob: Blob; width: number; height: number } | null> {
+  const { pipeline, env } = await import("@huggingface/transformers");
+  env.allowLocalModels = false;
+  env.useBrowserCache = true;
+
+  const img = await loadImageElement(file);
+  const srcLong = Math.max(img.naturalWidth, img.naturalHeight);
+  // حدّ إدخال النموذج ليبقى الناتج ≈ الهدف دون نفاد الذاكرة
+  const aiInLong = Math.min(srcLong, Math.max(512, Math.round(targetLong / 4)));
+  const prep = await resizeImageToLongEdge(img, aiInLong);
+  onProgress?.(0.12);
+
+  const url = URL.createObjectURL(prep.blob);
+  try {
+    onProgress?.(0.15);
+    // x4 مضغوط — توازن جودة/سرعة للمستعرض
+    const upscaler = await pipeline(
+      "image-to-image",
+      "Xenova/swin2SR-compressed-sr-x4-48",
+      {
+        device: "wasm",
+        dtype: "fp32",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        progress_callback: (ev: any) => {
+          if (typeof ev?.progress === "number") {
+            onProgress?.(0.15 + 0.35 * Math.min(1, ev.progress / 100));
+          }
+        },
+      },
+    );
+    onProgress?.(0.52);
+    const out = await upscaler(url);
+    const raw = Array.isArray(out) ? out[0] : out;
+    if (!raw || typeof raw.toBlob !== "function") return null;
+
+    let blob = (await raw.toBlob("image/png")) as Blob;
+    let width = Number(raw.width) || prep.width * 4;
+    let height = Number(raw.height) || prep.height * 4;
+    onProgress?.(0.72);
+
+    // إن بقي أصغر من الهدف: أكمل بتكبير عالي الجودة + تحسين
+    const long = Math.max(width, height);
+    if (long < targetLong * 0.98) {
+      const el = await loadImageElement(
+        new File([blob], "ai.png", { type: "image/png" }),
+      );
+      const finished = await canvasUpscaleEnhance(el, targetLong, (p) =>
+        onProgress?.(0.72 + 0.22 * p),
+      );
+      blob = finished.blob;
+      width = finished.width;
+      height = finished.height;
+    } else if (long > targetLong * 1.02) {
+      const el = await loadImageElement(
+        new File([blob], "ai.png", { type: "image/png" }),
+      );
+      const fitted = await resizeImageToLongEdge(el, targetLong);
+      const canvas = document.createElement("canvas");
+      canvas.width = fitted.width;
+      canvas.height = fitted.height;
+      const ctx = canvas.getContext("2d")!;
+      const fittedImg = await loadImageElement(
+        new File([fitted.blob], "fit.png", { type: "image/png" }),
+      );
+      ctx.drawImage(fittedImg, 0, 0);
+      enhancePhotoCanvas(canvas);
+      blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
+      width = fitted.width;
+      height = fitted.height;
+    } else {
+      const el = await loadImageElement(
+        new File([blob], "ai.png", { type: "image/png" }),
+      );
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(el, 0, 0);
+      enhancePhotoCanvas(canvas);
+      blob = await canvasToBlob(canvas, "image/jpeg", 0.95);
+    }
+
+    onProgress?.(1);
+    return { blob, width, height };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function upscaleCanvasMaxQuality(
+  file: File,
+  targetLong: number,
+  onProgress?: (p: number) => void,
+): Promise<{ blob: Blob; width: number; height: number }> {
   onProgress?.(0.1);
   const img = await loadImageElement(file);
+  return canvasUpscaleEnhance(img, targetLong, onProgress);
+}
+
+async function canvasUpscaleEnhance(
+  img: HTMLImageElement,
+  targetLong: number,
+  onProgress?: (p: number) => void,
+): Promise<{ blob: Blob; width: number; height: number }> {
   const srcW = img.naturalWidth;
   const srcH = img.naturalHeight;
   const long = Math.max(srcW, srcH);
@@ -644,7 +762,6 @@ export async function upscaleImageTo4k(
   const dstW = Math.round(srcW * scale);
   const dstH = Math.round(srcH * scale);
 
-  // تكبير متعدد الخطوات لجودة أفضل
   let cur = document.createElement("canvas");
   cur.width = srcW;
   cur.height = srcH;
@@ -652,13 +769,15 @@ export async function upscaleImageTo4k(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0);
-  onProgress?.(0.35);
+  onProgress?.(0.25);
 
   let w = srcW;
   let h = srcH;
-  while (w * 2 < dstW || h * 2 < dstH) {
-    const nw = Math.min(dstW, w * 2);
-    const nh = Math.min(dstH, h * 2);
+  // خطوات ×1.5 ثم ×2 لأقل ضبابية من قفزة واحدة
+  while (w < dstW - 1 || h < dstH - 1) {
+    const step = w * 2 <= dstW && h * 2 <= dstH ? 2 : Math.min(2, Math.max(1.25, dstW / w));
+    const nw = Math.min(dstW, Math.round(w * step));
+    const nh = Math.min(dstH, Math.round(h * step));
     const next = document.createElement("canvas");
     next.width = nw;
     next.height = nh;
@@ -666,10 +785,12 @@ export async function upscaleImageTo4k(
     nctx.imageSmoothingEnabled = true;
     nctx.imageSmoothingQuality = "high";
     nctx.drawImage(cur, 0, 0, nw, nh);
+    // شحذ خفيف بين الخطوات للحفاظ على التفاصيل
+    if (nw < dstW || nh < dstH) sharpenCanvas(next, 0.22);
     cur = next;
     w = nw;
     h = nh;
-    onProgress?.(0.35 + 0.4 * (w / dstW));
+    onProgress?.(0.25 + 0.5 * (w / dstW));
   }
 
   if (w !== dstW || h !== dstH) {
@@ -682,14 +803,78 @@ export async function upscaleImageTo4k(
     fctx.drawImage(cur, 0, 0, dstW, dstH);
     cur = final;
   }
-  onProgress?.(0.85);
 
-  // Unsharp mask خفيف
-  sharpenCanvas(cur, 0.35);
+  onProgress?.(0.85);
+  enhancePhotoCanvas(cur);
   onProgress?.(0.95);
-  const blob = await canvasToBlob(cur, "image/jpeg", 0.92);
+  const blob = await canvasToBlob(cur, "image/jpeg", 0.95);
   onProgress?.(1);
   return { blob, width: dstW, height: dstH };
+}
+
+async function resizeImageToLongEdge(
+  img: HTMLImageElement,
+  targetLong: number,
+): Promise<{ blob: Blob; width: number; height: number }> {
+  const srcW = img.naturalWidth;
+  const srcH = img.naturalHeight;
+  const long = Math.max(srcW, srcH);
+  if (long <= targetLong) {
+    const c = document.createElement("canvas");
+    c.width = srcW;
+    c.height = srcH;
+    c.getContext("2d")!.drawImage(img, 0, 0);
+    return {
+      blob: await canvasToBlob(c, "image/png"),
+      width: srcW,
+      height: srcH,
+    };
+  }
+  const scale = targetLong / long;
+  const w = Math.round(srcW * scale);
+  const h = Math.round(srcH * scale);
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h);
+  return { blob: await canvasToBlob(c, "image/png"), width: w, height: h };
+}
+
+/** تحسين وضوح وتباين وألوان بعد التكبير */
+function enhancePhotoCanvas(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const { width: w, height: h } = canvas;
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+
+  // تمديد تباين خفيف + تشبع
+  let min = 255;
+  let max = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const y = 0.299 * d[i]! + 0.587 * d[i + 1]! + 0.114 * d[i + 2]!;
+    if (y < min) min = y;
+    if (y > max) max = y;
+  }
+  const span = Math.max(1, max - min);
+  for (let i = 0; i < d.length; i += 4) {
+    let r = ((d[i]! - min) / span) * 255;
+    let g = ((d[i + 1]! - min) / span) * 255;
+    let b = ((d[i + 2]! - min) / span) * 255;
+    // رفع تشبع طفيف
+    const avg = (r + g + b) / 3;
+    const sat = 1.12;
+    r = avg + (r - avg) * sat;
+    g = avg + (g - avg) * sat;
+    b = avg + (b - avg) * sat;
+    d[i] = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, g));
+    d[i + 2] = Math.max(0, Math.min(255, b));
+  }
+  ctx.putImageData(img, 0, 0);
+  sharpenCanvas(canvas, 0.45);
 }
 
 function sharpenCanvas(canvas: HTMLCanvasElement, amount: number) {
@@ -722,7 +907,6 @@ function sharpenCanvas(canvas: HTMLCanvasElement, amount: number) {
       d[a] = s[a]!;
     }
   }
-  // copy borders
   for (let x = 0; x < w; x++) {
     for (let c = 0; c < 4; c++) {
       d[x * 4 + c] = s[x * 4 + c]!;
@@ -731,7 +915,7 @@ function sharpenCanvas(canvas: HTMLCanvasElement, amount: number) {
   }
   for (let y = 0; y < h; y++) {
     for (let c = 0; c < 4; c++) {
-      d[(y * w) * 4 + c] = s[(y * w) * 4 + c]!;
+      d[y * w * 4 + c] = s[y * w * 4 + c]!;
       d[(y * w + w - 1) * 4 + c] = s[(y * w + w - 1) * 4 + c]!;
     }
   }

@@ -247,7 +247,7 @@ export const tools: Tool[] = [
     slug: "ai-upscale",
     title: "تكبير الصور إلى 4K",
     description:
-      "ارفع جودة الصورة وكبّرها حتى دقة 4K مع تنعيم وتحسين الحواف.",
+      "حسّن جودة الصورة لأقصى حد ممكن بالذكاء الاصطناعي ثم كبّرها حتى دقة 4K.",
     category: "ai",
     accept: "image/*",
     icon: Maximize2,

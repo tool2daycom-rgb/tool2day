@@ -553,13 +553,18 @@ function UpscalePanel({
         >
           <option value={1920}>Full HD — 1920px</option>
           <option value={2560}>2K — 2560px</option>
-          <option value={3840}>4K — 3840px</option>
+          <option value={3840}>4K — 3840px (أقصى جودة)</option>
         </select>
       </label>
+      <p className="text-[11px] font-semibold text-[#777]">
+        يحسّن التفاصيل والوضوح بالذكاء الاصطناعي ثم يكبّر حتى الحجم المختار. أول تشغيل يحمّل النموذج وقد يستغرق دقيقة.
+      </p>
       <button type="button" className={btnPrimary} disabled={!file || busy} onClick={() => void run()}>
-        {busy ? "جارٍ التكبير…" : "كبّر الصورة"}
+        {busy ? "جارٍ تحسين الجودة…" : "حسّن وكبّر الصورة"}
       </button>
-      {busy ? <ProgressBar value={progress} /> : null}
+      {busy ? (
+        <ProgressBar value={progress} label="تحسين الجودة بالذكاء الاصطناعي…" />
+      ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {resultUrl ? (
         <div className="space-y-3">
