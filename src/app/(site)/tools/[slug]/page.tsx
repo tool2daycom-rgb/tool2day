@@ -131,15 +131,15 @@ export default async function ToolPage({ params }: Props) {
       <div className="mt-8 flex flex-col items-center text-center">
         <Link
           href="/"
-          className="mb-5 inline-flex transition hover:opacity-90"
+          className="mb-5 inline-flex w-full max-w-[22rem] justify-center transition hover:opacity-90 sm:max-w-[28rem]"
           aria-label="Tool2Day — العودة للصفحة الرئيسية"
         >
           <Image
-            src="/brand/preview-tool2day-eyes.png"
+            src="/brand/logo-hero-eyes.png"
             alt="TOOL2DAY"
-            width={420}
-            height={120}
-            className="h-14 w-auto object-contain sm:h-[4.25rem]"
+            width={920}
+            height={220}
+            className="h-auto w-full object-contain"
             priority
             unoptimized
           />
