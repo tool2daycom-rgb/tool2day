@@ -113,6 +113,7 @@ export async function removeImageBackground(
   onProgress?: (p: number) => void,
   opts: RemoveBgOptions = {},
 ): Promise<Blob> {
+  // الأداة مخصّصة لقصّ الشخص فقط (بدون جدار/درابزين)
   const personOnly = opts.personOnly !== false;
   onProgress?.(0.02);
 
@@ -126,7 +127,6 @@ export async function removeImageBackground(
   srcCtx.drawImage(original, 0, 0);
   const srcData = srcCtx.getImageData(0, 0, w, h);
 
-  // RMBG أولاً لجودة أعلى، ثم imgly
   onProgress?.(0.06);
   let matte = await tryRmbgAlphaMask(file, w, h, onProgress);
   if (!matte) {
@@ -155,10 +155,14 @@ export async function removeImageBackground(
     alpha = refineAlphaEdges(alpha, w, h);
   }
 
-  onProgress?.(0.92);
-  const out = applyAlphaToOriginal(srcData, alpha);
+  onProgress?.(0.9);
+  const composed = applyAlphaToOriginal(srcData, alpha);
+  // قصّ مربع الشخص بإحكام (بدون مساحة جدار فارغة)
+  const cropped = personOnly
+    ? cropToOpaqueBounds(composed, Math.max(8, Math.round(Math.min(w, h) * 0.02)))
+    : composed;
   onProgress?.(1);
-  return canvasImageDataToPng(out);
+  return canvasImageDataToPng(cropped);
 }
 
 type AlphaMask = {
@@ -262,6 +266,7 @@ async function tryRmbgAlphaMask(
 }
 
 let personSegmenterPromise: Promise<unknown> | null = null;
+let selfieBinaryPromise: Promise<unknown> | null = null;
 
 /**
  * يدمج قناع الشخص مع قناع الجودة:
@@ -275,22 +280,24 @@ function combinePersonAndMatte(
   w: number,
   h: number,
 ): Uint8ClampedArray {
-  // عمليات الشكل على نسخة مصغّرة للسرعة ثم تكبير ناعم
   const mw = Math.min(512, w);
   const mh = Math.max(1, Math.round((h * mw) / w));
   let pSmall = resizeAlphaTo(person, mw, mh, w, h);
   for (let i = 0; i < pSmall.length; i++) {
-    pSmall[i] = pSmall[i]! >= 110 ? 255 : 0;
+    pSmall[i] = pSmall[i]! >= 130 ? 255 : 0;
   }
-  pSmall = morphOpen(pSmall, mw, mh, 1);
-  pSmall = morphClose(pSmall, mw, mh, 3);
+  // افتح لإزالة جسور الدرابزين الرفيعة، ثم أغلق لملء الجسم
+  pSmall = morphOpen(pSmall, mw, mh, 2);
+  pSmall = morphClose(pSmall, mw, mh, 4);
+  // أبقِ أكبر مكوّن متصل فقط (الجسم) وتجاهل بقايا الجدار
+  pSmall = keepLargestComponent(pSmall, mw, mh);
   pSmall = dilateAlpha(pSmall, mw, mh, 1);
 
   const coreSmall = erodeAlpha(
     pSmall,
     mw,
     mh,
-    Math.max(2, Math.round(Math.min(mw, mh) / 40)),
+    Math.max(2, Math.round(Math.min(mw, mh) / 45)),
   );
   const softSmall = boxBlurAlpha(pSmall, mw, mh, 1);
 
@@ -304,15 +311,96 @@ function combinePersonAndMatte(
       out[i] = 255;
       continue;
     }
-    if (sp < 0.06) {
+    if (sp < 0.08) {
       out[i] = 0;
       continue;
     }
     const m = matte[i]! / 255;
-    const a = sp * Math.max(m, sp * 0.92);
+    // داخل حدود الشخص فقط — لا نُبقي جداراً حتى لو كان المatte يراه أمامياً
+    const a = sp * Math.max(m, 0.75 * sp);
     out[i] = Math.round(Math.max(0, Math.min(255, a * 255)));
   }
   return boxBlurAlpha(out, w, h, 1);
+}
+
+/** يُبقي أكبر كتلة بيضاء متصلة ويتجاهل بقايا الدرابزين المنفصلة */
+function keepLargestComponent(
+  alpha: Uint8ClampedArray,
+  w: number,
+  h: number,
+): Uint8ClampedArray {
+  const visited = new Uint8Array(w * h);
+  const out = new Uint8ClampedArray(w * h);
+  let best: number[] = [];
+  const stack: number[] = [];
+
+  for (let i = 0; i < alpha.length; i++) {
+    if (alpha[i]! < 128 || visited[i]) continue;
+    stack.length = 0;
+    stack.push(i);
+    visited[i] = 1;
+    const comp: number[] = [];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      comp.push(cur);
+      const x = cur % w;
+      const y = (cur / w) | 0;
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const ni = ny * w + nx;
+        if (visited[ni] || alpha[ni]! < 128) continue;
+        visited[ni] = 1;
+        stack.push(ni);
+      }
+    }
+    if (comp.length > best.length) best = comp;
+  }
+  for (const i of best) out[i] = 255;
+  return out;
+}
+
+function cropToOpaqueBounds(data: ImageData, pad: number): ImageData {
+  const { width: w, height: h, data: px } = data;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (px[(y * w + x) * 4 + 3]! > 12) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < minX || maxY < minY) return data;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(w - 1, maxX + pad);
+  maxY = Math.min(h - 1, maxY + pad);
+  const cw = maxX - minX + 1;
+  const ch = maxY - minY + 1;
+  const out = new ImageData(cw, ch);
+  for (let y = 0; y < ch; y++) {
+    for (let x = 0; x < cw; x++) {
+      const si = ((minY + y) * w + (minX + x)) * 4;
+      const di = (y * cw + x) * 4;
+      out.data[di] = px[si]!;
+      out.data[di + 1] = px[si + 1]!;
+      out.data[di + 2] = px[si + 2]!;
+      out.data[di + 3] = px[si + 3]!;
+    }
+  }
+  return out;
 }
 
 async function getPersonAlphaMask(
@@ -347,23 +435,44 @@ async function getPersonAlphaMask(
     });
   }
 
+  if (!selfieBinaryPromise) {
+    selfieBinaryPromise = (async () => {
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm",
+      );
+      return ImageSegmenter.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite",
+          delegate: "GPU",
+        },
+        runningMode: "IMAGE",
+        outputCategoryMask: true,
+        outputConfidenceMasks: true,
+      });
+    })().catch(() => null);
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const segmenter = (await personSegmenterPromise) as any;
   const result = segmenter.segment(img);
 
-  // فضّل أقنعة الثقة الناعمة لفئات الشخص (1–4)، وتجاهل «أخرى» (5) والدرابزين
+  let person: Uint8ClampedArray | null = null;
+  let mw = 0;
+  let mh = 0;
+
   const confMasks = result.confidenceMasks as
     | { width: number; height: number; getAsFloat32Array: () => Float32Array }[]
     | undefined;
 
   if (confMasks && confMasks.length >= 5) {
-    const mw = confMasks[1]!.width;
-    const mh = confMasks[1]!.height;
+    mw = confMasks[1]!.width;
+    mh = confMasks[1]!.height;
     const hair = confMasks[1]!.getAsFloat32Array();
     const body = confMasks[2]!.getAsFloat32Array();
     const face = confMasks[3]!.getAsFloat32Array();
     const clothes = confMasks[4]!.getAsFloat32Array();
-    const person = new Uint8ClampedArray(mw * mh);
+    person = new Uint8ClampedArray(mw * mh);
     for (let i = 0; i < person.length; i++) {
       const v = Math.max(
         hair[i] ?? 0,
@@ -371,22 +480,63 @@ async function getPersonAlphaMask(
         face[i] ?? 0,
         clothes[i] ?? 0,
       );
-      // عتبة أعلى: تقلل التقاط الدرابزين/الجدار
-      person[i] = v >= 0.42 ? Math.round(Math.min(1, v) * 255) : 0;
+      person[i] = v >= 0.5 ? Math.round(Math.min(1, v) * 255) : 0;
     }
-    return resizeAlphaTo(person, w, h, mw, mh);
+  } else {
+    const cat = result.categoryMask;
+    if (!cat) return null;
+    mw = cat.width as number;
+    mh = cat.height as number;
+    const raw = cat.getAsUint8Array() as Uint8Array;
+    person = new Uint8ClampedArray(mw * mh);
+    for (let i = 0; i < person.length; i++) {
+      const c = raw[i]!;
+      person[i] = c >= 1 && c <= 4 ? 255 : 0;
+    }
   }
 
-  const cat = result.categoryMask;
-  if (!cat) return null;
-  const mw = cat.width as number;
-  const mh = cat.height as number;
-  const raw = cat.getAsUint8Array() as Uint8Array;
-  const person = new Uint8ClampedArray(mw * mh);
-  for (let i = 0; i < person.length; i++) {
-    const c = raw[i]!;
-    person[i] = c >= 1 && c <= 4 ? 255 : 0;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const binary = (await selfieBinaryPromise) as any;
+    if (binary && person) {
+      const binRes = binary.segment(img);
+      const binConf = binRes.confidenceMasks?.[1] as
+        | { width: number; height: number; getAsFloat32Array: () => Float32Array }
+        | undefined;
+      const binCat = binRes.categoryMask as
+        | { width: number; height: number; getAsUint8Array: () => Uint8Array }
+        | undefined;
+      let binMask: Uint8ClampedArray | null = null;
+      let bw = mw;
+      let bh = mh;
+      if (binConf) {
+        bw = binConf.width;
+        bh = binConf.height;
+        const arr = binConf.getAsFloat32Array();
+        binMask = new Uint8ClampedArray(bw * bh);
+        for (let i = 0; i < binMask.length; i++) {
+          binMask[i] = (arr[i] ?? 0) >= 0.45 ? 255 : 0;
+        }
+      } else if (binCat) {
+        bw = binCat.width;
+        bh = binCat.height;
+        const arr = binCat.getAsUint8Array();
+        binMask = new Uint8ClampedArray(bw * bh);
+        for (let i = 0; i < binMask.length; i++) {
+          binMask[i] = arr[i]! > 0 ? 255 : 0;
+        }
+      }
+      if (binMask) {
+        const binFull = resizeAlphaTo(binMask, mw, mh, bw, bh);
+        for (let i = 0; i < person.length; i++) {
+          if (binFull[i]! < 128) person[i] = 0;
+        }
+      }
+    }
+  } catch {
+    /* اختياري */
   }
+
   return resizeAlphaTo(person, w, h, mw, mh);
 }
 
