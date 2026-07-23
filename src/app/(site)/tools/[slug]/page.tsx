@@ -5,6 +5,8 @@ import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
+import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
+import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import {
   getToolKeywords,
   getToolPageDescription,
@@ -12,6 +14,7 @@ import {
 } from "@/lib/seo-keywords";
 import { getToolSeoContent } from "@/lib/tool-seo-content";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
+import { getToolKind } from "@/lib/processors/active-tools";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -79,6 +82,12 @@ export default async function ToolPage({ params }: Props) {
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
   const isPdf = slug === "pdf-editor";
+  const kind = getToolKind(slug);
+  const isUtility =
+    kind === "text-tools" ||
+    kind === "error-detector" ||
+    kind === "speed-test";
+  const isVideoToText = kind === "video-to-text";
   const seo = getToolSeoContent(tool);
 
   return (
@@ -116,6 +125,19 @@ export default async function ToolPage({ params }: Props) {
             title={tool.title}
             description={tool.description}
             slug={tool.slug}
+          />
+        ) : isUtility ? (
+          <UtilityToolWorkspace
+            kind={kind as "text-tools" | "error-detector" | "speed-test"}
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : isVideoToText ? (
+          <VideoToTextWorkspace
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
           />
         ) : (
           <ToolWorkspace

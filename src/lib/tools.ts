@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   AudioLines,
+  Bug,
   Clapperboard,
   Combine,
   Crop,
@@ -30,13 +32,20 @@ import {
   FolderOpen,
   Speaker,
   Split,
+  Subtitles,
   Type,
   Video,
   Volume2,
   WandSparkles,
 } from "lucide-react";
 
-export type ToolCategory = "video" | "audio" | "pdf" | "converters";
+export type ToolCategory =
+  | "video"
+  | "audio"
+  | "pdf"
+  | "converters"
+  | "text"
+  | "utilities";
 
 export type Tool = {
   slug: string;
@@ -71,6 +80,16 @@ export const categoryMeta: Record<
     sectionTitle: "المحولات",
     anchor: "converters",
   },
+  text: {
+    label: "النص",
+    sectionTitle: "أدوات النص",
+    anchor: "text",
+  },
+  utilities: {
+    label: "يومية",
+    sectionTitle: "أدوات يومية",
+    anchor: "utilities",
+  },
 };
 
 export const navCategories: ToolCategory[] = [
@@ -78,6 +97,8 @@ export const navCategories: ToolCategory[] = [
   "pdf",
   "audio",
   "video",
+  "text",
+  "utilities",
 ];
 
 export const tools: Tool[] = [
@@ -115,6 +136,15 @@ export const tools: Tool[] = [
     category: "video",
     accept: "text/plain",
     icon: Download,
+  },
+  {
+    slug: "video-to-text",
+    title: "تحويل فيديو إلى نص",
+    description:
+      "تفريغ كلام الفيديو أو الصوت إلى نص مكتوب مع اختيار لغة الكلام ودقة عالية عبر Whisper.",
+    category: "video",
+    accept: "video/*,audio/*",
+    icon: Subtitles,
   },
   {
     slug: "merge-videos",
@@ -510,6 +540,37 @@ export const tools: Tool[] = [
     accept: ".ttf,.otf,.woff,.woff2",
     icon: Type,
   },
+
+  // Text
+  {
+    slug: "text-tools",
+    title: "أدوات النص",
+    description:
+      "عدّ كلمات، تحويل حالة الأحرف، تنظيف المسافات، ترتيب الأسطر، بحث واستبدال، وتنزيل TXT.",
+    category: "text",
+    accept: "text/plain",
+    icon: Type,
+  },
+
+  // Daily utilities
+  {
+    slug: "error-detector",
+    title: "كاشف الأخطاء",
+    description:
+      "افحص JSON والروابط والبريد وصياغة JavaScript وهيكل HTML قبل الاستخدام.",
+    category: "utilities",
+    accept: "text/plain",
+    icon: Bug,
+  },
+  {
+    slug: "speed-test",
+    title: "فحص سرعة الإنترنت",
+    description:
+      "قِس زمن الاستجابة وسرعة التنزيل والرفع عبر خوادم Tool2Day من المتصفح.",
+    category: "utilities",
+    accept: "text/plain",
+    icon: Activity,
+  },
 ];
 
 export const categoryOrder: ToolCategory[] = [
@@ -517,6 +578,8 @@ export const categoryOrder: ToolCategory[] = [
   "audio",
   "pdf",
   "converters",
+  "text",
+  "utilities",
 ];
 
 export function getTool(slug: string) {

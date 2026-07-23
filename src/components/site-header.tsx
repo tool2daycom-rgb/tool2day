@@ -8,7 +8,9 @@ import {
   Music2,
   RefreshCcw,
   Shield,
+  Type,
   Video,
+  Wrench,
 } from "lucide-react";
 import { useState } from "react";
 import { AuthMenu } from "@/components/auth-menu";
@@ -19,12 +21,14 @@ import {
   type ToolCategory,
 } from "@/lib/tools";
 
-/** ترتيب قوائم سطح المكتب مثل 123apps: Video → Audio → PDF → Converters */
+/** ترتيب قوائم سطح المكتب مثل 123apps */
 const desktopNavOrder: ToolCategory[] = [
   "video",
   "audio",
   "pdf",
   "converters",
+  "text",
+  "utilities",
 ];
 
 const categoryIcon: Record<ToolCategory, typeof Video> = {
@@ -32,6 +36,8 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
   audio: Music2,
   pdf: FileText,
   converters: RefreshCcw,
+  text: Type,
+  utilities: Wrench,
 };
 
 const AMAN_BASE = "https://aman.tool2day.com";
