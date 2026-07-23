@@ -26,6 +26,12 @@ import {
   getCurrency,
 } from "@/lib/processors/world-currencies";
 import {
+  allKaratGramPrices,
+  goldGramPure,
+  goldLiraPrices,
+  TROY_OUNCE_GRAMS,
+} from "@/lib/processors/gold-pricing";
+import {
   WORLD_CITIES,
   cityLabel,
   describeOffset,
@@ -554,6 +560,7 @@ function CurrencyPanel({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [goldQuote, setGoldQuote] = useState("SAR");
 
   const rate = useMemo(() => {
     if (!rates) return null;
@@ -662,6 +669,17 @@ function CurrencyPanel({
   const goldUsd = rates ? convertAmount(1, "XAU", "USD", rates.rates) : null;
   const goldSar = rates ? convertAmount(1, "XAU", "SAR", rates.rates) : null;
   const silverUsd = rates ? convertAmount(1, "XAG", "USD", rates.rates) : null;
+  const goldOunceQuote = rates
+    ? convertAmount(1, "XAU", goldQuote, rates.rates)
+    : null;
+  const karatRows =
+    goldOunceQuote != null ? allKaratGramPrices(goldOunceQuote) : null;
+  const liraRows =
+    goldOunceQuote != null ? goldLiraPrices(goldOunceQuote) : null;
+  const gram24 =
+    goldOunceQuote != null ? goldGramPure(goldOunceQuote) : null;
+
+  const goldQuoteOptions = ["SAR", "USD", "AED", "EGP", "KWD", "QAR", "BHD", "OMR", "TRY", "EUR", "GBP"];
 
   return (
     <PanelShell title={title} description={description} wide>
@@ -824,15 +842,48 @@ function CurrencyPanel({
 
         <div className="space-y-3">
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm font-bold text-amber-950">الذهب والفضة</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-bold text-amber-950">الذهب والفضة</p>
+              <label className="flex items-center gap-1 text-[11px] font-semibold text-amber-900">
+                عرض بـ
+                <select
+                  className="rounded border border-amber-300 bg-white px-1.5 py-0.5 text-xs"
+                  value={goldQuote}
+                  onChange={(e) => setGoldQuote(e.target.value)}
+                >
+                  {goldQuoteOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <p className="mt-2 text-sm tabular-nums text-amber-900">
-              🥇 أونصة ذهب: {goldUsd == null ? "…" : formatMoney(goldUsd)} USD
-              {goldSar != null ? ` · ${formatMoney(goldSar)} SAR` : ""}
+              🥇 أونصة: {goldOunceQuote == null ? "…" : formatMoney(goldOunceQuote)} {goldQuote}
+              {goldUsd != null ? ` · ${formatMoney(goldUsd)} USD` : ""}
+              {goldSar != null && goldQuote !== "SAR"
+                ? ` · ${formatMoney(goldSar)} SAR`
+                : ""}
             </p>
             <p className="mt-1 text-sm tabular-nums text-amber-900">
               🥈 أونصة فضة: {silverUsd == null ? "…" : formatMoney(silverUsd)} USD
             </p>
+            <p className="mt-1 text-[11px] text-amber-800/80">
+              غرام عيار 24 ≈ {gram24 == null ? "…" : formatMoney(gram24)} {goldQuote}
+              {" · "}1 أونصة = {TROY_OUNCE_GRAMS} غ
+            </p>
             <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-semibold"
+                onClick={() => {
+                  setFrom("XAU");
+                  setTo(goldQuote);
+                }}
+              >
+                ذهب → {goldQuote}
+              </button>
               <button
                 type="button"
                 className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-semibold"
@@ -842,16 +893,6 @@ function CurrencyPanel({
                 }}
               >
                 ذهب → دولار
-              </button>
-              <button
-                type="button"
-                className="rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-semibold"
-                onClick={() => {
-                  setFrom("XAU");
-                  setTo("SAR");
-                }}
-              >
-                ذهب → ريال
               </button>
             </div>
           </div>
@@ -897,6 +938,80 @@ function CurrencyPanel({
               ))}
             </ul>
           </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-amber-200 bg-white p-4">
+          <p className="text-sm font-bold text-[#222]">سعر غرام الذهب حسب العيار</p>
+          <p className="mt-1 text-[11px] text-[#888]">
+            محسوب من سعر الأونصة العالمي × (العيار ÷ 24) · بعملة {goldQuote}
+          </p>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-[#eee]">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-50 text-[#666]">
+                <tr>
+                  <th className="px-3 py-2 text-start font-semibold">العيار</th>
+                  <th className="px-3 py-2 text-start font-semibold">نقاء</th>
+                  <th className="px-3 py-2 text-start font-semibold">
+                    سعر الغرام ({goldQuote})
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(karatRows || []).map((row) => (
+                  <tr key={row.karat} className="border-t border-[#eee]">
+                    <td className="px-3 py-2 font-semibold">عيار {row.karat}</td>
+                    <td className="px-3 py-2 tabular-nums text-[#666]">
+                      {((row.karat / 24) * 100).toFixed(1)}%
+                    </td>
+                    <td className="px-3 py-2 text-base font-bold tabular-nums text-amber-900">
+                      {formatMoney(row.perGram)}
+                    </td>
+                  </tr>
+                ))}
+                {!karatRows ? (
+                  <tr>
+                    <td colSpan={3} className="px-3 py-4 text-center text-[#888]">
+                      جاري التحميل…
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-amber-200 bg-white p-4">
+          <p className="text-sm font-bold text-[#222]">ربع · نص · ليرة ذهب</p>
+          <p className="mt-1 text-[11px] text-[#888]">
+            أوزان الليرة الجمهورية الشائعة (عيار 22) · بعملة {goldQuote}
+          </p>
+          <div className="mt-3 grid gap-2">
+            {(liraRows || []).map((row) => (
+              <div
+                key={row.key}
+                className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-3"
+              >
+                <div>
+                  <p className="font-bold text-amber-950">{row.labelAr}</p>
+                  <p className="text-[11px] text-amber-800/80">
+                    {row.grams} غ · عيار {row.karat}
+                  </p>
+                </div>
+                <p className="text-lg font-bold tabular-nums text-amber-950">
+                  {formatMoney(row.price)}{" "}
+                  <span className="text-xs font-semibold">{goldQuote}</span>
+                </p>
+              </div>
+            ))}
+            {!liraRows ? (
+              <p className="py-4 text-center text-sm text-[#888]">جاري التحميل…</p>
+            ) : null}
+          </div>
+          <p className="mt-2 text-[10px] leading-5 text-[#999]">
+            الأوزان معيارية للسوق (7.216 / 3.608 / 1.804 غ). السعر المحلي عند الصاغة قد يختلف قليلاً حسب الأجرة والعمولة.
+          </p>
         </div>
       </div>
     </PanelShell>
