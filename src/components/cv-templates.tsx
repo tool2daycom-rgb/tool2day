@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import {
   cvLabels,
+  isCvRtl,
   lines,
   type CvData,
   type CvLang,
@@ -200,7 +201,7 @@ function LevelBar({ level, color }: { level: number; color: string }) {
 
 export function CvTemplateView({ data, lang, template }: Props) {
   const L = cvLabels(lang);
-  const dir: "rtl" | "ltr" = lang === "ar" ? "rtl" : "ltr";
+  const dir: "rtl" | "ltr" = isCvRtl(lang) ? "rtl" : "ltr";
   const name = data.fullName.trim() || L.placeholderName;
   const title = data.title.trim() || L.placeholderTitle;
   const skillList = lines(data.skills);

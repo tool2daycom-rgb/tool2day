@@ -5,11 +5,13 @@ import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   buildCvPlainText,
   CV_TEMPLATES,
+  CV_UI_LANGUAGES,
   cvLabels,
   emptyCv,
   emptyEducation,
   emptyExperience,
   hardenCloneColors,
+  isCvRtl,
   MARITAL_OPTIONS_AR,
   MARITAL_OPTIONS_EN,
   toggleLanguageLine,
@@ -52,11 +54,11 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
   function onPhoto(file: File | null) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setError(lang === "ar" ? "اختر صورة فقط" : "Choose an image file");
+      setError(isCvRtl(lang) ? "اختر صورة فقط" : "Choose an image file");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setError(lang === "ar" ? "الصورة أكبر من 5MB" : "Image larger than 5MB");
+      setError(isCvRtl(lang) ? "الصورة أكبر من 5MB" : "Image larger than 5MB");
       return;
     }
     const reader = new FileReader();
@@ -103,7 +105,7 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
       const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
       const name = `${data.fullName.trim() || "cv"}-tool2day.pdf`;
       await downloadBlob(blob, name);
-      setNote(lang === "ar" ? "تم تنزيل PDF" : "PDF downloaded");
+      setNote(isCvRtl(lang) ? "تم تنزيل PDF" : "PDF downloaded");
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل التنزيل");
     } finally {
@@ -120,7 +122,7 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
       }),
       `${data.fullName.trim() || "cv"}-tool2day.txt`,
     );
-    setNote(lang === "ar" ? "تم تنزيل TXT" : "TXT downloaded");
+    setNote(isCvRtl(lang) ? "تم تنزيل TXT" : "TXT downloaded");
   }
 
   return (
@@ -143,7 +145,7 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
             >
               {CV_TEMPLATES.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {lang === "ar" ? t.labelAr : t.labelEn}
+                  {isCvRtl(lang) ? t.labelAr : t.labelEn}
                 </option>
               ))}
             </select>
@@ -153,10 +155,13 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
             <select
               className={`${field} mt-1`}
               value={lang}
-              onChange={(e) => setLang(e.target.value as CvLang)}
+              onChange={(e) => setLang(e.target.value)}
             >
-              <option value="ar">العربية</option>
-              <option value="en">English</option>
+              {CV_UI_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.flag} {l.native} — {l.english}
+                </option>
+              ))}
             </select>
           </label>
         </div>
@@ -181,7 +186,7 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
               className="rounded-md border border-[#ddd] bg-white px-3 py-2 text-xs font-bold"
               onClick={() => photoRef.current?.click()}
             >
-              {lang === "ar" ? "رفع صورة" : "Upload photo"}
+              {L.uploadPhoto}
             </button>
             {data.photoDataUrl ? (
               <button
@@ -189,7 +194,7 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
                 className="text-xs text-red-600"
                 onClick={() => patch("photoDataUrl", "")}
               >
-                {lang === "ar" ? "إزالة" : "Remove"}
+                {L.removePhoto}
               </button>
             ) : null}
             <input
@@ -233,10 +238,10 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
               value={data.maritalStatus}
               onChange={(e) => patch("maritalStatus", e.target.value)}
             >
-              {(lang === "ar" ? MARITAL_OPTIONS_AR : MARITAL_OPTIONS_EN).map(
+              {(isCvRtl(lang) ? MARITAL_OPTIONS_AR : MARITAL_OPTIONS_EN).map(
                 (opt) => (
                   <option key={opt || "_"} value={opt}>
-                    {opt || (lang === "ar" ? "— اختر —" : "— Select —")}
+                    {opt || (isCvRtl(lang) ? "— اختر —" : "— Select —")}
                   </option>
                 ),
               )}
@@ -363,7 +368,9 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
               className={`${field} mt-1 min-h-24`}
               value={data.skills}
               onChange={(e) => patch("skills", e.target.value)}
-              placeholder={lang === "ar" ? "سطر لكل مهارة" : "One skill per line"}
+              placeholder={
+                isCvRtl(lang) ? "سطر لكل مهارة" : "One skill per line"
+              }
             />
           </label>
           <label className="block text-xs font-semibold text-[#555]">
@@ -373,7 +380,7 @@ export function CvBuilderWorkspace({ slug, title, description }: Props) {
               value={data.languages}
               onChange={(e) => patch("languages", e.target.value)}
               placeholder={
-                lang === "ar" ? "العربية\nEnglish (B2)" : "Arabic\nEnglish (B2)"
+                isCvRtl(lang) ? "العربية\nEnglish (B2)" : "Arabic\nEnglish (B2)"
               }
             />
             <p className="mt-2 text-[11px] font-semibold text-[#777]">
