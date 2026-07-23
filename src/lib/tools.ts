@@ -141,7 +141,7 @@ export const tools: Tool[] = [
     slug: "video-to-text",
     title: "تحويل فيديو إلى نص",
     description:
-      "تفريغ كلام الفيديو أو الصوت إلى نص مكتوب مع اختيار لغة الكلام ودقة عالية عبر Whisper.",
+      "تفريغ كلام الفيديو أو الصوت إلى نص مكتوب حتى 30 دقيقة، مع اختيار اللغة واستخراج كل الكلمات بدقة عالية.",
     category: "video",
     accept: "video/*,audio/*",
     icon: Subtitles,

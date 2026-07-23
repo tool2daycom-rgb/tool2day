@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
+  MAX_TRANSCRIBE_DURATION_SEC,
+  MAX_VIDEO_TO_TEXT_MB,
   TRANSCRIBE_LANGUAGES,
   transcribeMediaFile,
 } from "@/lib/processors/transcribe";
 import { formatProcessError } from "@/lib/processors/ffmpeg-client";
-import { MAX_CLIENT_FILE_MB } from "@/lib/processors/active-tools";
 
 type Props = {
   slug: string;
@@ -34,8 +35,8 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
   function onPick(list: FileList | null) {
     const f = list?.[0];
     if (!f) return;
-    if (f.size > MAX_CLIENT_FILE_MB * 1024 * 1024) {
-      setError(`الحد الأقصى ${MAX_CLIENT_FILE_MB}MB`);
+    if (f.size > MAX_VIDEO_TO_TEXT_MB * 1024 * 1024) {
+      setError(`الحد الأقصى ${MAX_VIDEO_TO_TEXT_MB}MB (حتى 30 دقيقة)`);
       return;
     }
     setFile(f);
@@ -67,9 +68,9 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
       setProvider(result.provider);
       const dur =
         result.durationSec != null
-          ? ` · مدة الصوت ${result.durationSec.toFixed(1)}ث`
+          ? ` · ${ (result.durationSec / 60).toFixed(1) } دقيقة`
           : "";
-      setStatus(`اكتمل التفريغ الكامل${dur} — راجع النص وعدّل إن لزم`);
+      setStatus(`اكتمل تفريغ كل الكلمات${dur} — راجع النص وعدّل إن لزم`);
       setProgress(100);
     } catch (e) {
       setError(formatProcessError(e));
@@ -94,14 +95,16 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
     );
   }
 
+  const maxMin = MAX_TRANSCRIBE_DURATION_SEC / 60;
+
   return (
     <div className="rounded-2xl border border-[#e8e8e8] bg-white p-5 shadow-sm sm:p-6">
       <p className="text-lg font-semibold text-[#111]">{title}</p>
       <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
       <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs leading-6 text-amber-950">
-        يُفرَّغ الفيديو كاملاً بمقاطع متتالية عبر نموذج Whisper Small عالي الدقة.
-        اختر لغة الكلام الصحيحة، وفضّل صوتاً واضحاً. التحميل الأول للنموذج أكبر
-        وقد يستغرق دقائق ثم يُحفظ محلياً. راجع النص بعد الاستخراج.
+        يدعم فيديو حتى <strong>{maxMin} دقيقة</strong> من الكلام. يُفرَّغ الملف
+        كاملاً بمقاطع متتالية لاستخراج كل الكلمات. الفيديوهات الطويلة قد تستغرق
+        وقتاً أطول حسب جهازك — أبقِ الصفحة مفتوحة حتى يكتمل.
       </p>
 
       <div
@@ -117,7 +120,8 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
           {file ? file.name : "اسحب فيديو أو صوت هنا أو انقر للاختيار"}
         </p>
         <p className="mt-1 text-xs text-[#888]">
-          MP4 / WebM / MOV / MP3 / WAV — حتى {MAX_CLIENT_FILE_MB}MB
+          MP4 / WebM / MOV / MP3 / WAV — حتى {maxMin} دقيقة · {MAX_VIDEO_TO_TEXT_MB}
+          MB
         </p>
         <input
           ref={inputRef}
@@ -150,7 +154,7 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
         onClick={() => void run()}
         className="mt-4 w-full rounded-md bg-[#111] px-4 py-3 text-sm font-bold text-white hover:bg-[#333] disabled:opacity-50"
       >
-        {busy ? "جارٍ التفريغ…" : "حوّل الفيديو إلى نص"}
+        {busy ? "جارٍ تفريغ كل الكلمات…" : "حوّل الفيديو إلى نص"}
       </button>
 
       {busy || progress > 0 ? (

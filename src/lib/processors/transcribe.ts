@@ -28,17 +28,23 @@ export const TRANSCRIBE_LANGUAGES: TranscribeLanguage[] = [
 ];
 
 const SAMPLE_RATE = 16000;
-/** مقاطع قصيرة بدقّة أعلى وتغطية كاملة للفيديو */
+/** مقاطع قصيرة بدقّة أعلى وتغطية كاملة */
 const CHUNK_SECONDS = 20;
 const OVERLAP_SECONDS = 2;
+/** الحد الأقصى المدعوم: 30 دقيقة */
+export const MAX_TRANSCRIBE_DURATION_SEC = 30 * 60;
+/** حجم ملف معقول لفيديو ~30 دقيقة */
+export const MAX_VIDEO_TO_TEXT_MB = 800;
+/** لا نرفع للصوت الطويل للخادم (حد Vercel) */
+const MAX_SERVER_AUDIO_BYTES = 20 * 1024 * 1024;
 
 /**
- * يستخرج صوت الفيديو كـ WAV أحادي 16kHz لأقصى دقة تفريغ.
+ * يستخرج صوت الفيديو كـ WAV أحادي 16kHz — يقصّ عند 30 دقيقة كحد أقصى.
  */
 export async function extractTranscriptionAudio(
   file: File,
   onProgress?: (ratio: number) => void,
-): Promise<File> {
+): Promise<{ audio: File; durationSec: number }> {
   const ffmpeg = await getFFmpeg(onProgress);
   const inputExt =
     file.name.split(".").pop()?.toLowerCase() ||
@@ -49,6 +55,8 @@ export async function extractTranscriptionAudio(
   await runFFmpeg([
     "-i",
     input,
+    "-t",
+    String(MAX_TRANSCRIBE_DURATION_SEC),
     "-vn",
     "-ac",
     "1",
@@ -62,13 +70,25 @@ export async function extractTranscriptionAudio(
   await ffmpeg.deleteFile(input);
   await ffmpeg.deleteFile(output);
   const blob = toBlob(data, "audio/wav");
-  return new File([blob], "speech.wav", { type: "audio/wav" });
+  const audio = new File([blob], "speech.wav", { type: "audio/wav" });
+  // تقدير المدة من حجم PCM 16-bit mono
+  const durationSec = Math.max(
+    0.1,
+    (blob.size - 44) / (SAMPLE_RATE * 2),
+  );
+  if (durationSec > MAX_TRANSCRIBE_DURATION_SEC + 1) {
+    throw new Error(
+      `الحد الأقصى ${MAX_TRANSCRIBE_DURATION_SEC / 60} دقيقة — قصّ الفيديو أولاً`,
+    );
+  }
+  return { audio, durationSec };
 }
 
 export async function transcribeViaServer(
   audio: File,
   languageCode: string,
 ): Promise<{ text: string; provider: string } | null> {
+  if (audio.size > MAX_SERVER_AUDIO_BYTES) return null;
   const form = new FormData();
   form.append("file", audio, audio.name);
   form.append("language", languageCode);
@@ -102,10 +122,6 @@ let pipelinePromise: Promise<{
   label: string;
 }> | null = null;
 
-/**
- * أفضل جودة عملية في المتصفح: whisper-small fp32 على WASM.
- * نتجنب WebGPU (غالباً يقطع النص أو يشوّهه) و q8 المعطوب.
- */
 async function getLocalWhisper(
   onStatus?: (msg: string) => void,
 ): Promise<{ pipe: WhisperPipeline; label: string }> {
@@ -209,7 +225,6 @@ function extractText(result: WhisperResult | string): string {
   return (result.text || "").trim();
 }
 
-/** إزالة تكرار نهاية/بداية المقاطع المتداخلة */
 function mergeChunkTexts(parts: string[]): string {
   if (!parts.length) return "";
   let out = parts[0]!.trim();
@@ -234,26 +249,47 @@ function mergeChunkTexts(parts: string[]): string {
   return out.replace(/\s+/gu, " ").trim();
 }
 
-function splitAudioChunks(samples: Float32Array): Float32Array[] {
+function formatClock(sec: number) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function yieldUi() {
+  return new Promise<void>((r) => setTimeout(r, 0));
+}
+
+/**
+ * يمرّ على الصوت بمقاطع متداخلة دون نسخ كل المقاطع في الذاكرة دفعة واحدة.
+ */
+async function* iterateAudioChunks(
+  samples: Float32Array,
+): AsyncGenerator<{ view: Float32Array; index: number; total: number }> {
   const chunkLen = CHUNK_SECONDS * SAMPLE_RATE;
   const hop = Math.max(
     SAMPLE_RATE,
     (CHUNK_SECONDS - OVERLAP_SECONDS) * SAMPLE_RATE,
   );
-  const chunks: Float32Array[] = [];
+  const total =
+    samples.length <= chunkLen
+      ? 1
+      : Math.ceil(Math.max(1, samples.length - chunkLen) / hop) + 1;
+
   if (samples.length <= chunkLen) {
-    chunks.push(samples);
-    return chunks;
+    yield { view: samples, index: 0, total: 1 };
+    return;
   }
+
+  let index = 0;
   for (let start = 0; start < samples.length; start += hop) {
     const end = Math.min(samples.length, start + chunkLen);
-    const slice = samples.subarray(start, end);
-    // تجاهل ذيل أقصر من نصف ثانية بلا كلام مفيد غالباً
-    if (slice.length < SAMPLE_RATE * 0.4 && chunks.length > 0) break;
-    chunks.push(new Float32Array(slice));
+    const view = samples.subarray(start, end);
+    if (view.length < SAMPLE_RATE * 0.4 && index > 0) break;
+    yield { view, index, total };
+    index += 1;
     if (end >= samples.length) break;
   }
-  return chunks;
 }
 
 export async function transcribeLocally(
@@ -261,19 +297,27 @@ export async function transcribeLocally(
   languageCode: string,
   onStatus?: (msg: string) => void,
   onProgress?: (ratio: number) => void,
+  knownDurationSec?: number,
 ): Promise<{ text: string; provider: string; durationSec: number }> {
   const { pipe, label } = await getLocalWhisper(onStatus);
-  onStatus?.("تحليل الصوت وتقسيمه لمقاطع كاملة…");
+  onStatus?.("تحميل الصوت في الذاكرة وتقسيمه لمقاطع…");
   const samples = await decodeWavToFloat32(audio);
-  const durationSec = samples.length / SAMPLE_RATE;
+  const durationSec = knownDurationSec ?? samples.length / SAMPLE_RATE;
+
+  if (durationSec > MAX_TRANSCRIBE_DURATION_SEC + 0.5) {
+    throw new Error(
+      `الحد الأقصى ${MAX_TRANSCRIBE_DURATION_SEC / 60} دقيقة من الكلام`,
+    );
+  }
+
+  const mins = (durationSec / 60).toFixed(1);
   onStatus?.(
-    `مدة الصوت ${durationSec.toFixed(1)} ثانية — تفريغ كل المقاطع…`,
+    `مدة الصوت ${mins} دقيقة (${formatClock(durationSec)}) — تفريغ كل الكلمات…`,
   );
 
   const lang = TRANSCRIBE_LANGUAGES.find((l) => l.code === languageCode);
   const baseOpts: Record<string, unknown> = {
     task: "transcribe",
-    // ضروري لمعالجة أطول من ~30ث داخل المقطع إن لزم
     return_timestamps: true,
     chunk_length_s: 30,
     stride_length_s: 5,
@@ -282,21 +326,34 @@ export async function transcribeLocally(
     baseOpts.language = lang.whisperName;
   }
 
-  const chunks = splitAudioChunks(samples);
   const parts: string[] = [];
+  let processed = 0;
+  let totalChunks = 1;
 
-  for (let i = 0; i < chunks.length; i++) {
-    onStatus?.(`تفريغ المقطع ${i + 1} من ${chunks.length}…`);
-    onProgress?.(0.15 + (0.8 * i) / Math.max(1, chunks.length));
-    const result = await pipe(chunks[i]!, baseOpts);
+  for await (const { view, index, total } of iterateAudioChunks(samples)) {
+    totalChunks = total;
+    const at = (index * CHUNK_SECONDS * (1 - OVERLAP_SECONDS / CHUNK_SECONDS));
+    onStatus?.(
+      `تفريغ المقطع ${index + 1} من ~${total} · عند ${formatClock(at)} / ${formatClock(durationSec)}`,
+    );
+    onProgress?.(0.12 + (0.85 * index) / Math.max(1, total));
+    // نسخ مقطع واحد فقط للنموذج (يتجنب مشاكل الـ views أحياناً)
+    const slice = new Float32Array(view);
+    const result = await pipe(slice, baseOpts);
     const text = extractText(result);
     if (text) parts.push(text);
+    processed += 1;
+    await yieldUi();
   }
 
   onProgress?.(0.98);
   const text = mergeChunkTexts(parts);
   if (!text) throw new Error("لم يُكتشف كلام واضح في الملف");
-  return { text, provider: `${label} · ${chunks.length} مقطع`, durationSec };
+  return {
+    text,
+    provider: `${label} · ${processed || totalChunks} مقطع · حتى 30د`,
+    durationSec,
+  };
 }
 
 export async function transcribeMediaFile(
@@ -305,21 +362,40 @@ export async function transcribeMediaFile(
   onProgress?: (ratio: number) => void,
   onStatus?: (msg: string) => void,
 ): Promise<{ text: string; provider: string; durationSec?: number }> {
-  onStatus?.("استخراج وتنقية الصوت من الملف…");
-  onProgress?.(0.05);
-  const audio = await extractTranscriptionAudio(file, (r) =>
-    onProgress?.(0.05 + r * 0.1),
-  );
-  onStatus?.("محاولة التفريغ عالي الدقة على الخادم…");
-  try {
-    const server = await transcribeViaServer(audio, languageCode);
-    if (server) {
-      onProgress?.(1);
-      return server;
-    }
-  } catch {
-    // سقوط إلى النموذج المحلي عالي الجودة
+  if (file.size > MAX_VIDEO_TO_TEXT_MB * 1024 * 1024) {
+    throw new Error(`الحد الأقصى لحجم الملف ${MAX_VIDEO_TO_TEXT_MB}MB`);
   }
-  onStatus?.("التفريغ الكامل داخل المتصفح (جودة عالية)…");
-  return transcribeLocally(audio, languageCode, onStatus, onProgress);
+
+  onStatus?.("استخراج الصوت (حتى 30 دقيقة كحد أقصى)…");
+  onProgress?.(0.04);
+  const { audio, durationSec } = await extractTranscriptionAudio(file, (r) =>
+    onProgress?.(0.04 + r * 0.08),
+  );
+
+  onStatus?.(
+    `استُخرج ${formatClock(durationSec)} من الصوت — بدء التفريغ الكامل…`,
+  );
+
+  // الملفات القصيرة فقط قد تمر عبر الخادم إن وُجد مفتاح
+  if (audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= 8 * 60) {
+    onStatus?.("محاولة التفريغ عالي الدقة على الخادم…");
+    try {
+      const server = await transcribeViaServer(audio, languageCode);
+      if (server) {
+        onProgress?.(1);
+        return { ...server, durationSec };
+      }
+    } catch {
+      // سقوط محلي
+    }
+  }
+
+  onStatus?.("التفريغ الكامل داخل المتصفح (جودة عالية · حتى 30 دقيقة)…");
+  return transcribeLocally(
+    audio,
+    languageCode,
+    onStatus,
+    onProgress,
+    durationSec,
+  );
 }
