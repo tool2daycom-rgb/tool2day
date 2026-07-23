@@ -197,7 +197,7 @@ export function calculateLoan(
 
 export function formatMoney(n: number, digits = 2): string {
   if (!Number.isFinite(n)) return "—";
-  return n.toLocaleString("ar-EG", {
+  return n.toLocaleString("en-US", {
     maximumFractionDigits: digits,
     minimumFractionDigits: Math.min(2, digits),
   });

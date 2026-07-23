@@ -56,7 +56,7 @@ export function cityLabel(c: WorldCity): string {
 }
 
 export function formatInTz(date: Date, tz: string): string {
-  return new Intl.DateTimeFormat("ar", {
+  return new Intl.DateTimeFormat("en-GB", {
     timeZone: tz,
     weekday: "short",
     year: "numeric",

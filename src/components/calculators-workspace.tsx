@@ -679,11 +679,13 @@ function CurrencyPanel({
   const gram24 =
     goldOunceQuote != null ? goldGramPure(goldOunceQuote) : null;
 
-  const goldQuoteOptions = ["SAR", "USD", "AED", "EGP", "KWD", "QAR", "BHD", "OMR", "TRY", "EUR", "GBP"];
+  const goldQuoteOptions = WORLD_CURRENCIES.filter((c) => c.kind === "fiat").map(
+    (c) => c.code,
+  );
 
   return (
     <PanelShell title={title} description={description} wide>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#666]">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#666] [font-variant-numeric:lining-nums_tabular-nums]">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -695,7 +697,15 @@ function CurrencyPanel({
           </button>
           {rates?.date ? <span>آخر تحديث للسوق: {rates.date}</span> : null}
           {rates?.fetchedAt ? (
-            <span>· سُحب {new Date(rates.fetchedAt).toLocaleTimeString("ar")}</span>
+            <span>
+              · سُحب{" "}
+              {new Date(rates.fetchedAt).toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true,
+              })}
+            </span>
           ) : null}
         </div>
         <p className="text-[11px] text-[#888]">
@@ -941,11 +951,36 @@ function CurrencyPanel({
         </div>
       </div>
 
+      <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-amber-950">أسعار الذهب</p>
+            <p className="mt-0.5 text-[11px] text-amber-900/80">
+              غرام لكل العيارات · ربع / نص / ليرة ذهب (عيار 22)
+            </p>
+          </div>
+          <label className="block min-w-[220px] text-xs font-bold text-amber-950">
+            اختر عملة العرض
+            <select
+              className={`${field} mt-1 border-amber-300 bg-white font-semibold`}
+              value={goldQuote}
+              onChange={(e) => setGoldQuote(e.target.value)}
+            >
+              {goldQuoteOptions.map((code) => (
+                <option key={code} value={code}>
+                  {currencyLabel(code)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="rounded-xl border border-amber-200 bg-white p-4">
           <p className="text-sm font-bold text-[#222]">سعر غرام الذهب حسب العيار</p>
           <p className="mt-1 text-[11px] text-[#888]">
-            محسوب من سعر الأونصة العالمي × (العيار ÷ 24) · بعملة {goldQuote}
+            عيارات 24 · 22 · 21 · 18 · 14 · بعملة {goldQuote}
           </p>
           <div className="mt-3 overflow-x-auto rounded-lg border border-[#eee]">
             <table className="w-full text-sm">
@@ -985,7 +1020,7 @@ function CurrencyPanel({
         <div className="rounded-xl border border-amber-200 bg-white p-4">
           <p className="text-sm font-bold text-[#222]">ربع · نص · ليرة ذهب</p>
           <p className="mt-1 text-[11px] text-[#888]">
-            أوزان الليرة الجمهورية الشائعة (عيار 22) · بعملة {goldQuote}
+            أوزان 1.804 / 3.608 / 7.216 غ · عيار 22 · بعملة {goldQuote}
           </p>
           <div className="mt-3 grid gap-2">
             {(liraRows || []).map((row) => (
@@ -996,7 +1031,7 @@ function CurrencyPanel({
                 <div>
                   <p className="font-bold text-amber-950">{row.labelAr}</p>
                   <p className="text-[11px] text-amber-800/80">
-                    {row.grams} غ · عيار {row.karat}
+                    {row.grams} g · karat {row.karat}
                   </p>
                 </div>
                 <p className="text-lg font-bold tabular-nums text-amber-950">
@@ -1010,7 +1045,7 @@ function CurrencyPanel({
             ) : null}
           </div>
           <p className="mt-2 text-[10px] leading-5 text-[#999]">
-            الأوزان معيارية للسوق (7.216 / 3.608 / 1.804 غ). السعر المحلي عند الصاغة قد يختلف قليلاً حسب الأجرة والعمولة.
+            الأوزان معيارية للسوق (7.216 / 3.608 / 1.804 g). السعر المحلي عند الصاغة قد يختلف قليلاً حسب الأجرة والعمولة.
           </p>
         </div>
       </div>
