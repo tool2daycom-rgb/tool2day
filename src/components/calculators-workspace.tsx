@@ -94,8 +94,8 @@ function PanelShell({
         wide ? "" : ""
       }`}
     >
-      <p className="text-lg font-semibold text-[#111]">{title}</p>
-      <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
+      <p className="text-lg font-extrabold text-[#0a0a0a]">{title}</p>
+      <p className="mt-1 text-sm font-semibold leading-7 text-[#333]">{description}</p>
       <div className="mt-5 space-y-4">{children}</div>
     </div>
   );

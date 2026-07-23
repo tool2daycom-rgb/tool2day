@@ -1242,7 +1242,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       <p className="mt-3 text-xs text-[#888]">
         {kind === "media-downloader"
           ? `${title} — مجاني · استخراج الروابط العامة فقط · احترم حقوق النشر`
-          : `${title} — مجاني بالكامل · بدون علامة مائية · معالجة في المتصفح`}
+          : `${title} — مجاني بالكامل · معالجة في المتصفح`}
       </p>
     </div>
   );

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { CalculatorsWorkspace } from "@/components/calculators-workspace";
 import { GeneratorsWorkspace } from "@/components/generators-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
@@ -72,6 +72,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
+function cleanTagline(tagline: string) {
+  return tagline
+    .replace(/\s*[—–-]\s*بدون علامة مائية/g, "")
+    .replace(/\s*وبدون علامة مائية/g, "")
+    .replace(/\s*بدون علامة مائية/g, "")
+    .trim();
+}
+
 export default async function ToolPage({ params }: Props) {
   const { slug } = await params;
   if (slug === "video-editor") {
@@ -101,9 +109,11 @@ export default async function ToolPage({ params }: Props) {
     kind === "crypto-calculator" ||
     kind === "timezone-calculator" ||
     kind === "currency-exchange";
+  const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const seo = getToolSeoContent(tool);
-  const isWide = isPdf || isCv || kind === "currency-exchange";
+  const isWide = isPdf || isCv || isCurrency;
+  const tagline = cleanTagline(seo.tagline);
 
   return (
     <div
@@ -113,24 +123,51 @@ export default async function ToolPage({ params }: Props) {
     >
       <Link
         href={`/#${category.anchor}`}
-        className="text-sm font-semibold text-[#2563eb] transition hover:underline"
+        className="text-sm font-bold text-[#1d4ed8] transition hover:underline"
       >
         ← {category.sectionTitle}
       </Link>
 
       <div className="mt-8 flex flex-col items-center text-center">
-        <BrandMarkAnimated size={40} motion="morph" className="mb-4" />
-        <div className="flex items-center justify-center gap-3">
-          <Icon className="h-7 w-7 stroke-[1.5] text-[#222]" />
-          <h1 className="text-3xl font-bold text-[#111] sm:text-4xl">
+        <Link
+          href="/"
+          className="mb-5 inline-flex transition hover:opacity-90"
+          aria-label="Tool2Day — العودة للصفحة الرئيسية"
+        >
+          <Image
+            src="/brand/preview-tool2day-eyes.png"
+            alt="TOOL2DAY"
+            width={420}
+            height={120}
+            className="h-14 w-auto object-contain sm:h-[4.25rem]"
+            priority
+            unoptimized
+          />
+        </Link>
+
+        <div className="flex items-center justify-center gap-3 sm:gap-4">
+          {isCurrency ? (
+            <Image
+              src="/brand/currency-gold-coin.png"
+              alt=""
+              width={96}
+              height={96}
+              className="h-14 w-14 rounded-full object-cover shadow-md sm:h-16 sm:w-16"
+              unoptimized
+              aria-hidden
+            />
+          ) : (
+            <Icon className="h-8 w-8 stroke-[2] text-[#111]" />
+          )}
+          <h1 className="text-3xl font-extrabold tracking-tight text-[#0a0a0a] sm:text-4xl">
             {tool.title}
           </h1>
         </div>
-        <p className="mt-3 max-w-xl text-base leading-8 text-[#555]">
-          {seo.tagline}
+        <p className="mt-3 max-w-xl text-base font-semibold leading-8 text-[#222]">
+          {tagline}
         </p>
-        <p className="mt-2 text-sm font-semibold text-emerald-700">
-          مجاني بالكامل · بدون علامة مائية
+        <p className="mt-2 text-sm font-extrabold text-emerald-800">
+          مجاني بالكامل
         </p>
       </div>
 
