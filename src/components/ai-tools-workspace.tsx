@@ -144,12 +144,14 @@ function OcrPanel({
   const [error, setError] = useState<string | null>(null);
   const [langs, setLangs] = useState("auto");
   const [detected, setDetected] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
   async function run(f: File, langOverride?: string) {
     setBusy(true);
     setError(null);
     setText("");
     setDetected(null);
+    setHint(null);
     beginToolUse(slug);
     try {
       const out = await runOcr(f, langOverride ?? langs, (p, s) => {
@@ -158,6 +160,7 @@ function OcrPanel({
       });
       setText(out.text || "لم يُعثر على نص واضح في الصورة.");
       setDetected(out.langLabel);
+      if (out.warning) setHint(out.warning);
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل الاستخراج");
     } finally {
@@ -170,6 +173,7 @@ function OcrPanel({
     setText("");
     setError(null);
     setDetected(null);
+    setHint(null);
     if (f) void run(f);
   }
 
@@ -197,8 +201,13 @@ function OcrPanel({
         </select>
       </label>
       <p className="text-[11px] font-semibold text-[#777]">
-        اختر اللغة يدوياً من القائمة الكاملة، أو اترك «تلقائي». للمستندات الألمانية: Deutsch + English.
+        للمستندات الألمانية اختر Deutsch + English. ارفع صورة واضحة بحجم كبير (يفضّل أكثر من 1500 بكسل) وليس لقطة شاشة مصغّرة.
       </p>
+      {hint ? (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+          {hint}
+        </p>
+      ) : null}
       {detected ? (
         <p className="text-xs font-bold text-emerald-800">
           اللغة المكتشفة: {detected}

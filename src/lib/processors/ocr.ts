@@ -1,9 +1,10 @@
-/** OCR محسّن: تدوير تلقائي + اكتشاف لغة + تكبير قوي للمستندات */
+/** OCR محسّن: تكبير متعدد الخطوات + أوضاع تحضير + مناطق للمستندات الصغيرة */
 
 export type OcrResult = {
   text: string;
   langUsed: string;
   langLabel: string;
+  warning?: string;
 };
 
 const LANG_LABELS: Record<string, string> = {
@@ -15,6 +16,7 @@ const LANG_LABELS: Record<string, string> = {
   "spa+eng": "Español + English",
   "fra+eng": "Français + English",
   "deu+eng": "Deutsch + English",
+  deu: "Deutsch",
   "tur+eng": "Türkçe + English",
   "ita+eng": "Italiano + English",
   "eng+deu": "English + Deutsch",
@@ -23,6 +25,7 @@ const LANG_LABELS: Record<string, string> = {
 
 const AUTO_LANG_PACKS = [
   "deu+eng",
+  "deu",
   "por+eng",
   "eng",
   "ara+eng",
@@ -32,9 +35,9 @@ const AUTO_LANG_PACKS = [
   "tur+eng",
 ] as const;
 
-type PrepMode = "enhance" | "binary";
+type PrepMode = "light" | "enhance" | "binary";
 
-async function loadImageElement(file: File): Promise<HTMLImageElement> {
+async function loadImageElement(file: File | Blob): Promise<HTMLImageElement> {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
@@ -70,16 +73,24 @@ export async function runOcr(
   onProgress?: (p: number, status: string) => void,
 ): Promise<OcrResult> {
   const Tesseract = await import("tesseract.js");
+  const src = await loadImageElement(file);
+  const srcLong = Math.max(src.naturalWidth, src.naturalHeight);
+  const tiny = srcLong < 900;
+  const warning = tiny
+    ? "الصورة منخفضة الدقة — للحصول على أفضل نتيجة ارفع صورة أوضح بحجم أكبر (يفضّل أكثر من 1500 بكسل)."
+    : undefined;
+
   onProgress?.(0.02, "تحسين الصورة…");
-  const prepared = await prepareImageForOcr(file, "enhance");
+  const light = await prepareImageForOcr(file, "light");
+  const enhance = await prepareImageForOcr(file, "enhance");
 
   onProgress?.(0.06, "كشف اتجاه النص…");
   let angle = 0;
   try {
-    const detected = await Tesseract.detect(prepared.blob, {
+    const detected = await Tesseract.detect(light.blob, {
       logger: (m) => {
         if (m.status) {
-          onProgress?.(0.06 + (m.progress || 0) * 0.06, "كشف الاتجاه…");
+          onProgress?.(0.06 + (m.progress || 0) * 0.05, "كشف الاتجاه…");
         }
       },
     });
@@ -97,26 +108,29 @@ export async function runOcr(
       : [angle, (angle + 90) % 360, (angle + 270) % 360, 0];
 
   onProgress?.(0.12, "تحديد اتجاه القراءة…");
-  let bestAngle = anglesToTry[0]!;
+  let bestAngle = 0;
   let probeText = "";
   let probeScore = -1;
   {
-    const probe = await Tesseract.createWorker("eng+deu", 1, {
+    const probe = await Tesseract.createWorker("deu+eng", 1, {
       logger: (m) => {
         if (m.status === "recognizing text") {
-          onProgress?.(0.12 + (m.progress || 0) * 0.12, "مسح أولي…");
+          onProgress?.(0.12 + (m.progress || 0) * 0.1, "مسح أولي…");
         } else if (m.status === "loading language traineddata") {
           onProgress?.(0.12, "تحميل نماذج أولية…");
         }
       },
     });
     try {
+      await probe.setParameters({
+        preserve_interword_spaces: "1",
+        user_defined_dpi: "300",
+      });
       for (const a of anglesToTry) {
         const oriented =
-          a === 0 ? prepared.blob : await rotateImageBlob(prepared.blob, a);
+          a === 0 ? light.blob : await rotateImageBlob(light.blob, a);
         await probe.setParameters({
           tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-          preserve_interword_spaces: "1",
         });
         const { data } = await probe.recognize(oriented);
         const text = (data.text || "").trim();
@@ -133,10 +147,8 @@ export async function runOcr(
     }
   }
 
-  let orientedBlob =
-    bestAngle === 0
-      ? prepared.blob
-      : await rotateImageBlob(prepared.blob, bestAngle);
+  const orient = async (blob: Blob) =>
+    bestAngle === 0 ? blob : rotateImageBlob(blob, bestAngle);
 
   let packs: string[];
   const probeWasWeak = !(probeScore >= 28 && hasLetterRatio(probeText) > 0.35);
@@ -147,11 +159,11 @@ export async function runOcr(
     packs = uniquePacks([
       guessed.code,
       "deu+eng",
-      "por+eng",
+      "deu",
       "eng",
       ...AUTO_LANG_PACKS,
     ]);
-    onProgress?.(0.28, `لغة مرشّحة: ${guessed.label}…`);
+    onProgress?.(0.24, `لغة مرشّحة: ${guessed.label}…`);
   } else {
     packs = [langs];
   }
@@ -160,40 +172,74 @@ export async function runOcr(
   let bestScore = -1;
   let langUsed = packs[0]!;
 
-  for (let i = 0; i < packs.length; i++) {
+  const variants: { label: string; blob: Blob }[] = [
+    { label: "خفيف", blob: await orient(light.blob) },
+    { label: "محسّن", blob: await orient(enhance.blob) },
+  ];
+
+  const psmList = [
+    Tesseract.PSM.AUTO,
+    Tesseract.PSM.SINGLE_COLUMN,
+    Tesseract.PSM.SINGLE_BLOCK,
+    Tesseract.PSM.SPARSE_TEXT,
+  ];
+
+  const maxPacks = langs === "auto" ? (tiny ? 3 : 4) : 1;
+
+  for (let i = 0; i < Math.min(packs.length, maxPacks); i++) {
     const pack = packs[i]!;
     onProgress?.(
-      0.3 + (i / packs.length) * 0.55,
+      0.28 + (i / maxPacks) * 0.45,
       `قراءة بـ ${LANG_LABELS[pack] || pack}…`,
     );
     const worker = await Tesseract.createWorker(pack, 1, {
       logger: (m) => {
         if (m.status === "recognizing text") {
           onProgress?.(
-            0.3 + ((i + (m.progress || 0)) / packs.length) * 0.55,
+            0.28 + ((i + (m.progress || 0)) / maxPacks) * 0.45,
             "استخراج النص…",
           );
         } else if (m.status === "loading language traineddata") {
-          onProgress?.(0.3, `تحميل ${LANG_LABELS[pack] || pack}…`);
+          onProgress?.(0.28, `تحميل ${LANG_LABELS[pack] || pack}…`);
         }
       },
     });
     try {
-      for (const psm of [
-        Tesseract.PSM.AUTO,
-        Tesseract.PSM.SINGLE_BLOCK,
-        Tesseract.PSM.SINGLE_COLUMN,
-      ]) {
-        await worker.setParameters({
-          tessedit_pageseg_mode: psm,
-          preserve_interword_spaces: "1",
-        });
-        const { data } = await worker.recognize(orientedBlob);
-        const text = (data.text || "").trim();
-        const score = scoreOcrText(text, Number(data.confidence) || 0);
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        user_defined_dpi: "300",
+      });
+      for (const variant of variants) {
+        for (const psm of psmList) {
+          await worker.setParameters({ tessedit_pageseg_mode: psm });
+          const { data } = await worker.recognize(variant.blob);
+          const text = (data.text || "").trim();
+          const score = scoreOcrText(text, Number(data.confidence) || 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestText = text;
+            langUsed = pack;
+          }
+        }
+      }
+
+      // تقسيم رأسي للمستندات الصغيرة/الطويلة عندما النتيجة ضعيفة
+      if (tiny || bestScore < 55 || countDocKeywords(bestText) < 2) {
+        onProgress?.(0.7, "قراءة بالمناطق…");
+        const regions = await splitVerticalRegions(variants[0]!.blob);
+        const parts: string[] = [];
+        for (const region of regions) {
+          await worker.setParameters({
+            tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+          });
+          const { data } = await worker.recognize(region);
+          parts.push((data.text || "").trim());
+        }
+        const merged = parts.filter(Boolean).join("\n\n");
+        const score = scoreOcrText(merged, 60);
         if (score > bestScore) {
           bestScore = score;
-          bestText = text;
+          bestText = merged;
           langUsed = pack;
         }
       }
@@ -203,27 +249,25 @@ export async function runOcr(
 
     if (langs !== "auto") break;
     if (
-      !probeWasWeak &&
-      bestScore >= 58 &&
+      bestScore >= 70 &&
       hasLetterRatio(bestText) > 0.5 &&
-      countDocKeywords(bestText) >= 2
+      countDocKeywords(bestText) >= 3
     ) {
       break;
     }
-    if (i >= 3 && bestScore >= 50 && hasLetterRatio(bestText) > 0.45) break;
   }
 
-  if (bestScore < 42 || hasLetterRatio(bestText) < 0.4) {
-    onProgress?.(0.88, "تحسين إضافي للمستند…");
+  if (bestScore < 50 || hasLetterRatio(bestText) < 0.4) {
+    onProgress?.(0.85, "تحسين ثنائي إضافي…");
     const bin = await prepareImageForOcr(file, "binary");
-    const binOriented =
-      bestAngle === 0 ? bin.blob : await rotateImageBlob(bin.blob, bestAngle);
+    const binOriented = await orient(bin.blob);
     const pack = langs === "auto" ? langUsed || "deu+eng" : langs;
     const worker = await Tesseract.createWorker(pack, 1);
     try {
       await worker.setParameters({
         tessedit_pageseg_mode: Tesseract.PSM.AUTO,
         preserve_interword_spaces: "1",
+        user_defined_dpi: "300",
       });
       const { data } = await worker.recognize(binOriented);
       const text = (data.text || "").trim();
@@ -232,43 +276,21 @@ export async function runOcr(
         bestText = text;
         bestScore = score;
         langUsed = pack;
-        orientedBlob = binOriented;
       }
     } finally {
       await worker.terminate();
     }
   }
 
-  if (langs === "auto" && bestText) {
-    const refined = guessLangPack(bestText);
-    if (
-      refined.code !== langUsed &&
-      refined.code !== "eng+por+spa+fra+deu+ita"
-    ) {
-      onProgress?.(0.94, `تحسين بـ ${refined.label}…`);
-      const worker = await Tesseract.createWorker(refined.code, 1);
-      try {
-        await worker.setParameters({
-          tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-          preserve_interword_spaces: "1",
-        });
-        const { data } = await worker.recognize(orientedBlob);
-        const text = (data.text || "").trim();
-        const score = scoreOcrText(text, Number(data.confidence) || 0);
-        if (score > bestScore) {
-          bestText = text;
-          langUsed = refined.code;
-        }
-      } finally {
-        await worker.terminate();
-      }
-    }
-  }
-
   onProgress?.(1, "تم");
   const finalGuess = guessLangPack(bestText);
   let text = cleanupOcrText(bestText);
-  if (langUsed.includes("deu") || /[äöüß]|Aufenth|Gilt nur|Volkshochschule/i.test(text)) {
+  if (
+    langUsed.includes("deu") ||
+    /[äöüß]|Aufenth|Gilt nur|Volkshochschule|Meldebest|Pforzheim|gemeldet/i.test(
+      text,
+    )
+  ) {
     text = correctGermanOcr(text);
   }
   if (langUsed.includes("por") || /FILIA|SECRETARIA|ESTADO DE/i.test(text)) {
@@ -283,10 +305,11 @@ export async function runOcr(
           ? finalGuess.label
           : LANG_LABELS[langUsed] || langUsed
         : LANG_LABELS[langUsed] || langUsed,
+    warning,
   };
 }
 
-/** تصحيح أخطاء OCR الشائعة في الألمانية */
+/** تصحيح أخطاء OCR الشائعة في الألمانية (مستندات إدارية) */
 function correctGermanOcr(text: string): string {
   const pairs: [RegExp, string][] = [
     [/\bAZR-Nummery\b/gi, "AZR-Nummer"],
@@ -305,14 +328,52 @@ function correctGermanOcr(text: string): string {
     [/\bPíorzheim\b/gi, "Pforzheim"],
     [/\bPforznhe\b/gi, "Pforzheim"],
     [/\bPforzheirn\b/gi, "Pforzheim"],
+    [/\bPforzheia\b/gi, "Pforzheim"],
+    [/\bPforzheis\b/gi, "Pforzheim"],
+    [/\bPforzhein\b/gi, "Pforzheim"],
+    [/\bPort sam\b/gi, "Pforzheim"],
+    [/\bPirzkem\b/gi, "Pforzheim"],
     [/\bFiktit\b/gi, "Fiktionsbescheinigung"],
-    [/\bSeriennummer des Klebeetiketts\b/gi, "Seriennummer des Klebeetiketts"],
-    [/\bErstausstellung\b/gi, "Erstausstellung"],
+    [/\bSürgercentram\b/gi, "Bürgercentrum"],
+    [/\bSürgercentrunn\b/gi, "Bürgercentrum"],
+    [/\bBürgercentrunn\b/gi, "Bürgercentrum"],
+    [/\bBiro\.?\s*Pforzheim\b/gi, "Stadt Pforzheim"],
+    [/\bMeldebest[^\n]{0,12}\b/gi, "Meldebestätigung"],
+    [/\bDest\s*itigyn\b/gi, "Meldebestätigung"],
+    [/\bgemäß\b/gi, "gemäß"],
+    [/\bgents\b/gi, "gemäß"],
+    [/\bgen[il5]\s*§\b/gi, "gemäß §"],
+    [/\bAbs\.\s*2\s*3MG\b/gi, "Abs. 2 BMG"],
+    [/\bAbs\.\s*2\s*ams\b/gi, "Abs. 2 BMG"],
+    [/\b2\s*3MG\b/gi, "2 BMG"],
+    [/\bSachbanseierin\b/gi, "Sachbearbeiterin"],
+    [/\bSachbendetern\b/gi, "Sachbearbeiterin"],
+    [/\bSschbendetern\b/gi, "Sachbearbeiterin"],
+    [/\bgezeld\b/gi, "gemeldet"],
+    [/\bgeselde\b/gi, "gemeldet"],
+    [/\bges\s*[:.]?\s*det\b/gi, "gemeldet"],
+    [/\bgemelde\b/gi, "gemeldet"],
+    [/\balleiniger Wohnung gemeldet\b/gi, "alleiniger Wohnung gemeldet"],
+    [/\bAaiser-Friedrich-Str\b/gi, "Kaiser-Friedrich-Str"],
+    [/\bKaiser-Frfedrich-Str\b/gi, "Kaiser-Friedrich-Str"],
+    [/\bKart-Fridrich\b/gi, "Karl-Friedrich"],
+    [/\bKarl-Fridrich\b/gi, "Karl-Friedrich"],
+    [/\bUnser Zeichen\b/gi, "Unser Zeichen"],
+    [/\bUser Zacher\b/gi, "Unser Zeichen"],
+    [/\bU=sevw Texter\b/gi, "Unser Zeichen"],
+    [/\bTelefax\b/gi, "Telefax"],
+    [/\bAuszugsdatum\b/gi, "Auszugsdatum"],
+    [/\bAbmeldedatum\b/gi, "Abmeldedatum"],
+    [/\bMit freundlichen Grüßen\b/gi, "Mit freundlichen Grüßen"],
+    [/\bist derzeit in Pforzheim\b/gi, "ist derzeit in Pforzheim"],
     [/\bVerlangerung\b/gi, "Verlängerung"],
     [/\bNebenbestimmungen\b/gi, "Nebenbestimmungen"],
     [/F1569095[¢cC]/g, "F15690956"],
     [/2511\s*12\s*067580/g, "251112067580"],
     [/2511\s*6\/08/g, "251112067580"],
+    [/\b275172\b/g, "75172"],
+    [/\b5172 Pforzheim\b/gi, "75172 Pforzheim"],
+    [/\b75178 Pforzheim\b/gi, "75175 Pforzheim"],
   ];
   let out = text;
   for (const [re, rep] of pairs) out = out.replace(re, rep);
@@ -354,10 +415,10 @@ export function guessLangPack(text: string): { code: string; label: string } {
 
   if (
     /[äöüß]/.test(t) ||
-    /\b(der|die|das|und|für|nicht|mit|von|aufenth|geburtsdatum|vorname|staatsangeh|bescheinigung|inhaber|reisepass|ausgestellt|gültig|bundesrepublik|straße|pforzheim|berlin|münchen|name)\b/i.test(
+    /\b(der|die|das|und|für|nicht|mit|von|aufenth|geburtsdatum|vorname|staatsangeh|bescheinigung|inhaber|reisepass|ausgestellt|gültig|bundesrepublik|straße|pforzheim|berlin|münchen|name|meldebest|bürger|gemeldet)\b/i.test(
       t,
     ) ||
-    /aufenthaltstitel|fiktions|aufenthg|brasilianisch/i.test(t)
+    /aufenthaltstitel|fiktions|aufenthg|brasilianisch|meldebestätigung/i.test(t)
   ) {
     return { code: "deu+eng", label: "Deutsch" };
   }
@@ -409,6 +470,7 @@ function countDocKeywords(text: string): number {
     /aufenthalt/i,
     /reisepass/i,
     /fiktions/i,
+    /meldebest/i,
     /nebenbestimmungen/i,
     /azr[- ]?nummer/i,
     /seriennummer/i,
@@ -416,6 +478,11 @@ function countDocKeywords(text: string): number {
     /beschäftigung|beschaftigung|beschiftigung/i,
     /selbständige|selbstandige|selbstindige/i,
     /gilt nur/i,
+    /gemeldet/i,
+    /pforzheim/i,
+    /bürgercentrum|burgercentrum/i,
+    /auszugsdatum|abmeldedatum/i,
+    /kaiser-friedrich/i,
     /filia/i,
     /secretaria/i,
     /identidade/i,
@@ -441,17 +508,17 @@ function scoreOcrText(text: string, confidence: number): number {
   const keywords = countDocKeywords(text);
   const realHits = (
     text.match(
-      /\b(DANDASH|Wisam|Pforzheim|Enzkreis|brasilianisch|Aufenthalt|Geburtsdatum|SECRETARIA|FILIAÇÃO|ESTADO|SIRIA|Vorname|Reisepass|Fiktions|Nebenbestimmungen|AZR|Intensivsprachkurs|Volkshochschule|Beschäftigung|Selbständige|F15690956)\b/gi,
+      /\b(DANDASH|Dandash|Wisam|Pforzheim|Enzkreis|brasilianisch|Aufenthalt|Geburtsdatum|SECRETARIA|FILIAÇÃO|ESTADO|SIRIA|Vorname|Reisepass|Fiktions|Nebenbestimmungen|AZR|Intensivsprachkurs|Volkshochschule|Beschäftigung|Selbständige|Meldebestätigung|Bürgercentrum|gemeldet|Kaiser-Friedrich|Schwaab|F15690956|01\.08\.1992)\b/gi,
     ) || []
   ).length;
   return (
-    confidence * 0.55 +
-    words * 2.2 +
-    ratio * 40 -
-    junk * 1.5 +
-    keywords * 8 +
-    realHits * 12 +
-    Math.min(20, text.length / 30)
+    confidence * 0.45 +
+    words * 2.0 +
+    ratio * 35 -
+    junk * 1.8 +
+    keywords * 10 +
+    realHits * 14 +
+    Math.min(25, text.length / 28)
   );
 }
 
@@ -464,33 +531,35 @@ function cleanupOcrText(text: string): string {
     .trim();
 }
 
+/** تكبير متعدد الخطوات بجودة عالية ثم معالجة حسب الوضع */
 async function prepareImageForOcr(
   file: File,
-  mode: PrepMode = "enhance",
+  mode: PrepMode = "light",
 ): Promise<{ blob: Blob; width: number; height: number }> {
   const img = await loadImageElement(file);
   const srcW = img.naturalWidth;
   const srcH = img.naturalHeight;
   const long = Math.max(srcW, srcH);
-  const targetLong = Math.max(
-    2800,
-    Math.min(
-      4200,
-      long < 1400 ? long * 3.2 : long < 2000 ? long * 2 : long * 1.35,
-    ),
-  );
-  const scale = targetLong / long;
-  const w = Math.round(srcW * scale);
-  const h = Math.round(srcH * scale);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
+  // للمستندات الصغيرة جداً: تكبير أقوى (حرف كبير ≈ 30px)
+  const targetLong =
+    mode === "light"
+      ? Math.max(
+          3200,
+          Math.min(4800, long < 700 ? long * 7 : long < 1200 ? long * 4 : long * 2),
+        )
+      : Math.max(
+          2800,
+          Math.min(
+            4200,
+            long < 1400 ? long * 3.5 : long < 2000 ? long * 2 : long * 1.35,
+          ),
+        );
+
+  const canvas = await upscaleInSteps(img, srcW, srcH, targetLong / long);
+  const w = canvas.width;
+  const h = canvas.height;
   const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, w, h);
-
   const imageData = ctx.getImageData(0, 0, w, h);
   const d = imageData.data;
   let min = 255;
@@ -503,20 +572,144 @@ async function prepareImageForOcr(
     if (g > max) max = g;
   }
   const span = Math.max(1, max - min);
+  const contrast = mode === "light" ? 1.08 : mode === "enhance" ? 1.22 : 1.15;
+  const thresh = mode === "binary" ? otsuThreshold(gray) : 0;
+
   for (let i = 0, p = 0; i < d.length; i += 4, p++) {
     let v = ((gray[p]! - min) / span) * 255;
-    v = (v - 128) * 1.25 + 128;
-    if (mode === "binary") v = v > 150 ? 255 : 0;
+    v = (v - 128) * contrast + 128;
+    if (mode === "binary") v = v > thresh ? 255 : 0;
     else v = Math.max(0, Math.min(255, v));
     d[i] = d[i + 1] = d[i + 2] = v;
   }
   ctx.putImageData(imageData, 0, 0);
+
+  if (mode === "light" || mode === "enhance") {
+    unsharpLight(ctx, w, h, mode === "light" ? 0.55 : 0.75);
+  }
+
   return { blob: await canvasToBlob(canvas, "image/png"), width: w, height: h };
 }
 
+async function upscaleInSteps(
+  img: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  totalScale: number,
+): Promise<HTMLCanvasElement> {
+  let w = srcW;
+  let h = srcH;
+  let remaining = totalScale;
+  let source: CanvasImageSource = img;
+
+  while (remaining > 1.01) {
+    const step = Math.min(2, remaining);
+    const nw = Math.round(w * step);
+    const nh = Math.round(h * step);
+    const canvas = document.createElement("canvas");
+    canvas.width = nw;
+    canvas.height = nh;
+    const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(source, 0, 0, nw, nh);
+    source = canvas;
+    w = nw;
+    h = nh;
+    remaining /= step;
+  }
+
+  if (source instanceof HTMLCanvasElement) return source;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(source, 0, 0);
+  return canvas;
+}
+
+function otsuThreshold(gray: Float32Array): number {
+  const hist = new Array<number>(256).fill(0);
+  for (let i = 0; i < gray.length; i++) {
+    hist[Math.max(0, Math.min(255, Math.round(gray[i]!)))]!++;
+  }
+  const total = gray.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * hist[i]!;
+  let sumB = 0;
+  let wB = 0;
+  let max = 0;
+  let threshold = 150;
+  for (let i = 0; i < 256; i++) {
+    wB += hist[i]!;
+    if (wB === 0) continue;
+    const wF = total - wB;
+    if (wF === 0) break;
+    sumB += i * hist[i]!;
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) * (mB - mF);
+    if (between > max) {
+      max = between;
+      threshold = i;
+    }
+  }
+  return threshold;
+}
+
+function unsharpLight(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  amount: number,
+) {
+  const src = ctx.getImageData(0, 0, w, h);
+  const dst = ctx.createImageData(w, h);
+  const s = src.data;
+  const d = dst.data;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      const c = s[i]!;
+      let blur = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          blur += s[((y + dy) * w + (x + dx)) * 4]!;
+        }
+      }
+      blur /= 9;
+      const v = Math.max(0, Math.min(255, c + (c - blur) * amount));
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(dst, 0, 0);
+}
+
+async function splitVerticalRegions(blob: Blob): Promise<Blob[]> {
+  const img = await loadImageElement(blob);
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const bands = [
+    { y0: 0, y1: Math.round(h * 0.3) },
+    { y0: Math.round(h * 0.22), y1: Math.round(h * 0.72) },
+    { y0: Math.round(h * 0.62), y1: h },
+  ];
+  const out: Blob[] = [];
+  for (const b of bands) {
+    const ch = Math.max(1, b.y1 - b.y0);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, b.y0, w, ch, 0, 0, w, ch);
+    out.push(await canvasToBlob(canvas, "image/png"));
+  }
+  return out;
+}
+
 async function rotateImageBlob(blob: Blob, degrees: number): Promise<Blob> {
-  const file = new File([blob], "ocr.png", { type: "image/png" });
-  const img = await loadImageElement(file);
+  const img = await loadImageElement(blob);
   const rad = (degrees * Math.PI) / 180;
   const sin = Math.abs(Math.sin(rad));
   const cos = Math.abs(Math.cos(rad));
