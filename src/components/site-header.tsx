@@ -9,7 +9,6 @@ import {
   Music2,
   RefreshCcw,
   Sparkles,
-  Type,
   Video,
   Wrench,
 } from "lucide-react";
@@ -30,7 +29,6 @@ const desktopNavOrder: ToolCategory[] = [
   "audio",
   "pdf",
   "converters",
-  "text",
   "utilities",
 ];
 
@@ -41,7 +39,6 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
   audio: Music2,
   pdf: FileText,
   converters: RefreshCcw,
-  text: Type,
   utilities: Wrench,
 };
 

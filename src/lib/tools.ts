@@ -55,7 +55,6 @@ export type ToolCategory =
   | "audio"
   | "pdf"
   | "converters"
-  | "text"
   | "utilities";
 
 export type Tool = {
@@ -101,11 +100,6 @@ export const categoryMeta: Record<
     sectionTitle: "المحولات",
     anchor: "converters",
   },
-  text: {
-    label: "النص",
-    sectionTitle: "أدوات النص",
-    anchor: "text",
-  },
   utilities: {
     label: "يومية",
     sectionTitle: "أدوات يومية",
@@ -120,7 +114,6 @@ export const navCategories: ToolCategory[] = [
   "pdf",
   "audio",
   "video",
-  "text",
   "utilities",
 ];
 
@@ -649,18 +642,16 @@ export const tools: Tool[] = [
     icon: Type,
   },
 
-  // Text
+  // Daily utilities
   {
     slug: "text-tools",
     title: "أدوات النص",
     description:
       "عدّ كلمات، تحويل حالة الأحرف، تنظيف المسافات، ترتيب الأسطر، بحث واستبدال، وتنزيل TXT.",
-    category: "text",
+    category: "utilities",
     accept: "text/plain",
     icon: Type,
   },
-
-  // Daily utilities
   {
     slug: "error-detector",
     title: "كاشف الأخطاء",
@@ -688,7 +679,6 @@ export const categoryOrder: ToolCategory[] = [
   "audio",
   "pdf",
   "converters",
-  "text",
   "utilities",
 ];
 

@@ -144,7 +144,8 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "TTF إلى WOFF",
     "font converter online",
   ],
-  text: [
+  utilities: [
+    "أدوات يومية",
     "أدوات النص",
     "تلاعب بالنص",
     "عداد كلمات",
@@ -153,9 +154,6 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "word counter",
     "case converter",
     "find and replace",
-  ],
-  utilities: [
-    "أدوات يومية",
     "فحص سرعة الإنترنت",
     "كاشف أخطاء",
     "speed test",
