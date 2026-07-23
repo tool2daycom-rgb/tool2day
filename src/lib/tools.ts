@@ -117,7 +117,7 @@ export const tools: Tool[] = [
     slug: "cv-builder",
     title: "مولد السيرة الذاتية",
     description:
-      "ابنِ سيرة ذاتية نصية بسيطة: بيانات، خبرة، تعليم ومهارات ثم انسخ أو نزّل TXT.",
+      "ابنِ سيرة ذاتية باحتراف: قوالب متعددة، اختيار اللغة، صورة شخصية، حقول كاملة وتنزيل PDF.",
     category: "generators",
     accept: "text/plain",
     icon: FileText,

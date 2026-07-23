@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
-import { buildCvText, emptyCv, type CvData } from "@/lib/processors/cv-builder";
 import { generateAllFancy } from "@/lib/processors/fancy-text";
 import {
   buildEmail,
@@ -16,6 +15,7 @@ import {
   type CssOptions,
   type CssPreset,
 } from "@/lib/processors/css-generator";
+import { CvBuilderWorkspace } from "@/components/cv-builder-workspace";
 
 export type GeneratorKind =
   | "cv-builder"
@@ -40,7 +40,9 @@ export function GeneratorsWorkspace({ kind, slug, title, description }: Props) {
   }, [slug]);
 
   if (kind === "cv-builder") {
-    return <CvPanel slug={slug} title={title} description={description} />;
+    return (
+      <CvBuilderWorkspace slug={slug} title={title} description={description} />
+    );
   }
   if (kind === "fancy-text") {
     return <FancyPanel slug={slug} title={title} description={description} />;
@@ -103,91 +105,6 @@ async function downloadTxt(slug: string, text: string, name: string) {
   await downloadBlob(
     new Blob([text], { type: "text/plain;charset=utf-8" }),
     name,
-  );
-}
-
-function CvPanel({
-  slug,
-  title,
-  description,
-}: {
-  slug: string;
-  title: string;
-  description: string;
-}) {
-  const [data, setData] = useState<CvData>(emptyCv);
-  const [note, setNote] = useState<string | null>(null);
-  const out = useMemo(() => buildCvText(data), [data]);
-
-  function set<K extends keyof CvData>(key: K, value: string) {
-    setData((d) => ({ ...d, [key]: value }));
-  }
-
-  return (
-    <Shell title={title} description={description}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {(
-          [
-            ["fullName", "الاسم الكامل"],
-            ["title", "المسمى الوظيفي"],
-            ["email", "البريد"],
-            ["phone", "الهاتف"],
-            ["city", "المدينة"],
-            ["languages", "اللغات"],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="block text-xs font-semibold text-[#555]">
-            {label}
-            <input
-              className={`${field} mt-1`}
-              value={data[key]}
-              onChange={(e) => set(key, e.target.value)}
-            />
-          </label>
-        ))}
-      </div>
-      {(
-        [
-          ["summary", "نبذة مختصرة"],
-          ["experience", "الخبرة (سطر لكل نقطة)"],
-          ["education", "التعليم"],
-          ["skills", "المهارات"],
-        ] as const
-      ).map(([key, label]) => (
-        <label key={key} className="block text-xs font-semibold text-[#555]">
-          {label}
-          <textarea
-            className={`${field} mt-1 min-h-24`}
-            value={data[key]}
-            onChange={(e) => set(key, e.target.value)}
-          />
-        </label>
-      ))}
-      <pre className="whitespace-pre-wrap rounded-lg bg-[#f7f7f7] p-4 text-sm leading-7 text-[#222]">
-        {out || "املأ الحقول لمعاينة السيرة…"}
-      </pre>
-      <div className="flex flex-wrap gap-2">
-        <Btn
-          primary
-          onClick={() => {
-            beginToolUse(slug);
-            void copyText(out).then(() => setNote("تم النسخ"));
-          }}
-        >
-          نسخ السيرة
-        </Btn>
-        <Btn
-          onClick={() =>
-            void downloadTxt(slug, out, "cv-tool2day.txt").then(() =>
-              setNote("تم التنزيل"),
-            )
-          }
-        >
-          تنزيل TXT
-        </Btn>
-      </div>
-      {note ? <p className="text-xs text-emerald-700">{note}</p> : null}
-    </Shell>
   );
 }
 

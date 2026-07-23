@@ -83,6 +83,7 @@ export default async function ToolPage({ params }: Props) {
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
   const isPdf = slug === "pdf-editor";
+  const isCv = slug === "cv-builder";
   const kind = getToolKind(slug);
   const isUtility =
     kind === "text-tools" ||
@@ -99,7 +100,7 @@ export default async function ToolPage({ params }: Props) {
   return (
     <div
       className={`mx-auto w-full px-4 py-10 sm:px-6 sm:py-14 ${
-        isPdf ? "max-w-[1400px]" : "max-w-3xl"
+        isPdf || isCv ? "max-w-[1400px]" : "max-w-3xl"
       }`}
     >
       <Link
