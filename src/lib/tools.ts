@@ -229,7 +229,7 @@ export const tools: Tool[] = [
     slug: "ai-summarize",
     title: "تلخيص المقالات والروابط",
     description:
-      "الصق رابطاً أو نصاً واحصل على ملخص واضح فوري للمقال أو الصفحة.",
+      "لخّص أي مقال: هدف النص ولماذا كُتب، مع أهم النقاط فقط — بدون تعليقات أو ضوضاء الصفحات.",
     category: "ai",
     accept: "text/plain",
     icon: FileSearch,

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { extractiveSummarize, htmlToPlainText } from "@/lib/processors/ai-micro-tools";
+import {
+  cleanArticleText,
+  extractiveSummarize,
+  htmlToPlainText,
+} from "@/lib/processors/ai-micro-tools";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -68,9 +72,29 @@ async function fetchPageText(url: string): Promise<string> {
   return htmlToPlainText(html);
 }
 
-async function llmSummarize(text: string): Promise<{ summary: string; provider: string } | null> {
-  const snippet = text.slice(0, 12_000);
-  const prompt = `لخّص النص التالي بالعربية في 5–8 جمل واضحة ومفيدة، بدون مقدمات:\n\n${snippet}`;
+const SUMMARY_SYSTEM = `أنت ملخّص مقالات محترف بالعربية.
+أخرج ملخصاً منظماً فقط بهذا الشكل بالضبط:
+
+الموضوع: …
+لماذا المقال موجود / الهدف:
+(جملة أو جملتان توضّحان غرض المقال ولماذا كُتب)
+
+أهم النقاط:
+• نقطة جوهرية
+• نقطة جوهرية
+• …
+
+قواعد:
+- لا تنسخ واجهة فيسبوك أو التعليقات أو الإعجابات أو الأسماء الجانبية.
+- ركّز على محتوى المقال فقط.
+- لا تختلق معلومات غير موجودة.
+- كن موجزاً وواضحاً (6–10 نقاط كحد أقصى).`;
+
+async function llmSummarize(
+  text: string,
+): Promise<{ summary: string; provider: string } | null> {
+  const snippet = cleanArticleText(text).slice(0, 14_000);
+  const prompt = `لخّص المقال التالي وفق التعليمات:\n\n${snippet}`;
 
   const groq = process.env.GROQ_API_KEY;
   if (groq) {
@@ -84,10 +108,7 @@ async function llmSummarize(text: string): Promise<{ summary: string; provider: 
         model: "llama-3.3-70b-versatile",
         temperature: 0.2,
         messages: [
-          {
-            role: "system",
-            content: "You are a concise Arabic summarizer. Reply with the summary only.",
-          },
+          { role: "system", content: SUMMARY_SYSTEM },
           { role: "user", content: prompt },
         ],
       }),
@@ -113,10 +134,7 @@ async function llmSummarize(text: string): Promise<{ summary: string; provider: 
         model: "gpt-4o-mini",
         temperature: 0.2,
         messages: [
-          {
-            role: "system",
-            content: "You are a concise Arabic summarizer. Reply with the summary only.",
-          },
+          { role: "system", content: SUMMARY_SYSTEM },
           { role: "user", content: prompt },
         ],
       }),
@@ -136,7 +154,7 @@ async function llmSummarize(text: string): Promise<{ summary: string; provider: 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { url?: string; text?: string };
-    let sourceText = (body.text || "").trim();
+    let sourceText = cleanArticleText(body.text || "");
     let source: "text" | "url" = "text";
 
     if (body.url?.trim()) {
@@ -167,9 +185,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // احتياطي محلي على الخادم إن لم تتوفر مفاتيح
     return NextResponse.json({
-      summary: extractiveSummarize(sourceText, 6),
+      summary: extractiveSummarize(sourceText, 8),
       provider: "extractive",
       source,
       chars: sourceText.length,

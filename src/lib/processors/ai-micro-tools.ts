@@ -317,18 +317,41 @@ export async function eraseMaskedRegion(
   return blob;
 }
 
-/** تلخيص استخراجي محلي (احتياطي بدون مفاتيح API) */
-export function extractiveSummarize(text: string, maxSentences = 5): string {
-  const cleaned = text.replace(/\s+/g, " ").trim();
+/** تلخيص استخراجي محلي منظّم: الهدف + أهم النقاط */
+export function extractiveSummarize(text: string, maxPoints = 8): string {
+  const cleaned = cleanArticleText(text);
   if (!cleaned) return "";
+
+  const paragraphs = cleaned
+    .split(/\n+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 20);
+
   const sentences = cleaned
     .split(/(?<=[.!?؟。！？\n])\s+/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 40);
-  if (sentences.length <= maxSentences) return sentences.join(" ") || cleaned.slice(0, 800);
+    .map((s) => s.replace(/^[\s•\-–—*📌✔️🔹⚠️]+\s*/, "").trim())
+    .filter((s) => s.length >= 25 && !isNoiseSentence(s));
+
+  if (sentences.length === 0) {
+    return cleaned.slice(0, 1200);
+  }
+
+  const title =
+    paragraphs.find((p) => p.length < 90 && /سيرة|CV|مقال|دليل|كيفية|كيف/i.test(p)) ||
+    paragraphs[0]?.slice(0, 90) ||
+    "";
+
+  const purposeCandidates = sentences.slice(0, 6).filter((s) =>
+    /أول انطباع|من الضروري|يزيد من فرص|يساعد|الغرض|الهدف|دليل|ضروري|سواء كنت|إليك/i.test(
+      s,
+    ),
+  );
+  const purpose =
+    purposeCandidates.slice(0, 2).join(" ") ||
+    sentences.slice(0, 2).join(" ");
 
   const stop = new Set(
-    "the a an and or but in on at to for of is are was were be this that it with as by from عن من في على إلى هذا هذه التي الذي كان تكون يكون ما لا لم لن إن أن أو ثم قد".split(
+    "the a an and or but in on at to for of is are was were be this that it with as by from عن من في على إلى هذا هذه التي الذي كان تكون يكون ما لا لم لن إن أن أو ثم قد مثل مثلما".split(
       /\s+/,
     ),
   );
@@ -339,21 +362,118 @@ export function extractiveSummarize(text: string, maxSentences = 5): string {
       freq.set(w, (freq.get(w) || 0) + 1);
     }
   }
+
   const scored = sentences.map((s, i) => {
     let score = 0;
     for (const w of s.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
       score += freq.get(w) || 0;
     }
-    // تفضيل الجمل الأولى قليلاً
-    score += Math.max(0, 3 - i) * 2;
+    if (
+      /هيكل|معلومات|خبرات|تعليم|مهارات|نصائح|أخطاء|الفرق|Resume|CV|ملخص|إنجاز|تخصيص|تدقيق|تنسيق/i.test(
+        s,
+      )
+    ) {
+      score += 18;
+    }
+    if (/مثال:|مثل:|✔️|استخدم|اذكر|تجنّب|تجنب|أضف/i.test(s)) score += 8;
+    // تقليل تكرار جمل المقدمة الطويلة
+    if (i < 2) score += 4;
+    if (s.length > 280) score -= 8;
     return { s, score, i };
   });
-  scored.sort((a, b) => b.score - a.score);
-  return scored
-    .slice(0, maxSentences)
-    .sort((a, b) => a.i - b.i)
-    .map((x) => x.s)
-    .join(" ");
+
+  scored.sort((a, b) => b.score - a.score || a.i - b.i);
+  const picked: string[] = [];
+  const seen = new Set<string>();
+  for (const item of scored) {
+    const key = item.s.slice(0, 48);
+    if (seen.has(key)) continue;
+    // لا تكرر جملة الهدف حرفياً
+    if (purpose.includes(item.s.slice(0, 40))) continue;
+    seen.add(key);
+    picked.push(item.s);
+    if (picked.length >= maxPoints) break;
+  }
+  picked.sort((a, b) => {
+    const ia = sentences.indexOf(a);
+    const ib = sentences.indexOf(b);
+    return ia - ib;
+  });
+
+  const lines: string[] = [];
+  if (title) lines.push(`الموضوع: ${title.replace(/^الموضوع:\s*/i, "")}`);
+  lines.push("");
+  lines.push("لماذا المقال موجود / الهدف:");
+  lines.push(purpose);
+  lines.push("");
+  lines.push("أهم النقاط:");
+  for (const p of picked) {
+    lines.push(`• ${p}`);
+  }
+  if (picked.length === 0) {
+    lines.push(`• ${sentences[0]}`);
+  }
+  return lines.join("\n").trim();
+}
+
+/** تنظيف نص المقال من ضوضاء فيسبوك/واجهات المواقع والكيانات */
+export function cleanArticleText(raw: string): string {
+  let t = raw
+    .replace(/&#x27;|&#39;|&apos;/gi, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#\d+;/g, " ")
+    .replace(/&[a-z]+;/gi, " ");
+
+  // قطع قسم التعليقات والتفاعلات إن وُجد
+  t = t.replace(
+    /\b(All reactions:|Most relevant|Like Comment|View more comments|Write a comment|التعليقات|أضف تعليقاً)[\s\S]*$/i,
+    " ",
+  );
+
+  const noiseLine =
+    /^(Facebook Log In|Shared with Public|Verified account|@highlight|Like|Comment|Share|Most relevant is selected|Log In|Sign Up|Follow|Translated|See more|See translation|\d+\s*(comments?|shares?|w|d|y|mo|h)\b)/i;
+
+  const lines = t
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .filter((l) => !noiseLine.test(l))
+    .filter((l) => !/^\d+\s*$/.test(l))
+    .filter((l) => !/^(?:[\u1000-\u109F\s]+)$/.test(l)); // أحرف بورمية عشوائية من واجهة فيسبوك
+
+  t = lines.join("\n");
+
+  // جمل ضوضاء داخل النص المتصل
+  t = t
+    .replace(/\bFacebook Log In\b/gi, " ")
+    .replace(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}'s Post\b/g, " ")
+    .replace(/\bVerified account\b/gi, " ")
+    .replace(/\bJanuary \d{1,2}, \d{4}\s*·\s*Shared with Public\b/gi, " ")
+    .replace(/\bAll reactions:\s*\d+/gi, " ")
+    .replace(/\b\d+\s*comments?\s+\d+\s*shares?\b/gi, " ")
+    .replace(/\bLike\s+Comment\b/gi, " ")
+    .replace(/\bMost relevant(?: is selected[^.]*\.)?/gi, " ")
+    .replace(/\b@highlight\b/gi, " ")
+    .replace(/\b\d+[wdhmy]\b/gi, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return t.slice(0, 60_000);
+}
+
+function isNoiseSentence(s: string): boolean {
+  if (/Facebook|Log In|reactions|Most relevant|Like Comment|@highlight/i.test(s)) {
+    return true;
+  }
+  // تعليق قصير باسم شخص
+  if (s.length < 60 && /^(?:[\p{L}\s.'-]{2,40})\s+(?:شكرا|عايز|مساعدة|كيفاش|إلا)/u.test(s)) {
+    return true;
+  }
+  const letters = (s.match(/\p{L}/gu) || []).length;
+  return letters < 12;
 }
 
 export function htmlToPlainText(html: string): string {
@@ -369,9 +489,10 @@ export function htmlToPlainText(html: string): string {
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;|&apos;/gi, "'")
     .replace(/\s+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
-  return stripped.slice(0, 60_000);
+  return cleanArticleText(stripped).slice(0, 60_000);
 }

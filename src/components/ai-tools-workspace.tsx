@@ -9,6 +9,7 @@ import {
 } from "react";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
+  cleanArticleText,
   eraseMaskedRegion,
   extractiveSummarize,
   removeImageBackground,
@@ -300,7 +301,7 @@ function SummarizePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: url.trim() || undefined,
-          text: text.trim() || undefined,
+          text: text.trim() ? cleanArticleText(text) : undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -313,8 +314,9 @@ function SummarizePanel({
       setProvider(data.provider || "");
     } catch (e) {
       // احتياطي محلي إن فشل الخادم والنص موجود
-      if (text.trim().length > 40) {
-        setSummary(extractiveSummarize(text, 6));
+      const cleaned = cleanArticleText(text);
+      if (cleaned.length > 40) {
+        setSummary(extractiveSummarize(cleaned, 8));
         setProvider("local");
       } else {
         setError(e instanceof Error ? e.message : "فشل التلخيص");
@@ -337,15 +339,18 @@ function SummarizePanel({
         />
       </label>
       <label className="block text-xs font-bold text-[#444]">
-        أو الصق النص مباشرة
+        أو الصق نص المقال مباشرة
         <textarea
           className={`${field} mt-1 min-h-36`}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="الصق المقال هنا…"
+          placeholder="الصق المقال فقط (بدون تعليقات فيسبوك إن أمكن)…"
           dir="auto"
         />
       </label>
+      <p className="text-[11px] font-semibold text-[#777]">
+        الملخص يوضح: هدف المقال ولماذا كُتب، ثم أهم النقاط فقط — بدون تعليقات أو تفاعلات.
+      </p>
       <button
         type="button"
         className={btnPrimary}
