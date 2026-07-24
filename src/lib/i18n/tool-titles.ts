@@ -48,7 +48,7 @@ export const toolTitlesEn: Record<string, string> = {
   "change-pitch": "Change pitch",
   "reverse-audio": "Reverse audio",
   "audio-joiner": "Join audio",
-  equalizer: "Equalizer",
+  "equalizer": "Equalizer",
   "voice-recorder": "Voice recorder",
   "text-to-speech": "Text to speech",
   "pdf-editor": "PDF editor",
