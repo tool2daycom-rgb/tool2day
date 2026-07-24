@@ -1,19 +1,27 @@
 import type { Metadata } from "next";
 import { VideoEditorWorkspace } from "@/components/video-editor-workspace";
+import { getToolKeywords } from "@/lib/seo-keywords";
+import {
+  buildLanguageAlternateMap,
+  getLocalizedMetaDescription,
+  getLocalizedMetaTitle,
+} from "@/lib/seo-multilang";
+import { getTool } from "@/lib/tools";
+
+const tool = getTool("video-editor");
 
 export const metadata: Metadata = {
-  title: "محرر الفيديو مجاناً",
-  description:
-    "محرر الفيديو مجاناً — تايملاين ومعاينة: قص، فصل صوت، سرعة، تدوير، قماش، نص وصور ثم تصدير. بدون علامة مائية على Tool2Day.",
-  keywords: [
-    "محرر الفيديو",
-    "محرر الفيديو مجاناً",
-    "محرر فيديو أونلاين",
-    "أدوات الفيديو",
-    "Tool2Day",
-    "مجاناً",
-    "بدون علامة مائية",
-  ],
+  title: tool
+    ? getLocalizedMetaTitle("video-editor", "en", tool.title)
+    : "Video editor — Free online tool",
+  description: tool
+    ? getLocalizedMetaDescription("video-editor", "en", tool.title)
+    : "Free online video editor — no watermark on Tool2Day.",
+  keywords: tool ? getToolKeywords(tool) : ["video editor", "Tool2Day"],
+  alternates: {
+    canonical: "https://tool2day.com/tools/video-editor",
+    languages: buildLanguageAlternateMap("/tools/video-editor"),
+  },
 };
 
 export default function VideoEditorPage() {
