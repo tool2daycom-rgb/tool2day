@@ -14,7 +14,7 @@ import {
   Video,
   Wrench,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthMenu } from "@/components/auth-menu";
 import { BrandLogo } from "@/components/brand-logo";
 import {
@@ -50,6 +50,24 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
 
 export function SiteHeader() {
   const [open, setOpen] = useState<ToolCategory | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      const el = navRef.current;
+      if (el && !el.contains(e.target as Node)) setOpen(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0a0a] text-white">
@@ -66,8 +84,12 @@ export function SiteHeader() {
           <BrandLogo size="sm" showWord />
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 items-center overflow-x-auto md:flex">
-          <div className="flex items-center gap-0">
+        {/* overflow-visible ضروري حتى تظهر الستائر تحت الشريط */}
+        <nav
+          ref={navRef}
+          className="relative z-20 hidden min-w-0 flex-1 items-center overflow-visible md:flex"
+        >
+          <div className="flex max-w-full flex-wrap items-center gap-0 overflow-visible">
             {desktopNavOrder.map((category) => {
               const items = getToolsByCategory(category);
               const isOpen = open === category;
@@ -75,53 +97,66 @@ export function SiteHeader() {
               return (
                 <div
                   key={category}
-                  className="relative"
+                  className="relative shrink-0"
                   onMouseEnter={() => setOpen(category)}
                   onMouseLeave={() => setOpen(null)}
                 >
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-2 text-[13px] font-bold text-white transition hover:bg-white/10 lg:gap-1.5 lg:px-2.5 lg:text-sm"
+                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-2 text-[13px] font-bold text-white transition hover:bg-white/10 lg:gap-1.5 lg:px-2.5 lg:text-sm ${
+                      isOpen ? "bg-white/10" : ""
+                    }`}
                     aria-expanded={isOpen}
+                    aria-haspopup="menu"
+                    onClick={() =>
+                      setOpen((cur) => (cur === category ? null : category))
+                    }
                   >
                     <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
                     <span>{categoryMeta[category].label}</span>
                     <ChevronDown
-                      className="h-3.5 w-3.5 opacity-90"
+                      className={`h-3.5 w-3.5 opacity-90 transition ${
+                        isOpen ? "rotate-180" : ""
+                      }`}
                       strokeWidth={2.5}
                     />
                   </button>
                   {isOpen ? (
                     <div
+                      role="menu"
                       dir="rtl"
-                      className={`absolute top-full z-50 mt-0 min-w-56 rounded-md border border-white/10 bg-[#1c1c1c] py-2 shadow-xl ${
+                      className={`absolute top-full z-[60] pt-1 ${
                         category === "video"
-                          ? "left-0 w-[34rem] lg:left-1/2 lg:-translate-x-1/2"
-                          : "left-0 w-64 lg:left-1/2 lg:-translate-x-1/2"
+                          ? "left-0 w-[min(34rem,90vw)] lg:left-1/2 lg:-translate-x-1/2"
+                          : "left-0 w-64"
                       }`}
                     >
-                      <ul
-                        className={
-                          category === "video"
-                            ? "grid grid-cols-2 gap-x-2 px-2"
-                            : "flex flex-col px-1"
-                        }
-                      >
-                        {items.map((tool) => {
-                          const ToolIcon = tool.icon;
-                          return (
-                            <li key={tool.slug}>
-                              <Link
-                                href={`/tools/${tool.slug}`}
-                                className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                              >
-                                <ToolIcon className="h-4 w-4 shrink-0" />
-                                <span>{tool.title}</span>
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                      <div className="rounded-md border border-white/10 bg-[#1c1c1c] py-2 shadow-xl">
+                        <ul
+                          className={
+                            category === "video"
+                              ? "grid grid-cols-2 gap-x-2 px-2"
+                              : "flex flex-col px-1"
+                          }
+                        >
+                          {items.map((tool) => {
+                            const ToolIcon = tool.icon;
+                            return (
+                              <li key={tool.slug}>
+                                <Link
+                                  href={`/tools/${tool.slug}`}
+                                  role="menuitem"
+                                  className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                                  onClick={() => setOpen(null)}
+                                >
+                                  <ToolIcon className="h-4 w-4 shrink-0" />
+                                  <span>{tool.title}</span>
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
                     </div>
                   ) : null}
                 </div>
