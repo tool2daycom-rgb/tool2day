@@ -14,13 +14,16 @@ import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
 import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import { DEFAULT_LOCALE, isLocaleCode } from "@/lib/i18n/locales";
-import { getMessages } from "@/lib/i18n/messages";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
+import { JsonLd } from "@/components/json-ld";
+import { getToolKeywords } from "@/lib/seo-keywords";
 import {
-  getToolKeywords,
-  getToolPageDescription,
-  getToolPageTitle,
-} from "@/lib/seo-keywords";
+  buildLanguageAlternateMap,
+  buildToolJsonLd,
+  getLocalizedMetaDescription,
+  getLocalizedMetaTitle,
+  ogLocaleTag,
+} from "@/lib/seo-multilang";
 import { getToolSeoContent } from "@/lib/tool-seo-content";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
 import { getToolKind } from "@/lib/processors/active-tools";
@@ -59,32 +62,34 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
   const displayTitle = getToolTitle(tool.slug, locale, tool.title);
   const seo = getToolSeoContent(tool, { locale, title: displayTitle });
-  const title = getToolPageTitle(tool);
-  const description = getToolPageDescription(tool, seo.tagline);
-  const messages = getMessages(locale);
-  const metaDescription =
-    locale === "ar"
-      ? description
-      : `${displayTitle} — ${messages.freeInBrowser}. ${messages.noWatermark}.`;
+  const metaTitle = getLocalizedMetaTitle(tool.slug, locale, tool.title);
+  const metaDescription = getLocalizedMetaDescription(
+    tool.slug,
+    locale,
+    tool.title,
+    seo.tagline,
+  );
+  const path = `/tools/${tool.slug}`;
   return {
-    title: locale === "ar" ? title : displayTitle,
+    title: metaTitle,
     description: metaDescription,
     keywords: getToolKeywords(tool),
     openGraph: {
-      title: `${locale === "ar" ? title : displayTitle} | Tool2Day`,
+      title: `${metaTitle} | Tool2Day`,
       description: metaDescription,
-      url: `https://tool2day.com/tools/${tool.slug}`,
+      url: `https://tool2day.com${path}`,
       siteName: "Tool2Day",
-      locale: locale === "ar" ? "ar_AR" : locale === "en" ? "en_US" : locale,
+      locale: ogLocaleTag(locale),
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${locale === "ar" ? title : displayTitle} | Tool2Day`,
+      title: `${metaTitle} | Tool2Day`,
       description: metaDescription,
     },
     alternates: {
-      canonical: `https://tool2day.com/tools/${tool.slug}`,
+      canonical: `https://tool2day.com${path}`,
+      languages: buildLanguageAlternateMap(path),
     },
   };
 }
@@ -97,6 +102,26 @@ export default async function ToolPage({ params }: Props) {
 
   const tool = getTool(slug);
   if (!tool) notFound();
+
+  const cookieStore = await cookies();
+  const rawLang = cookieStore.get("tool2day_lang")?.value;
+  const locale =
+    rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
+  const displayTitle = getToolTitle(tool.slug, locale, tool.title);
+  const seo = getToolSeoContent(tool, { locale, title: displayTitle });
+  const metaDescription = getLocalizedMetaDescription(
+    tool.slug,
+    locale,
+    tool.title,
+    seo.tagline,
+  );
+  const jsonLd = buildToolJsonLd({
+    tool,
+    locale,
+    displayTitle,
+    description: metaDescription,
+    seo,
+  });
 
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
@@ -149,6 +174,7 @@ export default async function ToolPage({ params }: Props) {
         isWide ? "max-w-[1400px]" : "max-w-3xl"
       }`}
     >
+      <JsonLd data={jsonLd} />
       <ToolPageIntro
         slug={tool.slug}
         arTitle={tool.title}

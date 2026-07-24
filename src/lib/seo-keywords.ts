@@ -1,4 +1,9 @@
 import { categoryMeta, tools, type Tool, type ToolCategory } from "@/lib/tools";
+import {
+  buildAllSiteKeywordsMultilang,
+  buildMultilangToolKeywords,
+  siteSeoByLocale,
+} from "@/lib/seo-multilang";
 
 /** كلمات العلامة والنية العامة */
 export const brandKeywords = [
@@ -787,12 +792,15 @@ export function getToolKeywords(tool: Tool): string[] {
   const cat = categoryMeta[tool.category];
   const extras = toolExtraKeywords[tool.slug] ?? [];
   return unique([
-    ...withIntentVariants(tool.title),
-    ...extras.flatMap((k) => withIntentVariants(k)),
-    cat.label,
-    cat.sectionTitle,
-    ...categoryExtraKeywords[tool.category],
-    ...brandKeywords,
+    ...buildMultilangToolKeywords(tool.slug, tool.title, [
+      ...extras,
+      ...extras.flatMap((k) => withIntentVariants(k)),
+      ...withIntentVariants(tool.title),
+      cat.label,
+      cat.sectionTitle,
+      ...categoryExtraKeywords[tool.category],
+      ...brandKeywords,
+    ]),
   ]);
 }
 
@@ -814,7 +822,11 @@ export function getAllSiteKeywords(): string[] {
     categoryMeta[c].sectionTitle,
     ...categoryExtraKeywords[c],
   ]);
-  return unique([...brandKeywords, ...fromCategories, ...fromTools]);
+  return buildAllSiteKeywordsMultilang([
+    ...brandKeywords,
+    ...fromCategories,
+    ...fromTools,
+  ]);
 }
 
 export function getToolPageTitle(tool: Tool) {
@@ -831,7 +843,6 @@ export function getToolPageDescription(tool: Tool, tagline?: string) {
 }
 
 export const siteSeo = {
-  title: "Tool2Day | Free online file conversion & editing tools",
-  description:
-    "Tool2Day — free online tools for video, audio, PDF, and files with no watermark. Video editor, screen recorder, converters, PDF tools, AI utilities, and more.",
+  title: siteSeoByLocale.en.title,
+  description: siteSeoByLocale.en.description,
 } as const;
