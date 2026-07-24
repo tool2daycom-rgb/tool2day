@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLocale } from "@/components/locale-provider";
 import {
   getToolKind,
   MAX_CLIENT_FILE_MB,
@@ -43,6 +44,7 @@ const noFileKinds = new Set<ActiveToolKind>([
 const sel = "block w-full rounded-md border border-[#ddd] bg-white px-3 py-2";
 
 export function ToolWorkspace({ slug, title, description, accept }: Props) {
+  const { messages } = useLocale();
   const kind = useMemo(() => getToolKind(slug), [slug]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -800,7 +802,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
                 onClick={() => overlayVideoRef.current?.click()}
                 className="mt-3 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
               >
-                اختيار فيديو
+                {messages.chooseVideo}
               </button>
               <input
                 ref={overlayVideoRef}
@@ -828,7 +830,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
                 onClick={() => overlayImageRef.current?.click()}
                 className="mt-3 rounded-md bg-[#2563eb] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
               >
-                اختيار صورة
+                {messages.chooseImage}
               </button>
               <input
                 ref={overlayImageRef}
@@ -870,7 +872,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           }`}
         >
           <p className="text-base font-semibold text-[#111]">
-            {multiple ? "اسحب الملفات هنا" : "اسحب الملف هنا أو اختر من جهازك"}
+            {multiple ? messages.dragFiles : messages.dragFile}
           </p>
           <p className="mt-2 max-w-sm text-sm leading-7 text-[#666]">{description}</p>
           {(kind === "video-add-audio") && (
@@ -884,7 +886,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
             onClick={() => inputRef.current?.click()}
             className="mt-5 rounded-md bg-[#2563eb] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1d4ed8] disabled:opacity-60"
           >
-            اختيار {multiple ? "ملفات" : "ملف"}
+            {multiple ? messages.chooseFiles : messages.chooseFile}
           </button>
           <input
             ref={inputRef}
@@ -897,7 +899,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         </div>
       ) : (
         <p className="rounded-lg bg-[#fafafa] px-4 py-3 text-sm text-[#555]">
-          اضغط ابدأ واسمح للمتصفح بالصلاحيات المطلوبة.
+          {messages.allowPermissions}
         </p>
       )}
 
@@ -1111,7 +1113,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </Field>
         )}
         {(kind === "video-volume" || kind === "audio-volume") && (
-          <Field label="مستوى الصوت">
+          <Field label={messages.volumeLevel}>
             <input className={sel} type="number" step="0.1" min="0" value={volume} onChange={(e) => setVolume(e.target.value)} />
           </Field>
         )}
@@ -1232,7 +1234,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           onClick={run}
           className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
-          {busy ? "جارٍ العمل…" : "ابدأ المعالجة"}
+          {busy ? messages.working : messages.startProcessing}
         </button>
       )}
       {kind === "tts" && !ttsFile ? (
@@ -1242,8 +1244,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       ) : null}
       <p className="mt-3 text-xs text-[#888]">
         {kind === "media-downloader"
-          ? `${title} — مجاني · استخراج الروابط العامة فقط · احترم حقوق النشر`
-          : `${title} — مجاني بالكامل · معالجة في المتصفح`}
+          ? `${title} — ${messages.free}`
+          : `${title} — ${messages.browserProcessing}`}
       </p>
     </div>
   );

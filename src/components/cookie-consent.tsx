@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Cookie, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { useLocale } from "@/components/locale-provider";
 import {
   COOKIE_SETTINGS_EVENT,
   applyConsentToGtag,
@@ -64,6 +65,7 @@ function Toggle({
 }
 
 export function CookieConsent() {
+  const { messages } = useLocale();
   const [visible, setVisible] = useState(false);
   const [manage, setManage] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>({ analytics: true, advertising: true });
@@ -113,7 +115,7 @@ export function CookieConsent() {
       <button
         type="button"
         className="absolute inset-0 bg-[#0a0a0a]/45 backdrop-blur-[2px]"
-        aria-label="إغلاق"
+        aria-label={messages.close}
         onClick={() => {
           if (getStoredConsent()) setVisible(false);
         }}
@@ -136,11 +138,11 @@ export function CookieConsent() {
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
                 <Sparkles className="h-3 w-3" />
-                مجاني بالكامل
+                {messages.completelyFree}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-bold text-sky-800">
                 <ShieldCheck className="h-3 w-3" />
-                بدون علامة مائية
+                {messages.noWatermark}
               </span>
             </div>
           </div>
@@ -149,13 +151,11 @@ export function CookieConsent() {
             id="cookie-consent-title"
             className="mt-6 text-center text-xl font-bold text-[#111] sm:text-[1.35rem]"
           >
-            خصوصيتك تهمنا
+            {messages.cookieTitle}
           </h2>
           <p className="mt-3 text-center text-sm leading-7 text-[#555]">
-            نستخدم ملفات تعريف الارتباط (Cookies) لتشغيل الموقع وتحسين الأدوات
-            وعرض إعلانات غير مزعجة. موافقتك تساعدنا على إبقاء Tool2Day{" "}
-            <strong className="font-bold text-[#111]">مجانياً بالكامل</strong>{" "}
-            للجميع.
+            {messages.cookieBody}{" "}
+            <strong className="font-bold text-[#111]">{messages.completelyFree}</strong>
           </p>
 
           {manage ? (
@@ -164,33 +164,33 @@ export function CookieConsent() {
                 checked
                 disabled
                 onChange={() => {}}
-                label="ضرورية"
-                description="مطلوبة لتشغيل الموقع وحفظ تفضيلاتك ولغة العرض."
+                label={messages.cookieEssential}
+                description={messages.cookieEssentialDesc}
               />
               <Toggle
                 checked={prefs.analytics}
                 onChange={(analytics) => setPrefs((p) => ({ ...p, analytics }))}
-                label="تحليلات"
-                description="تساعدنا على فهم استخدام الأدوات لتحسين الأداء."
+                label={messages.cookieAnalytics}
+                description={messages.cookieAnalyticsDesc}
               />
               <Toggle
                 checked={prefs.advertising}
                 onChange={(advertising) => setPrefs((p) => ({ ...p, advertising }))}
-                label="إعلانات"
-                description="تدعم استضافة الموقع المجاني عبر Google AdSense."
+                label={messages.cookieAds}
+                description={messages.cookieAdsDesc}
               />
             </div>
           ) : (
             <ul className="mt-5 space-y-2 text-start text-xs leading-6 text-[#666]">
               <li className="flex gap-2">
                 <Cookie className="mt-0.5 h-4 w-4 shrink-0 text-[#888]" />
-                يمكنك تغيير اختيارك في أي وقت من إعدادات الكوكيز.
+                {messages.cookieChangeAnytime}
               </li>
               <li className="flex gap-2">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#888]" />
-                لا نبيع بياناتك — راجع{" "}
+                {messages.cookiePrivacyNote}{" "}
                 <Link href="/privacy" className="font-semibold text-[#2563eb] hover:underline">
-                  سياسة الخصوصية
+                  {messages.privacy}
                 </Link>
                 .
               </li>
@@ -209,7 +209,7 @@ export function CookieConsent() {
               }
               className="flex-1 rounded-xl bg-[#111] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#222] sm:min-w-[8rem]"
             >
-              {manage ? "حفظ التفضيلات" : "قبول الكل"}
+              {manage ? messages.savePrefs : messages.acceptAll}
             </button>
             {!manage ? (
               <>
@@ -218,14 +218,14 @@ export function CookieConsent() {
                   onClick={() => save({ analytics: false, advertising: false })}
                   className="flex-1 rounded-xl border border-[#ddd] bg-white px-5 py-3 text-sm font-bold text-[#333] transition hover:border-[#bbb] hover:bg-[#fafafa] sm:min-w-[8rem]"
                 >
-                  الأساسية فقط
+                  {messages.essentialOnly}
                 </button>
                 <button
                   type="button"
                   onClick={() => setManage(true)}
                   className="w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-[#666] transition hover:text-[#111] sm:w-auto"
                 >
-                  إدارة الخيارات
+                  {messages.manageOptions}
                 </button>
               </>
             ) : (
@@ -234,7 +234,7 @@ export function CookieConsent() {
                 onClick={() => setManage(false)}
                 className="flex-1 rounded-xl border border-[#ddd] px-5 py-3 text-sm font-semibold text-[#555] transition hover:bg-[#fafafa]"
               >
-                رجوع
+                {messages.back}
               </button>
             )}
           </div>

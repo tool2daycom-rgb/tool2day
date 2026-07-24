@@ -10,17 +10,122 @@ export type UiMessages = {
   translationFeedback: string;
   free: string;
   completelyFree: string;
-  heroLine: string;
-  freeWord: string;
   noWatermark: string;
+  heroLine: string;
   backTo: string;
-  categories: Record<
-    ToolCategory,
-    { label: string; sectionTitle: string }
-  >;
+  dragFile: string;
+  dragFiles: string;
+  chooseFile: string;
+  chooseFiles: string;
+  chooseVideo: string;
+  chooseImage: string;
+  startProcessing: string;
+  working: string;
+  extracting: string;
+  browserProcessing: string;
+  allowPermissions: string;
+  faqTitle: string;
+  whyUs: string;
+  easyUse: string;
+  easyUseBody: string;
+  noDownloads: string;
+  noDownloadsBody: string;
+  freeBody: string;
+  noWatermarkBody: string;
+  worksDevices: string;
+  worksDevicesBody: string;
+  safePrivate: string;
+  safePrivateBody: string;
+  howIntro: string;
+  stepOpen: string;
+  stepOpenBody: string;
+  stepUpload: string;
+  stepUploadBody: string;
+  stepSettings: string;
+  stepSettingsBody: string;
+  stepExport: string;
+  stepExportBody: string;
+  onlineTool: string;
+  onlineIntro: string;
+  howUse: string;
+  moreTitle: string;
+  moreBody: string;
+  faqFreeQ: string;
+  faqFreeA: string;
+  faqWaterQ: string;
+  faqWaterA: string;
+  faqInstallQ: string;
+  faqInstallA: string;
+  faqWhereQ: string;
+  faqWhereA: string;
+  faqFailQ: string;
+  faqFailA: string;
+  freeInBrowser: string;
+  privacy: string;
+  terms: string;
+  refund: string;
+  pricing: string;
+  help: string;
+  contact: string;
+  cookieSettings: string;
+  footerNav: string;
+  cookieTitle: string;
+  cookieBody: string;
+  acceptAll: string;
+  essentialOnly: string;
+  manageOptions: string;
+  rateTool: string;
+  rateBeforeDownload: string;
+  confirmDownload: string;
+  thankYouRating: string;
+  siteFeedbackTitle: string;
+  siteFeedbackSub: string;
+  ratingsAggregate: string;
+  noRatingsYet: string;
+  starBad: string;
+  starOk: string;
+  starGood: string;
+  starGreat: string;
+  starExcellent: string;
+  clickStarsOnce: string;
+  ratingsCount: string;
+  rateOnceOnDownload: string;
+  pickStars: string;
+  saveFailed: string;
+  yourRating: string;
+  saving: string;
+  cancel: string;
+  close: string;
+  savePrefs: string;
+  back: string;
+  cookieEssential: string;
+  cookieEssentialDesc: string;
+  cookieAnalytics: string;
+  cookieAnalyticsDesc: string;
+  cookieAds: string;
+  cookieAdsDesc: string;
+  cookieChangeAnytime: string;
+  cookiePrivacyNote: string;
+  volumeLevel: string;
+  categories: Record<ToolCategory, { label: string; sectionTitle: string }>;
 };
 
-const en: UiMessages = {
+const enCategories: UiMessages["categories"] = {
+  generators: { label: "Generators", sectionTitle: "Generators" },
+  calculators: { label: "Calculators", sectionTitle: "Math & converters" },
+  ai: { label: "AI", sectionTitle: "Quick AI tools" },
+  "social-dev": {
+    label: "Social",
+    sectionTitle: "Social media & developer tools",
+  },
+  video: { label: "Video", sectionTitle: "Video tools" },
+  audio: { label: "Audio", sectionTitle: "Audio tools" },
+  pdf: { label: "PDF", sectionTitle: "PDF tools" },
+  converters: { label: "Converters", sectionTitle: "Converters" },
+  utilities: { label: "Daily", sectionTitle: "Daily tools" },
+};
+
+export const en: UiMessages = {
   login: "Log in",
   myAccount: "My account",
   logout: "Log out",
@@ -29,31 +134,119 @@ const en: UiMessages = {
   translationFeedback: "Found a translation issue? Tell us",
   free: "Free",
   completelyFree: "Completely free",
+  noWatermark: "No watermark",
   heroLine:
     "Online tools for video, audio, PDF, and files — free and without watermark",
-  freeWord: "free",
-  noWatermark: "without watermark",
   backTo: "Back to",
-  categories: {
-    generators: { label: "Generators", sectionTitle: "Generators" },
-    calculators: {
-      label: "Calculators",
-      sectionTitle: "Math & converters",
-    },
-    ai: { label: "AI", sectionTitle: "Quick AI tools" },
-    "social-dev": {
-      label: "Social",
-      sectionTitle: "Social media & developer tools",
-    },
-    video: { label: "Video", sectionTitle: "Video tools" },
-    audio: { label: "Audio", sectionTitle: "Audio tools" },
-    pdf: { label: "PDF", sectionTitle: "PDF tools" },
-    converters: { label: "Converters", sectionTitle: "Converters" },
-    utilities: { label: "Daily", sectionTitle: "Daily tools" },
-  },
+  dragFile: "Drag a file here or choose from your device",
+  dragFiles: "Drag files here",
+  chooseFile: "Choose file",
+  chooseFiles: "Choose files",
+  chooseVideo: "Choose video",
+  chooseImage: "Choose image",
+  startProcessing: "Start processing",
+  working: "Working…",
+  extracting: "Extracting…",
+  browserProcessing: "Completely free · processed in your browser",
+  allowPermissions: "Press Start and allow the required browser permissions.",
+  faqTitle: "Frequently asked questions",
+  whyUs: "Why choose us",
+  easyUse: "Easy to use",
+  easyUseBody: "A simple interface so you can start in a few clicks.",
+  noDownloads: "No installs needed",
+  noDownloadsBody: "Everything runs in the browser — no apps or plugins.",
+  freeBody: "100% free for basic use with no mandatory subscription.",
+  noWatermarkBody:
+    "Exported files stay clean — we never add a Tool2Day logo to your result.",
+  worksDevices: "Works on your devices",
+  worksDevicesBody: "Compatible with desktop and phone via a modern browser.",
+  safePrivate: "Safe & private",
+  safePrivateBody:
+    "Processing usually happens in your browser; we respect your file privacy.",
+  howIntro: "Follow these steps:",
+  stepOpen: "Open the tool",
+  stepOpenBody: "Open this Tool2Day page in any modern browser.",
+  stepUpload: "Upload or start",
+  stepUploadBody:
+    "Choose your file or use the options shown for this task.",
+  stepSettings: "Adjust settings",
+  stepSettingsBody:
+    "Pick quality, duration, pages, format, and review before running.",
+  stepExport: "Export free, no watermark",
+  stepExportBody:
+    "Start processing and download the result — free, with no logo on the file.",
+  onlineTool: "online",
+  onlineIntro:
+    "on Tool2Day is a free tool that helps you finish the job quickly without installing software. Upload a file or start in the browser, then export with no watermark.",
+  howUse: "How do I use",
+  moreTitle: "Create better content",
+  moreBody:
+    "Alongside this tool you’ll find free video, audio, PDF, and converter tools on Tool2Day — same idea: free and no watermark.",
+  faqFreeQ: "Is this tool free?",
+  faqFreeA:
+    "Yes. Tool2Day is free for basic use without forcing a paid plan.",
+  faqWaterQ: "Do you add a watermark?",
+  faqWaterA: "No. We do not add a watermark to your exported files.",
+  faqInstallQ: "Do I need to install software?",
+  faqInstallA: "No. A modern browser like Chrome, Edge, Firefox, or Safari is enough.",
+  faqWhereQ: "Where does processing happen?",
+  faqWhereA:
+    "Usually in your browser on your device for speed and privacy.",
+  faqFailQ: "What if processing fails?",
+  faqFailA:
+    "Try a smaller file, an updated browser, or another network — or contact us from Help.",
+  freeInBrowser: "free, right in your browser",
+  privacy: "Privacy",
+  terms: "Terms & Conditions",
+  refund: "Refund Policy",
+  pricing: "Pricing",
+  help: "Help",
+  contact: "Contact us",
+  cookieSettings: "Cookie settings",
+  footerNav: "Footer links",
+  cookieTitle: "Your privacy matters",
+  cookieBody:
+    "We use cookies for essential site functions and, with your consent, analytics and ads.",
+  acceptAll: "Accept all",
+  essentialOnly: "Essential only",
+  manageOptions: "Manage options",
+  rateTool: "Rate this tool",
+  rateBeforeDownload: "Rate the tool before download",
+  confirmDownload: "Confirm & download",
+  thankYouRating: "Thanks — your rating was saved",
+  siteFeedbackTitle: "What do you think of the site?",
+  siteFeedbackSub: "Tool ratings are collected here. Rate the site once.",
+  ratingsAggregate: "ratings from all tools and the site",
+  noRatingsYet: "No ratings yet",
+  starBad: "Poor",
+  starOk: "OK",
+  starGood: "Good",
+  starGreat: "Great",
+  starExcellent: "Excellent",
+  clickStarsOnce: "Tap the stars to rate once",
+  ratingsCount: "votes",
+  rateOnceOnDownload: "Rate once after each tool use — when downloading",
+  pickStars: "Choose a rating from 1 to 5 stars",
+  saveFailed: "Could not save the rating. Try again.",
+  yourRating: "Your rating",
+  saving: "Saving…",
+  cancel: "Cancel",
+  close: "Close",
+  savePrefs: "Save preferences",
+  back: "Back",
+  cookieEssential: "Essential",
+  cookieEssentialDesc: "Required to run the site and save your language preferences.",
+  cookieAnalytics: "Analytics",
+  cookieAnalyticsDesc: "Helps us understand tool usage to improve performance.",
+  cookieAds: "Advertising",
+  cookieAdsDesc: "Supports free hosting via Google AdSense.",
+  cookieChangeAnytime: "You can change your choice anytime from Cookie settings.",
+  cookiePrivacyNote: "We do not sell your data — see our",
+  volumeLevel: "Volume level",
+  categories: enCategories,
 };
 
-const ar: UiMessages = {
+export const ar: UiMessages = {
   login: "تسجيل الدخول",
   myAccount: "حسابي",
   logout: "تسجيل الخروج",
@@ -62,11 +255,114 @@ const ar: UiMessages = {
   translationFeedback: "أخبرنا هل وجدت خطأ في الترجمة؟",
   free: "مجاناً",
   completelyFree: "مجاني بالكامل",
+  noWatermark: "بدون علامة مائية",
   heroLine:
     "الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات — مجاناً وبدون علامة مائية",
-  freeWord: "مجاناً",
-  noWatermark: "بدون علامة مائية",
   backTo: "العودة إلى",
+  dragFile: "اسحب الملف هنا أو اختر من جهازك",
+  dragFiles: "اسحب الملفات هنا",
+  chooseFile: "اختيار ملف",
+  chooseFiles: "اختيار ملفات",
+  chooseVideo: "اختيار فيديو",
+  chooseImage: "اختيار صورة",
+  startProcessing: "ابدأ المعالجة",
+  working: "جارٍ العمل…",
+  extracting: "جارٍ الاستخراج…",
+  browserProcessing: "مجاني بالكامل · معالجة في المتصفح",
+  allowPermissions: "اضغط ابدأ واسمح للمتصفح بالصلاحيات المطلوبة.",
+  faqTitle: "الأسئلة الشائعة",
+  whyUs: "لماذا تختارنا",
+  easyUse: "سهل الاستخدام",
+  easyUseBody: "واجهة بسيطة تتيح لك البدء ببضع نقرات دون تعقيد.",
+  noDownloads: "لا حاجة للتحميلات",
+  noDownloadsBody: "كل شيء يعمل في المتصفح — بدون تثبيت برامج أو إضافات.",
+  freeBody: "الأداة مجانية 100٪ للاستخدام دون اشتراك إجباري.",
+  noWatermarkBody:
+    "الملفات المُصدَّرة نظيفة — لا نضيف شعار Tool2Day على نتيجتك.",
+  worksDevices: "يعمل على أجهزتك",
+  worksDevicesBody: "متوافق مع الكمبيوتر والهاتف عبر متصفح حديث.",
+  safePrivate: "آمن وخاص",
+  safePrivateBody:
+    "المعالجة تتم غالباً داخل متصفحك؛ نحترم خصوصية ملفاتك.",
+  howIntro: "اتبع الخطوات التالية:",
+  stepOpen: "افتح الأداة",
+  stepOpenBody: "ادخل إلى صفحة الأداة على Tool2Day من أي متصفح حديث.",
+  stepUpload: "ارفع الملف أو ابدأ",
+  stepUploadBody: "اختر ملفك أو استخدم خيارات الأداة الظاهرة في الصفحة.",
+  stepSettings: "اضبط الإعدادات",
+  stepSettingsBody:
+    "حدّد الخيارات المناسبة (الجودة، المدة، الصفحات، الصيغة…) ثم راجعها قبل التشغيل.",
+  stepExport: "صدّر مجاناً بدون علامة مائية",
+  stepExportBody:
+    "اضغط ابدأ المعالجة ونزّل النتيجة إلى جهازك — مجاناً وبدون شعار على الملف.",
+  onlineTool: "عبر الإنترنت",
+  onlineIntro:
+    "على Tool2Day أداة مجانية بالكامل تساعدك على إنجاز مهمتك بسرعة دون تثبيت برامج. ارفع ملفك أو ابدأ مباشرة من المتصفح، ثم صدّر النتيجة بدون أي علامة مائية.",
+  howUse: "كيف أستخدم",
+  moreTitle: "استخدم الأداة وأنشئ محتوى أفضل",
+  moreBody:
+    "بجانب هذه الأداة ستجد على Tool2Day أدوات فيديو وصوت وPDF ومحولات مجانية — نفس المبدأ: مجاني وبدون علامة مائية.",
+  faqFreeQ: "هل الأداة مجانية؟",
+  faqFreeA:
+    "نعم. أداة Tool2Day مجانية بالكامل للاستخدام الأساسي دون إجبارك على باقة مدفوعة.",
+  faqWaterQ: "هل تضعون علامة مائية على الملف؟",
+  faqWaterA: "لا. لا نضيف علامة مائية على ملفاتك المُصدَّرة.",
+  faqInstallQ: "هل أحتاج تثبيت برنامج؟",
+  faqInstallA: "لا. يكفي متصفح حديث مثل Chrome أو Edge أو Firefox أو Safari.",
+  faqWhereQ: "أين تتم المعالجة؟",
+  faqWhereA:
+    "غالباً داخل المتصفح على جهازك قدر الإمكان، لسرعة أعلى وخصوصية أفضل.",
+  faqFailQ: "ماذا أفعل إذا فشلت المعالجة؟",
+  faqFailA:
+    "جرّب ملفاً أصغر أو متصفحاً محدثاً أو شبكة أخرى، أو تواصل معنا من صفحة المساعدة.",
+  freeInBrowser: "مجاناً مباشرة من المتصفح",
+  privacy: "الخصوصية",
+  terms: "الشروط والأحكام",
+  refund: "سياسة الاسترداد",
+  pricing: "التسعير",
+  help: "المساعدة",
+  contact: "تواصل معنا",
+  cookieSettings: "إعدادات الكوكيز",
+  footerNav: "روابط التذييل",
+  cookieTitle: "خصوصيتك تهمنا",
+  cookieBody:
+    "نستخدم ملفات تعريف الارتباط للوظائف الأساسية، وبموافقتك للتحليلات والإعلانات.",
+  acceptAll: "قبول الكل",
+  essentialOnly: "الأساسية فقط",
+  manageOptions: "إدارة الخيارات",
+  rateTool: "قيّم هذه الأداة",
+  rateBeforeDownload: "قيّم الأداة قبل التنزيل",
+  confirmDownload: "تأكيد والتنزيل",
+  thankYouRating: "شكراً — تم حفظ تقييمك",
+  siteFeedbackTitle: "ما رأيك في الموقع؟",
+  siteFeedbackSub: "تقييمات الأدوات تتجمع هنا. تقييم الموقع مرة واحدة فقط.",
+  ratingsAggregate: "تقييماً من كل الأدوات والموقع",
+  noRatingsYet: "لا تقييمات بعد",
+  starBad: "سيء",
+  starOk: "مقبول",
+  starGood: "جيد",
+  starGreat: "رائع",
+  starExcellent: "ممتاز",
+  clickStarsOnce: "اضغط على النجوم للتقييم مرة واحدة",
+  ratingsCount: "صوتاً",
+  rateOnceOnDownload: "التقييم مرة واحدة بعد كل استخدام للأداة — عند التنزيل",
+  pickStars: "اختر تقييماً من 1 إلى 5 نجوم",
+  saveFailed: "تعذّر حفظ التقييم، حاول مرة أخرى",
+  yourRating: "تقييمك",
+  saving: "جاري الحفظ…",
+  cancel: "إلغاء",
+  close: "إغلاق",
+  savePrefs: "حفظ التفضيلات",
+  back: "رجوع",
+  cookieEssential: "ضرورية",
+  cookieEssentialDesc: "مطلوبة لتشغيل الموقع وحفظ تفضيلاتك ولغة العرض.",
+  cookieAnalytics: "تحليلات",
+  cookieAnalyticsDesc: "تساعدنا على فهم استخدام الأدوات لتحسين الأداء.",
+  cookieAds: "إعلانات",
+  cookieAdsDesc: "تدعم استضافة الموقع المجاني عبر Google AdSense.",
+  cookieChangeAnytime: "يمكنك تغيير اختيارك في أي وقت من إعدادات الكوكيز.",
+  cookiePrivacyNote: "لا نبيع بياناتك — راجع",
+  volumeLevel: "مستوى الصوت",
   categories: {
     generators: { label: "مولدات", sectionTitle: "المولدات" },
     calculators: {
@@ -89,12 +385,26 @@ const ar: UiMessages = {
   },
 };
 
-/** Full UI packs — others fall back to English */
-const packs: Partial<Record<LocaleCode, UiMessages>> = {
+function pack(
+  overrides: Partial<Omit<UiMessages, "categories">> & {
+    categories?: Partial<UiMessages["categories"]>;
+  },
+): UiMessages {
+  return {
+    ...en,
+    ...overrides,
+    categories: {
+      ...en.categories,
+      ...(overrides.categories || {}),
+    },
+  };
+}
+
+/** All locale packs — missing keys fall back to English via pack() */
+export const packs: Record<LocaleCode, UiMessages> = {
   en,
   ar,
-  de: {
-    ...en,
+  de: pack({
     login: "Anmelden",
     myAccount: "Mein Konto",
     logout: "Abmelden",
@@ -102,15 +412,83 @@ const packs: Partial<Record<LocaleCode, UiMessages>> = {
     search: "Suchen",
     free: "Kostenlos",
     completelyFree: "Völlig kostenlos",
+    noWatermark: "Kein Wasserzeichen",
     heroLine:
       "Online-Tools für Video, Audio, PDF und Dateien — kostenlos und ohne Wasserzeichen",
+    dragFile: "Datei hierher ziehen oder vom Gerät wählen",
+    dragFiles: "Dateien hierher ziehen",
+    chooseFile: "Datei wählen",
+    chooseFiles: "Dateien wählen",
+    chooseVideo: "Video wählen",
+    chooseImage: "Bild wählen",
+    startProcessing: "Verarbeitung starten",
+    working: "Arbeitet…",
+    extracting: "Extrahiert…",
+    browserProcessing: "Völlig kostenlos · Verarbeitung im Browser",
+    allowPermissions: "Start drücken und Browser-Berechtigungen erlauben.",
+    faqTitle: "Häufige Fragen",
+    whyUs: "Warum wir",
+    easyUse: "Einfach zu bedienen",
+    easyUseBody: "Einfache Oberfläche — in wenigen Klicks starten.",
+    noDownloads: "Keine Installation",
+    noDownloadsBody: "Alles läuft im Browser — ohne Apps oder Plugins.",
+    freeBody: "100 % kostenlos für die Grundnutzung ohne Zwangsabo.",
+    noWatermarkBody:
+      "Exportierte Dateien bleiben sauber — kein Tool2Day-Logo.",
+    worksDevices: "Auf Ihren Geräten",
+    worksDevicesBody: "Kompatibel mit PC und Smartphone im modernen Browser.",
+    safePrivate: "Sicher & privat",
+    safePrivateBody:
+      "Verarbeitung meist im Browser; wir respektieren Ihre Privatsphäre.",
+    howIntro: "So geht’s:",
+    stepOpen: "Tool öffnen",
+    stepUpload: "Hochladen oder starten",
+    stepSettings: "Einstellungen",
+    stepExport: "Kostenlos exportieren",
+    faqFreeQ: "Ist das Tool kostenlos?",
+    faqFreeA: "Ja. Tool2Day ist für die Grundnutzung kostenlos.",
+    faqWaterQ: "Gibt es ein Wasserzeichen?",
+    faqWaterA: "Nein. Wir fügen kein Wasserzeichen hinzu.",
+    faqInstallQ: "Muss ich Software installieren?",
+    faqInstallA: "Nein. Ein moderner Browser reicht.",
+    faqWhereQ: "Wo läuft die Verarbeitung?",
+    faqWhereA: "Meist im Browser auf Ihrem Gerät.",
+    faqFailQ: "Was tun bei Fehlern?",
+    faqFailA: "Kleinere Datei, aktualisierter Browser oder Hilfe-Seite.",
+    freeInBrowser: "kostenlos direkt im Browser",
+    privacy: "Datenschutz",
+    terms: "AGB",
+    refund: "Rückerstattung",
+    pricing: "Preise",
+    help: "Hilfe",
+    contact: "Kontakt",
+    cookieSettings: "Cookie-Einstellungen",
+    cookieTitle: "Ihre Privatsphäre zählt",
+    cookieBody:
+      "Wir nutzen Cookies für Basisfunktionen und — mit Zustimmung — Analyse und Werbung.",
+    acceptAll: "Alle akzeptieren",
+    essentialOnly: "Nur notwendige",
+    manageOptions: "Optionen verwalten",
+    rateTool: "Tool bewerten",
+    rateBeforeDownload: "Vor dem Download bewerten",
+    confirmDownload: "Bestätigen & laden",
+    thankYouRating: "Danke — Bewertung gespeichert",
+    siteFeedbackTitle: "Wie finden Sie die Seite?",
+    siteFeedbackSub: "Tool-Bewertungen werden hier gesammelt. Seite einmal bewerten.",
+    ratingsAggregate: "Bewertungen von Tools und Seite",
+    noRatingsYet: "Noch keine Bewertungen",
+    starBad: "Schlecht",
+    starOk: "OK",
+    starGood: "Gut",
+    starGreat: "Sehr gut",
+    starExcellent: "Exzellent",
     categories: {
       generators: { label: "Generatoren", sectionTitle: "Generatoren" },
       calculators: { label: "Rechner", sectionTitle: "Rechner & Umrechner" },
       ai: { label: "KI", sectionTitle: "Schnelle KI-Tools" },
       "social-dev": {
         label: "Social",
-        sectionTitle: "Social Media & Entwickler-Tools",
+        sectionTitle: "Social & Entwickler-Tools",
       },
       video: { label: "Video", sectionTitle: "Video-Tools" },
       audio: { label: "Audio", sectionTitle: "Audio-Tools" },
@@ -118,9 +496,8 @@ const packs: Partial<Record<LocaleCode, UiMessages>> = {
       converters: { label: "Konverter", sectionTitle: "Konverter" },
       utilities: { label: "Alltag", sectionTitle: "Alltags-Tools" },
     },
-  },
-  es: {
-    ...en,
+  }),
+  es: pack({
     login: "Iniciar sesión",
     myAccount: "Mi cuenta",
     logout: "Cerrar sesión",
@@ -128,25 +505,74 @@ const packs: Partial<Record<LocaleCode, UiMessages>> = {
     search: "Buscar",
     free: "Gratis",
     completelyFree: "Totalmente gratis",
+    noWatermark: "Sin marca de agua",
     heroLine:
       "Herramientas online para video, audio, PDF y archivos — gratis y sin marca de agua",
+    dragFile: "Arrastra un archivo aquí o elige desde tu dispositivo",
+    dragFiles: "Arrastra archivos aquí",
+    chooseFile: "Elegir archivo",
+    chooseFiles: "Elegir archivos",
+    chooseVideo: "Elegir video",
+    chooseImage: "Elegir imagen",
+    startProcessing: "Empezar procesamiento",
+    working: "Procesando…",
+    extracting: "Extrayendo…",
+    browserProcessing: "Totalmente gratis · procesado en el navegador",
+    allowPermissions: "Pulsa Empezar y permite los permisos del navegador.",
+    faqTitle: "Preguntas frecuentes",
+    whyUs: "Por qué elegirnos",
+    easyUse: "Fácil de usar",
+    noDownloads: "Sin instalaciones",
+    freeBody: "100% gratis para uso básico sin suscripción obligatoria.",
+    noWatermarkBody: "Los archivos exportados quedan limpios — sin logo.",
+    worksDevices: "En tus dispositivos",
+    safePrivate: "Seguro y privado",
+    howIntro: "Sigue estos pasos:",
+    stepOpen: "Abre la herramienta",
+    stepUpload: "Sube o empieza",
+    stepSettings: "Ajusta ajustes",
+    stepExport: "Exporta gratis",
+    faqFreeQ: "¿Es gratis?",
+    faqFreeA: "Sí. Tool2Day es gratis para uso básico.",
+    faqWaterQ: "¿Añaden marca de agua?",
+    faqWaterA: "No.",
+    faqInstallQ: "¿Necesito instalar software?",
+    faqInstallA: "No. Basta un navegador moderno.",
+    faqWhereQ: "¿Dónde se procesa?",
+    faqWhereA: "Normalmente en tu navegador.",
+    faqFailQ: "¿Y si falla?",
+    faqFailA: "Prueba un archivo más pequeño o un navegador actualizado.",
+    freeInBrowser: "gratis, en el navegador",
+    privacy: "Privacidad",
+    terms: "Términos",
+    refund: "Reembolsos",
+    pricing: "Precios",
+    help: "Ayuda",
+    contact: "Contacto",
+    cookieSettings: "Cookies",
+    cookieTitle: "Tu privacidad importa",
+    acceptAll: "Aceptar todo",
+    essentialOnly: "Solo esenciales",
+    manageOptions: "Gestionar",
+    rateTool: "Valora esta herramienta",
+    confirmDownload: "Confirmar y descargar",
+    thankYouRating: "Gracias — valoración guardada",
+    siteFeedbackTitle: "¿Qué opinas del sitio?",
+    ratingsAggregate: "valoraciones de herramientas y sitio",
+    noRatingsYet: "Sin valoraciones aún",
     categories: {
       generators: { label: "Generadores", sectionTitle: "Generadores" },
-      calculators: { label: "Cálculos", sectionTitle: "Matemáticas y conversiones" },
-      ai: { label: "IA", sectionTitle: "Herramientas de IA" },
-      "social-dev": {
-        label: "Social",
-        sectionTitle: "Redes y herramientas para desarrolladores",
-      },
+      calculators: { label: "Cálculos", sectionTitle: "Matemáticas" },
+      ai: { label: "IA", sectionTitle: "Herramientas IA" },
+      "social-dev": { label: "Social", sectionTitle: "Social y desarrollo" },
       video: { label: "Video", sectionTitle: "Herramientas de video" },
       audio: { label: "Audio", sectionTitle: "Herramientas de audio" },
       pdf: { label: "PDF", sectionTitle: "Herramientas PDF" },
       converters: { label: "Convertidores", sectionTitle: "Convertidores" },
       utilities: { label: "Diario", sectionTitle: "Herramientas diarias" },
     },
-  },
-  fr: {
-    ...en,
+  }),
+  fr: pack({
     login: "Connexion",
     myAccount: "Mon compte",
     logout: "Déconnexion",
@@ -154,95 +580,495 @@ const packs: Partial<Record<LocaleCode, UiMessages>> = {
     search: "Rechercher",
     free: "Gratuit",
     completelyFree: "Entièrement gratuit",
+    noWatermark: "Sans filigrane",
     heroLine:
       "Outils en ligne pour vidéo, audio, PDF et fichiers — gratuits et sans filigrane",
+    dragFile: "Glissez un fichier ici ou choisissez depuis votre appareil",
+    dragFiles: "Glissez des fichiers ici",
+    chooseFile: "Choisir un fichier",
+    chooseFiles: "Choisir des fichiers",
+    chooseVideo: "Choisir une vidéo",
+    chooseImage: "Choisir une image",
+    startProcessing: "Lancer le traitement",
+    working: "Traitement…",
+    extracting: "Extraction…",
+    browserProcessing: "Entièrement gratuit · dans le navigateur",
+    faqTitle: "Questions fréquentes",
+    whyUs: "Pourquoi nous choisir",
+    easyUse: "Facile à utiliser",
+    noDownloads: "Sans installation",
+    freeInBrowser: "gratuit dans le navigateur",
+    privacy: "Confidentialité",
+    terms: "Conditions",
+    refund: "Remboursement",
+    pricing: "Tarifs",
+    help: "Aide",
+    contact: "Contact",
+    cookieSettings: "Cookies",
+    acceptAll: "Tout accepter",
+    essentialOnly: "Essentiels uniquement",
+    rateTool: "Noter cet outil",
+    confirmDownload: "Confirmer et télécharger",
+    thankYouRating: "Merci — note enregistrée",
+    siteFeedbackTitle: "Que pensez-vous du site ?",
     categories: {
       generators: { label: "Générateurs", sectionTitle: "Générateurs" },
-      calculators: { label: "Calculs", sectionTitle: "Maths et convertisseurs" },
-      ai: { label: "IA", sectionTitle: "Outils IA rapides" },
-      "social-dev": {
-        label: "Social",
-        sectionTitle: "Réseaux & outils développeurs",
-      },
+      calculators: { label: "Calculs", sectionTitle: "Calculs" },
+      ai: { label: "IA", sectionTitle: "Outils IA" },
+      "social-dev": { label: "Social", sectionTitle: "Social & développeurs" },
       video: { label: "Vidéo", sectionTitle: "Outils vidéo" },
       audio: { label: "Audio", sectionTitle: "Outils audio" },
       pdf: { label: "PDF", sectionTitle: "Outils PDF" },
       converters: { label: "Convertisseurs", sectionTitle: "Convertisseurs" },
       utilities: { label: "Quotidien", sectionTitle: "Outils du quotidien" },
     },
-  },
-  pt: {
-    ...en,
+  }),
+  pt: pack({
     login: "Entrar",
-    myAccount: "Minha conta",
     logout: "Sair",
     selectLanguage: "Escolher idioma",
-    search: "Pesquisar",
     free: "Grátis",
     completelyFree: "Totalmente grátis",
-    heroLine:
-      "Ferramentas online para vídeo, áudio, PDF e arquivos — grátis e sem marca d'água",
-  },
-  it: {
-    ...en,
+    noWatermark: "Sem marca d'água",
+    dragFile: "Arraste um arquivo aqui ou escolha no dispositivo",
+    chooseFile: "Escolher arquivo",
+    startProcessing: "Iniciar processamento",
+    working: "Processando…",
+    faqTitle: "Perguntas frequentes",
+    whyUs: "Por que nos escolher",
+    freeInBrowser: "grátis no navegador",
+    privacy: "Privacidade",
+    terms: "Termos",
+    help: "Ajuda",
+    contact: "Contato",
+    acceptAll: "Aceitar tudo",
+    rateTool: "Avaliar ferramenta",
+    categories: {
+      generators: { label: "Geradores", sectionTitle: "Geradores" },
+      calculators: { label: "Cálculos", sectionTitle: "Cálculos" },
+      ai: { label: "IA", sectionTitle: "Ferramentas de IA" },
+      "social-dev": { label: "Social", sectionTitle: "Social e desenvolvedores" },
+      video: { label: "Vídeo", sectionTitle: "Ferramentas de vídeo" },
+      audio: { label: "Áudio", sectionTitle: "Ferramentas de áudio" },
+      pdf: { label: "PDF", sectionTitle: "Ferramentas PDF" },
+      converters: { label: "Conversores", sectionTitle: "Conversores" },
+      utilities: { label: "Diário", sectionTitle: "Ferramentas diárias" },
+    },
+  }),
+  it: pack({
     login: "Accedi",
-    myAccount: "Il mio account",
     logout: "Esci",
     selectLanguage: "Scegli lingua",
-    search: "Cerca",
     free: "Gratis",
     completelyFree: "Completamente gratis",
-    heroLine:
-      "Strumenti online per video, audio, PDF e file — gratis e senza filigrana",
-  },
-  ru: {
-    ...en,
+    noWatermark: "Senza filigrana",
+    dragFile: "Trascina un file qui o scegli dal dispositivo",
+    chooseFile: "Scegli file",
+    startProcessing: "Avvia elaborazione",
+    working: "Elaborazione…",
+    faqTitle: "Domande frequenti",
+    freeInBrowser: "gratis nel browser",
+    privacy: "Privacy",
+    terms: "Termini",
+    help: "Aiuto",
+    contact: "Contatti",
+    acceptAll: "Accetta tutto",
+    rateTool: "Valuta lo strumento",
+    categories: {
+      generators: { label: "Generatori", sectionTitle: "Generatori" },
+      calculators: { label: "Calcoli", sectionTitle: "Calcoli" },
+      ai: { label: "IA", sectionTitle: "Strumenti IA" },
+      "social-dev": { label: "Social", sectionTitle: "Social e sviluppatori" },
+      video: { label: "Video", sectionTitle: "Strumenti video" },
+      audio: { label: "Audio", sectionTitle: "Strumenti audio" },
+      pdf: { label: "PDF", sectionTitle: "Strumenti PDF" },
+      converters: { label: "Convertitori", sectionTitle: "Convertitori" },
+      utilities: { label: "Quotidiano", sectionTitle: "Strumenti quotidiani" },
+    },
+  }),
+  ru: pack({
     login: "Войти",
-    myAccount: "Мой аккаунт",
     logout: "Выйти",
     selectLanguage: "Выберите язык",
-    search: "Поиск",
     free: "Бесплатно",
     completelyFree: "Полностью бесплатно",
-    heroLine:
-      "Онлайн-инструменты для видео, аудио, PDF и файлов — бесплатно и без водяного знака",
-  },
-  tr: {
-    ...en,
+    noWatermark: "Без водяного знака",
+    dragFile: "Перетащите файл сюда или выберите с устройства",
+    chooseFile: "Выбрать файл",
+    startProcessing: "Начать обработку",
+    working: "Обработка…",
+    faqTitle: "Частые вопросы",
+    freeInBrowser: "бесплатно в браузере",
+    privacy: "Конфиденциальность",
+    terms: "Условия",
+    help: "Помощь",
+    contact: "Контакты",
+    acceptAll: "Принять все",
+    rateTool: "Оценить инструмент",
+    categories: {
+      generators: { label: "Генераторы", sectionTitle: "Генераторы" },
+      calculators: { label: "Расчёты", sectionTitle: "Расчёты" },
+      ai: { label: "ИИ", sectionTitle: "ИИ-инструменты" },
+      "social-dev": { label: "Соцсети", sectionTitle: "Соцсети и разработка" },
+      video: { label: "Видео", sectionTitle: "Видео-инструменты" },
+      audio: { label: "Аудио", sectionTitle: "Аудио-инструменты" },
+      pdf: { label: "PDF", sectionTitle: "PDF-инструменты" },
+      converters: { label: "Конвертеры", sectionTitle: "Конвертеры" },
+      utilities: { label: "Ежедневные", sectionTitle: "Ежедневные инструменты" },
+    },
+  }),
+  pl: pack({
+    login: "Zaloguj",
+    logout: "Wyloguj",
+    selectLanguage: "Wybierz język",
+    free: "Za darmo",
+    completelyFree: "Całkowicie za darmo",
+    noWatermark: "Bez znaku wodnego",
+    dragFile: "Przeciągnij plik tutaj lub wybierz z urządzenia",
+    chooseFile: "Wybierz plik",
+    startProcessing: "Rozpocznij przetwarzanie",
+    faqTitle: "Najczęstsze pytania",
+    freeInBrowser: "za darmo w przeglądarce",
+    privacy: "Prywatność",
+    terms: "Regulamin",
+    help: "Pomoc",
+    contact: "Kontakt",
+    categories: {
+      generators: { label: "Generatory", sectionTitle: "Generatory" },
+      calculators: { label: "Kalkulatory", sectionTitle: "Kalkulatory" },
+      ai: { label: "AI", sectionTitle: "Narzędzia AI" },
+      "social-dev": { label: "Social", sectionTitle: "Social i deweloperzy" },
+      video: { label: "Wideo", sectionTitle: "Narzędzia wideo" },
+      audio: { label: "Audio", sectionTitle: "Narzędzia audio" },
+      pdf: { label: "PDF", sectionTitle: "Narzędzia PDF" },
+      converters: { label: "Konwertery", sectionTitle: "Konwertery" },
+      utilities: { label: "Codzienne", sectionTitle: "Narzędzia codzienne" },
+    },
+  }),
+  tr: pack({
     login: "Giriş yap",
-    myAccount: "Hesabım",
     logout: "Çıkış",
     selectLanguage: "Dil seçin",
-    search: "Ara",
     free: "Ücretsiz",
     completelyFree: "Tamamen ücretsiz",
-    heroLine:
-      "Video, ses, PDF ve dosyalar için çevrimiçi araçlar — ücretsiz ve filigransız",
-  },
-  fa: {
-    ...ar,
+    noWatermark: "Filigran yok",
+    dragFile: "Dosyayı buraya sürükleyin veya cihazdan seçin",
+    chooseFile: "Dosya seç",
+    startProcessing: "İşlemi başlat",
+    faqTitle: "Sık sorulan sorular",
+    freeInBrowser: "tarayıcıda ücretsiz",
+    privacy: "Gizlilik",
+    terms: "Şartlar",
+    help: "Yardım",
+    contact: "İletişim",
+    categories: {
+      generators: { label: "Oluşturucular", sectionTitle: "Oluşturucular" },
+      calculators: { label: "Hesaplayıcılar", sectionTitle: "Hesaplayıcılar" },
+      ai: { label: "YZ", sectionTitle: "YZ araçları" },
+      "social-dev": { label: "Sosyal", sectionTitle: "Sosyal ve geliştirici" },
+      video: { label: "Video", sectionTitle: "Video araçları" },
+      audio: { label: "Ses", sectionTitle: "Ses araçları" },
+      pdf: { label: "PDF", sectionTitle: "PDF araçları" },
+      converters: { label: "Dönüştürücüler", sectionTitle: "Dönüştürücüler" },
+      utilities: { label: "Günlük", sectionTitle: "Günlük araçlar" },
+    },
+  }),
+  id: pack({
+    login: "Masuk",
+    logout: "Keluar",
+    selectLanguage: "Pilih bahasa",
+    free: "Gratis",
+    completelyFree: "Sepenuhnya gratis",
+    noWatermark: "Tanpa watermark",
+    dragFile: "Seret file ke sini atau pilih dari perangkat",
+    chooseFile: "Pilih file",
+    startProcessing: "Mulai proses",
+    faqTitle: "Pertanyaan umum",
+    freeInBrowser: "gratis di browser",
+    privacy: "Privasi",
+    terms: "Ketentuan",
+    help: "Bantuan",
+    contact: "Kontak",
+    categories: {
+      generators: { label: "Generator", sectionTitle: "Generator" },
+      calculators: { label: "Kalkulator", sectionTitle: "Kalkulator" },
+      ai: { label: "AI", sectionTitle: "Alat AI" },
+      "social-dev": { label: "Sosial", sectionTitle: "Sosial & pengembang" },
+      video: { label: "Video", sectionTitle: "Alat video" },
+      audio: { label: "Audio", sectionTitle: "Alat audio" },
+      pdf: { label: "PDF", sectionTitle: "Alat PDF" },
+      converters: { label: "Konverter", sectionTitle: "Konverter" },
+      utilities: { label: "Harian", sectionTitle: "Alat harian" },
+    },
+  }),
+  ja: pack({
+    login: "ログイン",
+    logout: "ログアウト",
+    selectLanguage: "言語を選択",
+    free: "無料",
+    completelyFree: "完全無料",
+    noWatermark: "透かしなし",
+    dragFile: "ファイルをここにドラッグするか端末から選択",
+    chooseFile: "ファイルを選択",
+    startProcessing: "処理を開始",
+    working: "処理中…",
+    faqTitle: "よくある質問",
+    freeInBrowser: "ブラウザで無料",
+    privacy: "プライバシー",
+    terms: "利用規約",
+    help: "ヘルプ",
+    contact: "お問い合わせ",
+    acceptAll: "すべて許可",
+    rateTool: "このツールを評価",
+    categories: {
+      generators: { label: "ジェネレーター", sectionTitle: "ジェネレーター" },
+      calculators: { label: "計算機", sectionTitle: "計算機" },
+      ai: { label: "AI", sectionTitle: "AIツール" },
+      "social-dev": { label: "ソーシャル", sectionTitle: "ソーシャル＆開発" },
+      video: { label: "動画", sectionTitle: "動画ツール" },
+      audio: { label: "音声", sectionTitle: "音声ツール" },
+      pdf: { label: "PDF", sectionTitle: "PDFツール" },
+      converters: { label: "変換", sectionTitle: "変換ツール" },
+      utilities: { label: "日常", sectionTitle: "日常ツール" },
+    },
+  }),
+  ko: pack({
+    login: "로그인",
+    logout: "로그아웃",
+    selectLanguage: "언어 선택",
+    free: "무료",
+    completelyFree: "완전 무료",
+    noWatermark: "워터마크 없음",
+    dragFile: "파일을 여기로 끌어오거나 기기에서 선택",
+    chooseFile: "파일 선택",
+    startProcessing: "처리 시작",
+    faqTitle: "자주 묻는 질문",
+    freeInBrowser: "브라우저에서 무료",
+    privacy: "개인정보",
+    terms: "이용약관",
+    help: "도움말",
+    contact: "문의",
+    categories: {
+      generators: { label: "생성기", sectionTitle: "생성기" },
+      calculators: { label: "계산기", sectionTitle: "계산기" },
+      ai: { label: "AI", sectionTitle: "AI 도구" },
+      "social-dev": { label: "소셜", sectionTitle: "소셜 & 개발" },
+      video: { label: "동영상", sectionTitle: "동영상 도구" },
+      audio: { label: "오디오", sectionTitle: "오디오 도구" },
+      pdf: { label: "PDF", sectionTitle: "PDF 도구" },
+      converters: { label: "변환기", sectionTitle: "변환기" },
+      utilities: { label: "일상", sectionTitle: "일상 도구" },
+    },
+  }),
+  "zh-CN": pack({
+    login: "登录",
+    logout: "退出",
+    selectLanguage: "选择语言",
+    free: "免费",
+    completelyFree: "完全免费",
+    noWatermark: "无水印",
+    dragFile: "将文件拖到此处或从设备选择",
+    chooseFile: "选择文件",
+    startProcessing: "开始处理",
+    faqTitle: "常见问题",
+    freeInBrowser: "浏览器内免费使用",
+    privacy: "隐私",
+    terms: "条款",
+    help: "帮助",
+    contact: "联系我们",
+    categories: {
+      generators: { label: "生成器", sectionTitle: "生成器" },
+      calculators: { label: "计算器", sectionTitle: "计算器" },
+      ai: { label: "AI", sectionTitle: "AI 工具" },
+      "social-dev": { label: "社交", sectionTitle: "社交与开发" },
+      video: { label: "视频", sectionTitle: "视频工具" },
+      audio: { label: "音频", sectionTitle: "音频工具" },
+      pdf: { label: "PDF", sectionTitle: "PDF 工具" },
+      converters: { label: "转换器", sectionTitle: "转换器" },
+      utilities: { label: "日常", sectionTitle: "日常工具" },
+    },
+  }),
+  "zh-TW": pack({
+    login: "登入",
+    logout: "登出",
+    selectLanguage: "選擇語言",
+    free: "免費",
+    completelyFree: "完全免費",
+    noWatermark: "無浮水印",
+    dragFile: "將檔案拖曳至此或從裝置選擇",
+    chooseFile: "選擇檔案",
+    startProcessing: "開始處理",
+    faqTitle: "常見問題",
+    freeInBrowser: "瀏覽器內免費使用",
+    privacy: "隱私權",
+    terms: "條款",
+    help: "說明",
+    contact: "聯絡我們",
+    categories: {
+      generators: { label: "產生器", sectionTitle: "產生器" },
+      calculators: { label: "計算機", sectionTitle: "計算機" },
+      ai: { label: "AI", sectionTitle: "AI 工具" },
+      "social-dev": { label: "社群", sectionTitle: "社群與開發" },
+      video: { label: "影片", sectionTitle: "影片工具" },
+      audio: { label: "音訊", sectionTitle: "音訊工具" },
+      pdf: { label: "PDF", sectionTitle: "PDF 工具" },
+      converters: { label: "轉換器", sectionTitle: "轉換器" },
+      utilities: { label: "日常", sectionTitle: "日常工具" },
+    },
+  }),
+  fa: pack({
     login: "ورود",
-    myAccount: "حساب من",
     logout: "خروج",
     selectLanguage: "انتخاب زبان",
     search: "جستجو",
     free: "رایگان",
     completelyFree: "کاملاً رایگان",
+    noWatermark: "بدون واترمارک",
     heroLine:
       "ابزارهای آنلاین برای ویدیو، صدا، PDF و فایل‌ها — رایگان و بدون واترمارک",
-  },
-  he: {
-    ...en,
+    dragFile: "فایل را اینجا بکشید یا از دستگاه انتخاب کنید",
+    chooseFile: "انتخاب فایل",
+    startProcessing: "شروع پردازش",
+    working: "در حال کار…",
+    faqTitle: "سؤالات متداول",
+    whyUs: "چرا ما",
+    freeInBrowser: "رایگان در مرورگر",
+    privacy: "حریم خصوصی",
+    terms: "شرایط",
+    refund: "بازپرداخت",
+    pricing: "قیمت‌ها",
+    help: "راهنما",
+    contact: "تماس",
+    cookieSettings: "تنظیمات کوکی",
+    acceptAll: "پذیرش همه",
+    essentialOnly: "فقط ضروری",
+    rateTool: "امتیاز به ابزار",
+    confirmDownload: "تأیید و دانلود",
+    thankYouRating: "متشکریم — امتیاز ذخیره شد",
+    categories: {
+      generators: { label: "تولیدکننده‌ها", sectionTitle: "تولیدکننده‌ها" },
+      calculators: { label: "محاسبات", sectionTitle: "محاسبات" },
+      ai: { label: "هوش مصنوعی", sectionTitle: "ابزارهای هوش مصنوعی" },
+      "social-dev": { label: "شبکه‌ها", sectionTitle: "شبکه و توسعه‌دهنده" },
+      video: { label: "ویدیو", sectionTitle: "ابزارهای ویدیو" },
+      audio: { label: "صوت", sectionTitle: "ابزارهای صوت" },
+      pdf: { label: "PDF", sectionTitle: "ابزارهای PDF" },
+      converters: { label: "مبدل‌ها", sectionTitle: "مبدل‌ها" },
+      utilities: { label: "روزانه", sectionTitle: "ابزارهای روزانه" },
+    },
+  }),
+  vi: pack({
+    login: "Đăng nhập",
+    logout: "Đăng xuất",
+    selectLanguage: "Chọn ngôn ngữ",
+    free: "Miễn phí",
+    completelyFree: "Hoàn toàn miễn phí",
+    noWatermark: "Không watermark",
+    dragFile: "Kéo tệp vào đây hoặc chọn từ thiết bị",
+    chooseFile: "Chọn tệp",
+    startProcessing: "Bắt đầu xử lý",
+    faqTitle: "Câu hỏi thường gặp",
+    freeInBrowser: "miễn phí trên trình duyệt",
+    privacy: "Riêng tư",
+    terms: "Điều khoản",
+    help: "Trợ giúp",
+    contact: "Liên hệ",
+    categories: {
+      generators: { label: "Trình tạo", sectionTitle: "Trình tạo" },
+      calculators: { label: "Máy tính", sectionTitle: "Máy tính" },
+      ai: { label: "AI", sectionTitle: "Công cụ AI" },
+      "social-dev": { label: "Mạng xã hội", sectionTitle: "MXH & lập trình" },
+      video: { label: "Video", sectionTitle: "Công cụ video" },
+      audio: { label: "Âm thanh", sectionTitle: "Công cụ âm thanh" },
+      pdf: { label: "PDF", sectionTitle: "Công cụ PDF" },
+      converters: { label: "Chuyển đổi", sectionTitle: "Chuyển đổi" },
+      utilities: { label: "Hàng ngày", sectionTitle: "Công cụ hàng ngày" },
+    },
+  }),
+  he: pack({
     login: "התחברות",
-    myAccount: "החשבון שלי",
     logout: "התנתקות",
     selectLanguage: "בחירת שפה",
-    search: "חיפוש",
     free: "חינם",
     completelyFree: "חינם לגמרי",
-    heroLine:
-      "כלים מקוונים לווידאו, אודיו, PDF וקבצים — בחינם וללא סימן מים",
-  },
+    noWatermark: "ללא סימן מים",
+    dragFile: "גרור קובץ לכאן או בחר מהמכשיר",
+    chooseFile: "בחירת קובץ",
+    startProcessing: "התחל עיבוד",
+    faqTitle: "שאלות נפוצות",
+    freeInBrowser: "חינם בדפדפן",
+    privacy: "פרטיות",
+    terms: "תנאים",
+    help: "עזרה",
+    contact: "צור קשר",
+    categories: {
+      generators: { label: "מחוללים", sectionTitle: "מחוללים" },
+      calculators: { label: "מחשבונים", sectionTitle: "מחשבונים" },
+      ai: { label: "בינה מלאכותית", sectionTitle: "כלי בינה מלאכותית" },
+      "social-dev": { label: "חברתי", sectionTitle: "חברתי ומפתחים" },
+      video: { label: "וידאו", sectionTitle: "כלי וידאו" },
+      audio: { label: "אודיו", sectionTitle: "כלי אודיו" },
+      pdf: { label: "PDF", sectionTitle: "כלי PDF" },
+      converters: { label: "ממירים", sectionTitle: "ממירים" },
+      utilities: { label: "יומיומי", sectionTitle: "כלים יומיומיים" },
+    },
+  }),
+  hi: pack({
+    login: "लॉग इन",
+    logout: "लॉग आउट",
+    selectLanguage: "भाषा चुनें",
+    free: "मुफ़्त",
+    completelyFree: "पूरी तरह मुफ़्त",
+    noWatermark: "बिना वॉटरमार्क",
+    dragFile: "फ़ाइल यहाँ खींचें या डिवाइस से चुनें",
+    chooseFile: "फ़ाइल चुनें",
+    startProcessing: "प्रोसेसिंग शुरू करें",
+    faqTitle: "अक्सर पूछे जाने वाले प्रश्न",
+    freeInBrowser: "ब्राउज़र में मुफ़्त",
+    privacy: "गोपनीयता",
+    terms: "शर्तें",
+    help: "मदद",
+    contact: "संपर्क",
+    categories: {
+      generators: { label: "जनरेटर", sectionTitle: "जनरेटर" },
+      calculators: { label: "कैलकुलेटर", sectionTitle: "कैलकुलेटर" },
+      ai: { label: "AI", sectionTitle: "AI टूल" },
+      "social-dev": { label: "सोशल", sectionTitle: "सोशल और डेवलपर" },
+      video: { label: "वीडियो", sectionTitle: "वीडियो टूल" },
+      audio: { label: "ऑडियो", sectionTitle: "ऑडियो टूल" },
+      pdf: { label: "PDF", sectionTitle: "PDF टूल" },
+      converters: { label: "कन्वर्टर", sectionTitle: "कन्वर्टर" },
+      utilities: { label: "दैनिक", sectionTitle: "दैनिक टूल" },
+    },
+  }),
+  th: pack({
+    login: "เข้าสู่ระบบ",
+    logout: "ออกจากระบบ",
+    selectLanguage: "เลือกภาษา",
+    free: "ฟรี",
+    completelyFree: "ฟรีทั้งหมด",
+    noWatermark: "ไม่มีลายน้ำ",
+    dragFile: "ลากไฟล์มาที่นี่หรือเลือกจากอุปกรณ์",
+    chooseFile: "เลือกไฟล์",
+    startProcessing: "เริ่มประมวลผล",
+    faqTitle: "คำถามที่พบบ่อย",
+    freeInBrowser: "ฟรีในเบราว์เซอร์",
+    privacy: "ความเป็นส่วนตัว",
+    terms: "ข้อกำหนด",
+    help: "ช่วยเหลือ",
+    contact: "ติดต่อ",
+    categories: {
+      generators: { label: "ตัวสร้าง", sectionTitle: "ตัวสร้าง" },
+      calculators: { label: "เครื่องคิดเลข", sectionTitle: "เครื่องคิดเลข" },
+      ai: { label: "AI", sectionTitle: "เครื่องมือ AI" },
+      "social-dev": { label: "โซเชียล", sectionTitle: "โซเชียลและนักพัฒนา" },
+      video: { label: "วิดีโอ", sectionTitle: "เครื่องมือวิดีโอ" },
+      audio: { label: "เสียง", sectionTitle: "เครื่องมือเสียง" },
+      pdf: { label: "PDF", sectionTitle: "เครื่องมือ PDF" },
+      converters: { label: "ตัวแปลง", sectionTitle: "ตัวแปลง" },
+      utilities: { label: "รายวัน", sectionTitle: "เครื่องมือรายวัน" },
+    },
+  }),
 };
 
 export function getMessages(locale: LocaleCode): UiMessages {

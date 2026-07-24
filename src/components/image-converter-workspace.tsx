@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocale } from "@/components/locale-provider";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   circularCropImage,
@@ -56,6 +57,7 @@ function formatBytes(n: number) {
 }
 
 export function ImageConverterWorkspace({ slug, title, description }: Props) {
+  const { messages } = useLocale();
   const [mode, setMode] = useState<Mode>("convert");
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -311,7 +313,7 @@ export function ImageConverterWorkspace({ slug, title, description }: Props) {
         }`}
       >
         <p className="text-sm font-bold text-[#333]">
-          اسحب {multi ? "الصور" : "الصورة"} هنا أو اختر من جهازك
+          {multi ? messages.dragFiles : messages.dragFile}
         </p>
         <p className="mt-1 text-xs font-semibold text-[#777]">
           {mode === "convert" && "حوّل إلى WebP أو AVIF أو JPG/PNG"}
@@ -327,7 +329,7 @@ export function ImageConverterWorkspace({ slug, title, description }: Props) {
           className="mt-4 rounded-md bg-[#2563eb] px-5 py-2 text-sm font-bold text-white hover:bg-[#1d4ed8]"
           onClick={() => inputRef.current?.click()}
         >
-          اختيار ملف{multi ? "ات" : ""}
+          {multi ? messages.chooseFiles : messages.chooseFile}
         </button>
         <input
           ref={inputRef}
@@ -562,7 +564,7 @@ export function ImageConverterWorkspace({ slug, title, description }: Props) {
           disabled={busy || files.length === 0}
           onClick={() => void run()}
         >
-          {busy ? "جارٍ المعالجة…" : "ابدأ المعالجة"}
+          {busy ? messages.working : messages.startProcessing}
         </button>
 
         {status ? (

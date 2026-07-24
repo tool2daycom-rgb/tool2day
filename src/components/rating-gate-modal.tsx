@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { useLocale } from "@/components/locale-provider";
 import { StarsRow } from "@/components/star-rating";
 import {
   getDownloadRatingContext,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/ratings";
 
 export function RatingGateModal() {
+  const { messages } = useLocale();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<string | null>(null);
   const [picked, setPicked] = useState(0);
@@ -41,7 +43,7 @@ export function RatingGateModal() {
   async function confirm() {
     if (!target) return;
     if (picked < 1) {
-      setError("اختر تقييماً من 1 إلى 5 نجوم");
+      setError(messages.pickStars);
       return;
     }
     setBusy(true);
@@ -51,7 +53,7 @@ export function RatingGateModal() {
       setOpen(false);
       resolveRatingGate(true);
     } catch {
-      setError("تعذّر حفظ التقييم، حاول مرة أخرى");
+      setError(messages.saveFailed);
     } finally {
       setBusy(false);
     }
@@ -72,7 +74,7 @@ export function RatingGateModal() {
       <button
         type="button"
         className="absolute inset-0 bg-[#0a0a0a]/50 backdrop-blur-[2px]"
-        aria-label="إغلاق"
+        aria-label={messages.close}
         onClick={cancel}
       />
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#e8e8e8] bg-white p-6 shadow-[0_24px_80px_rgba(0,0,0,0.2)] sm:p-8">
@@ -82,11 +84,10 @@ export function RatingGateModal() {
             id="rating-gate-title"
             className="mt-4 text-xl font-bold text-[#111]"
           >
-            قيّم الأداة قبل التنزيل
+            {messages.rateBeforeDownload}
           </h2>
           <p className="mt-2 text-sm leading-7 text-[#555]">
-            التقييم مرة واحدة بعد كل استخدام — اختر النجوم ثم أكّد للتنزيل. لا يمكن
-            تغيير التقييم لاحقاً لهذا الاستخدام.
+            {messages.rateOnceOnDownload}
           </p>
           <div className="mt-6">
             <StarsRow
@@ -98,7 +99,7 @@ export function RatingGateModal() {
           </div>
           {picked > 0 ? (
             <p className="mt-3 text-sm font-bold text-[#E8874A]">
-              تقييمك: {picked} / 5
+              {messages.yourRating}: {picked} / 5
             </p>
           ) : null}
           {error ? (
@@ -111,7 +112,7 @@ export function RatingGateModal() {
               onClick={() => void confirm()}
               className="flex-1 rounded-xl bg-[#111] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#222] disabled:opacity-60"
             >
-              {busy ? "جاري الحفظ…" : "تأكيد والتنزيل"}
+              {busy ? messages.saving : messages.confirmDownload}
             </button>
             <button
               type="button"
@@ -119,7 +120,7 @@ export function RatingGateModal() {
               onClick={cancel}
               className="flex-1 rounded-xl border border-[#ddd] px-5 py-3 text-sm font-semibold text-[#555] transition hover:bg-[#fafafa]"
             >
-              إلغاء
+              {messages.cancel}
             </button>
           </div>
         </div>

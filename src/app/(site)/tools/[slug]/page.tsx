@@ -53,25 +53,39 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   const tool = getTool(slug);
   if (!tool) return {};
-  const seo = getToolSeoContent(tool);
+  const cookieStore = await cookies();
+  const rawLang = cookieStore.get("tool2day_lang")?.value;
+  const locale =
+    rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
+  const displayTitle = getToolTitle(tool.slug, locale, tool.title);
+  const seo = getToolSeoContent(tool, { locale, title: displayTitle });
   const title = getToolPageTitle(tool);
   const description = getToolPageDescription(tool, seo.tagline);
   return {
-    title,
-    description,
+    title: locale === "ar" ? title : displayTitle,
+    description:
+      locale === "ar"
+        ? description
+        : `${displayTitle} — free online tool on Tool2Day, no watermark.`,
     keywords: getToolKeywords(tool),
     openGraph: {
-      title: `${title} | Tool2Day`,
-      description,
+      title: `${locale === "ar" ? title : displayTitle} | Tool2Day`,
+      description:
+        locale === "ar"
+          ? description
+          : `${displayTitle} — free online tool on Tool2Day, no watermark.`,
       url: `https://tool2day.com/tools/${tool.slug}`,
       siteName: "Tool2Day",
-      locale: "ar_AR",
+      locale: locale === "ar" ? "ar_AR" : locale === "en" ? "en_US" : locale,
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} | Tool2Day`,
-      description,
+      title: `${locale === "ar" ? title : displayTitle} | Tool2Day`,
+      description:
+        locale === "ar"
+          ? description
+          : `${displayTitle} — free online tool on Tool2Day, no watermark.`,
     },
     alternates: {
       canonical: `https://tool2day.com/tools/${tool.slug}`,
@@ -141,7 +155,7 @@ export default async function ToolPage({ params }: Props) {
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const isImageConverter = slug === "image-converter";
-  const seo = getToolSeoContent(tool);
+  const seo = getToolSeoContent(tool, { locale, title: displayTitle });
   const isWide =
     isPdf ||
     isCv ||
@@ -149,10 +163,11 @@ export default async function ToolPage({ params }: Props) {
     kind === "ai-erase" ||
     isImageConverter ||
     kind === "video-content-ideas";
-  const tagline =
+  const tagline = cleanTagline(seo.tagline);
+  const toolDescription =
     locale === "ar"
-      ? cleanTagline(seo.tagline)
-      : `${displayTitle} — free, right in your browser`;
+      ? tool.description
+      : `${displayTitle} — ${messages.freeInBrowser}`;
 
   return (
     <div
@@ -213,16 +228,16 @@ export default async function ToolPage({ params }: Props) {
       <div className="mt-8">
         {isPdf ? (
           <PdfEditorWorkspace
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
             slug={tool.slug}
           />
         ) : isUtility ? (
           <UtilityToolWorkspace
             kind={kind as "text-tools" | "error-detector" | "speed-test"}
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : isGenerator ? (
           <GeneratorsWorkspace
@@ -237,8 +252,8 @@ export default async function ToolPage({ params }: Props) {
                 | "css-gradient-generator"
             }
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : isCalculator ? (
           <CalculatorsWorkspace
@@ -251,8 +266,8 @@ export default async function ToolPage({ params }: Props) {
                 | "currency-exchange"
             }
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : isAiTool ? (
           <AiToolsWorkspace
@@ -265,8 +280,8 @@ export default async function ToolPage({ params }: Props) {
                 | "ai-erase"
             }
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : isSocialDev ? (
           <SocialDevWorkspace
@@ -278,26 +293,26 @@ export default async function ToolPage({ params }: Props) {
                 | "video-content-ideas"
             }
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : isVideoToText ? (
           <VideoToTextWorkspace
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : isImageConverter ? (
           <ImageConverterWorkspace
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
           />
         ) : (
           <ToolWorkspace
             slug={tool.slug}
-            title={tool.title}
-            description={tool.description}
+            title={displayTitle}
+            description={toolDescription}
             accept={tool.accept}
           />
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "@/components/locale-provider";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   MAX_TRANSCRIBE_DURATION_SEC,
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function VideoToTextWorkspace({ slug, title, description }: Props) {
+  const { messages } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("ar");
@@ -117,7 +119,7 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
         }}
       >
         <p className="text-sm font-bold text-[#111]">
-          {file ? file.name : "اسحب فيديو أو صوت هنا أو انقر للاختيار"}
+          {file ? file.name : messages.dragFile}
         </p>
         <p className="mt-1 text-xs text-[#888]">
           MP4 / WebM / MOV / MP3 / WAV — حتى {maxMin} دقيقة · {MAX_VIDEO_TO_TEXT_MB}
@@ -154,7 +156,7 @@ export function VideoToTextWorkspace({ slug, title, description }: Props) {
         onClick={() => void run()}
         className="mt-4 w-full rounded-md bg-[#111] px-4 py-3 text-sm font-bold text-white hover:bg-[#333] disabled:opacity-50"
       >
-        {busy ? "جارٍ تفريغ كل الكلمات…" : "حوّل الفيديو إلى نص"}
+        {busy ? messages.working : messages.startProcessing}
       </button>
 
       {busy || progress > 0 ? (

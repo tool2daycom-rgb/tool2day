@@ -2,21 +2,23 @@
 
 import Link from "next/link";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { useLocale } from "@/components/locale-provider";
 import { openCookieSettings } from "@/lib/cookie-consent";
 
-const links = [
-  { href: "/privacy", label: "الخصوصية" },
-  { href: "/terms", label: "الشروط والأحكام" },
-  { href: "/refund", label: "سياسة الاسترداد" },
-  { href: "/pricing", label: "التسعير" },
-  { href: "/help", label: "المساعدة" },
-  { href: "/contact", label: "تواصل معنا" },
-];
-
 export function SiteFooter() {
+  const { messages, localeDef } = useLocale();
+
+  const links = [
+    { href: "/privacy", label: messages.privacy },
+    { href: "/terms", label: messages.terms },
+    { href: "/refund", label: messages.refund },
+    { href: "/pricing", label: messages.pricing },
+    { href: "/help", label: messages.help },
+    { href: "/contact", label: messages.contact },
+  ];
+
   return (
     <footer className="relative mt-auto bg-[#0a0a0a] text-white">
-      {/* موجة علوية بأسلوب SISTRIX */}
       <div className="pointer-events-none absolute inset-x-0 top-0 -translate-y-[calc(100%-1px)] leading-none">
         <svg
           viewBox="0 0 1440 72"
@@ -40,7 +42,7 @@ export function SiteFooter() {
           <BrandMarkAnimated size={56} motion="morph" />
 
           <nav
-            aria-label="روابط التذييل"
+            aria-label={messages.footerNav}
             className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm font-semibold text-white/90 sm:gap-x-8 sm:text-[15px]"
           >
             {links.map((link) => (
@@ -57,13 +59,13 @@ export function SiteFooter() {
               onClick={openCookieSettings}
               className="transition hover:text-white"
             >
-              إعدادات الكوكيز
+              {messages.cookieSettings}
             </button>
           </nav>
 
           <div className="flex w-full flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/55 sm:flex-row sm:text-sm">
             <p>© Tool2Day</p>
-            <p>العربية</p>
+            <p>{localeDef.name}</p>
           </div>
         </div>
       </div>

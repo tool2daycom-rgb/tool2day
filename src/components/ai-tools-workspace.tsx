@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocale } from "@/components/locale-provider";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   cleanArticleText,
@@ -106,6 +107,7 @@ function FilePick({
   file: File | null;
   onPick: (f: File | null) => void;
 }) {
+  const { messages } = useLocale();
   return (
     <label className="block cursor-pointer rounded-xl border border-dashed border-[#ccc] bg-[#fafafa] px-4 py-6 text-center hover:border-[#2563eb] hover:bg-[#f5f8ff]">
       <input
@@ -115,7 +117,7 @@ function FilePick({
         onChange={(e) => onPick(e.target.files?.[0] || null)}
       />
       <p className="text-sm font-bold text-[#222]">
-        {file ? file.name : "اضغط لاختيار صورة"}
+        {file ? file.name : messages.chooseImage}
       </p>
       <p className="mt-1 text-xs text-[#777]">PNG · JPG · WEBP</p>
     </label>

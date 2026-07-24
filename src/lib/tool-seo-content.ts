@@ -1,3 +1,5 @@
+import type { LocaleCode } from "@/lib/i18n/locales";
+import { getMessages, type UiMessages } from "@/lib/i18n/messages";
 import type { Tool } from "@/lib/tools";
 
 export type ToolFaq = { q: string; a: string };
@@ -18,7 +20,7 @@ export type ToolSeoContent = {
   faqs: ToolFaq[];
 };
 
-const FREE_WHY = [
+const FREE_WHY_AR = [
   {
     title: "سهل الاستخدام",
     body: "واجهة بسيطة بالعربية تتيح لك البدء ببضع نقرات دون تعقيد.",
@@ -45,7 +47,45 @@ const FREE_WHY = [
   },
 ] as const;
 
-function defaultContent(tool: Tool): ToolSeoContent {
+function whyFromMessages(m: UiMessages): ToolSeoContent["why"] {
+  return [
+    { title: m.easyUse, body: m.easyUseBody },
+    { title: m.noDownloads, body: m.noDownloadsBody },
+    { title: m.completelyFree, body: m.freeBody },
+    { title: m.noWatermark, body: m.noWatermarkBody },
+    { title: m.worksDevices, body: m.worksDevicesBody },
+    { title: m.safePrivate, body: m.safePrivateBody },
+  ];
+}
+
+function localizedContent(name: string, m: UiMessages): ToolSeoContent {
+  return {
+    tagline: `${name} — ${m.freeInBrowser}`,
+    introTitle: `${name} ${m.onlineTool}`,
+    intro: `${name} ${m.onlineIntro}`,
+    howTitle: `${m.howUse} ${name}?`,
+    howIntro: m.howIntro,
+    steps: [
+      { title: m.stepOpen, body: m.stepOpenBody },
+      { title: m.stepUpload, body: m.stepUploadBody },
+      { title: m.stepSettings, body: m.stepSettingsBody },
+      { title: m.stepExport, body: m.stepExportBody },
+    ],
+    moreTitle: m.moreTitle,
+    moreBody: m.moreBody,
+    whyTitle: m.whyUs,
+    why: whyFromMessages(m),
+    faqs: [
+      { q: m.faqFreeQ.replace("this tool", name).replace("الأداة", name), a: m.faqFreeA },
+      { q: m.faqWaterQ, a: m.faqWaterA },
+      { q: m.faqInstallQ, a: m.faqInstallA },
+      { q: m.faqWhereQ, a: m.faqWhereA },
+      { q: m.faqFailQ, a: m.faqFailA },
+    ],
+  };
+}
+
+function defaultContentAr(tool: Tool): ToolSeoContent {
   const name = tool.title;
   return {
     tagline: `${name} مجاناً مباشرة من المتصفح`,
@@ -74,7 +114,7 @@ function defaultContent(tool: Tool): ToolSeoContent {
     moreTitle: `استخدم ${name} وأنشئ محتوى أفضل`,
     moreBody: `بجانب ${name} ستجد على Tool2Day أدوات فيديو وصوت وPDF ومحولات مجانية تساعدك على إكمال مشروعك من مكان واحد، مع نفس المبدأ: مجاني وبدون علامة مائية.`,
     whyTitle: "لماذا تختارنا",
-    why: [...FREE_WHY],
+    why: [...FREE_WHY_AR],
     faqs: [
       {
         q: `هل ${name} مجاني؟`,
@@ -100,102 +140,18 @@ function defaultContent(tool: Tool): ToolSeoContent {
   };
 }
 
-const overrides: Partial<Record<string, ToolSeoContent>> = {
-  "screen-recorder": {
-    tagline: "سجّل الشاشة مباشرة من متصفحك — مجاناً",
-    introTitle: "شاشة التسجيل عبر الإنترنت",
-    intro:
-      "مسجل الشاشة عبر الإنترنت على Tool2Day يتيح لك التقاط وتسجيل ما يحدث على شاشة جهازك. استخدمه لإنشاء دروس فيديو، وتسجيل الاجتماعات والعروض، ولقطات الألعاب، وغيرها. لا تحتاج تثبيت برنامج أو إضافات — افتح الصفحة وابدأ خلال ثوانٍ. الأداة مجانية بالكامل وبدون علامة مائية، ويمكنك لاحقاً تقليم الفيديو أو إضافة نص أو ضبط الصوت عبر أدواتنا الأخرى.",
-    howTitle: "كيف أسجل الشاشة عبر الإنترنت؟",
-    howIntro: "لاستخدام مسجل الشاشة على Tool2Day، اتبع الخطوات التالية:",
-    steps: [
-      {
-        title: "اذهب إلى الموقع",
-        body: "افتح صفحة مسجل الشاشة على Tool2Day في متصفحك.",
-      },
-      {
-        title: "اختر مدة التسجيل",
-        body: "حدد مدة التسجيل بالثواني حسب حاجتك، ثم حضّر ما تريد عرضه على الشاشة.",
-      },
-      {
-        title: "ابدأ التسجيل",
-        body: "اضغط زر البدء واسمح للمتصفح بمشاركة الشاشة (ملء الشاشة أو نافذة أو تبويب حسب ما يعرضه المتصفح).",
-      },
-      {
-        title: "احفظ النتيجة",
-        body: "عند انتهاء المدة أو إيقاف المشاركة يُحفظ التسجيل على جهازك — مجاناً وبدون علامة مائية.",
-      },
-    ],
-    moreTitle:
-      "استخدم مسجل الشاشة المجاني، وأنشئ محتوى رائعاً لمنصات الإعلام",
-    moreBody:
-      "بعد التسجيل يمكنك استخدام أدوات أخرى على Tool2Day مثل قص الفيديو، الدمج، أو محرر الفيديو لتحسين المقطع. كل ذلك مجاني وبدون علامة مائية ليبقى محتواك احترافياً ونظيفاً.",
-    whyTitle: "لماذا تختارنا",
-    why: [
-      {
-        title: "سهل الاستخدام",
-        body: "ابدأ تسجيل الشاشة ببضع نقرات وواجهة عربية واضحة.",
-      },
-      {
-        title: "يعمل على أي جهاز",
-        body: "استخدمه من الكمبيوتر أو الأجهزة اللوحية عبر متصفح يدعم مشاركة الشاشة.",
-      },
-      {
-        title: "لا حاجة للتحميلات",
-        body: "لا برامج ولا إضافات — فقط الموقع والمتصفح.",
-      },
-      {
-        title: "مجاني بالكامل",
-        body: "التسجيل مجاني 100٪ دون إجبارك على اشتراك للبدء.",
-      },
-      {
-        title: "بدون علامة مائية",
-        body: "ملفك الناتج نظيف — لا نضيف شعار Tool2Day فوق التسجيل.",
-      },
-      {
-        title: "آمن",
-        body: "المعالجة تتم في المتصفح قدر الإمكان مع احترام خصوصيتك.",
-      },
-    ],
-    faqs: [
-      {
-        q: "ما فائدة مسجل الشاشة؟",
-        a: "يسجّل نشاط شاشتك لإنشاء شروحات، اجتماعات، عروض، أو لقطات لعب بسهولة من المتصفح.",
-      },
-      {
-        q: "كيف أسجّل الشاشة عبر الإنترنت؟",
-        a: "افتح الأداة، اختر المدة، اضغط ابدأ، واسمح بمشاركة الشاشة. عند الانتهاء يُحفظ الفيديو على جهازك.",
-      },
-      {
-        q: "هل يمكن التسجيل مع الصوت؟",
-        a: "حسب إعدادات المتصفح وما تسمح به عند مشاركة الشاشة/الميكروفون. فعّل الأذونات المطلوبة عند الطلب.",
-      },
-      {
-        q: "هل التسجيل محدود بوقت؟",
-        a: "نعم ضمن حدود الأداة في الصفحة (يمكنك ضبط المدة بالثواني حسب الخيارات المتاحة).",
-      },
-      {
-        q: "هل يمكن تعديل الفيديو بعد التسجيل؟",
-        a: "نعم عبر أدوات Tool2Day مثل القص والدمج ومحرر الفيديو — مجاناً وبدون علامة مائية.",
-      },
-      {
-        q: "هل الأداة مجانية وبدون علامة مائية؟",
-        a: "نعم. Tool2Day يقدّم مسجل الشاشة مجاناً بالكامل دون وضع علامة مائية على ملفك.",
-      },
-    ],
-  },
+const overrides: Record<string, ToolSeoContent> = {
   "enhance-video": {
-    tagline:
-      "حسّن وضوح الفيديو حتى 4K مجاناً — معالجة في المتصفح",
-    introTitle: "تحسين جودة الفيديو حتى 4K",
+    tagline: "حسّن جودة الفيديو وكبّره حتى 4K — مجاناً في المتصفح",
+    introTitle: "تحسين الفيديو عبر الإنترنت",
     intro:
-      "أداة تحسين جودة الفيديو على Tool2Day ترفع وضوح المقطع قدر الإمكان: تنعيم الضوضاء، رفع الدقة حتى 4K، توضيح الحواف، وتحسين التباين والألوان، ثم تصدير بترميز عالي الجودة. مناسبة لإنقاذ المقاطع الضبابية أو منخفضة الدقة قبل النشر. مجانية بالكامل وبدون علامة مائية.",
-    howTitle: "كيف أحسّن جودة الفيديو؟",
+      "أداة تحسين الفيديو على Tool2Day ترفع الدقة حتى 4K مع تنعيم الضوضاء وتوضيح الحواف — مجاناً وبدون علامة مائية، والمعالجة داخل المتصفح.",
+    howTitle: "كيف أحسّن فيديو؟",
     howIntro: "اتبع الخطوات التالية:",
     steps: [
       {
         title: "ارفع الفيديو",
-        body: "اختر المقطع من جهازك (يفضّل ملفات أقصر لمعالجة أسرع في المتصفح).",
+        body: "اختر مقطع MP4 أو WebM أو MOV من جهازك.",
       },
       {
         title: "اختر الدقة وقوة التحسين",
@@ -214,7 +170,7 @@ const overrides: Partial<Record<string, ToolSeoContent>> = {
     moreBody:
       "يمكنك قص الفيديو أو دمجه أو مواصلة المونتاج في محرر الفيديو على Tool2Day — كل ذلك مجاناً وبدون علامة مائية.",
     whyTitle: "لماذا تختارنا",
-    why: [...FREE_WHY],
+    why: [...FREE_WHY_AR],
     faqs: [
       {
         q: "هل يحسّن فعلاً الجودة أم يكبّر الصورة فقط؟",
@@ -236,6 +192,16 @@ const overrides: Partial<Record<string, ToolSeoContent>> = {
   },
 };
 
-export function getToolSeoContent(tool: Tool): ToolSeoContent {
-  return overrides[tool.slug] ?? defaultContent(tool);
+export function getToolSeoContent(
+  tool: Tool,
+  opts?: { locale?: LocaleCode; title?: string },
+): ToolSeoContent {
+  const locale = opts?.locale ?? "en";
+  const title = opts?.title ?? tool.title;
+
+  if (locale === "ar") {
+    return overrides[tool.slug] ?? defaultContentAr(tool);
+  }
+
+  return localizedContent(title, getMessages(locale));
 }

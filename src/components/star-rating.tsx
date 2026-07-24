@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Check, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { useLocale } from "@/components/locale-provider";
 import {
   fetchRatingStats,
   formatRatingAverage,
@@ -103,15 +104,17 @@ export function StarsRow({
 /** عرض فقط — التقييم يتم مرة واحدة بعد استخدام الأداة (قبل التنزيل) */
 export function ToolRatingBar({
   target,
-  label = "قيّم هذه الأداة",
+  label,
   className = "",
 }: {
   target: string;
   label?: string;
   className?: string;
 }) {
+  const { messages } = useLocale();
   const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
   const [myStars, setMyStars] = useState(0);
+  const resolvedLabel = label ?? messages.rateTool;
 
   useEffect(() => {
     setMyStars(getMyStars(target));
@@ -133,7 +136,7 @@ export function ToolRatingBar({
     <div
       className={`flex flex-wrap items-center justify-center gap-3 border-t border-dashed border-[#ddd] pt-8 ${className}`}
     >
-      <p className="text-base font-bold text-[#111]">{label}</p>
+      <p className="text-base font-bold text-[#111]">{resolvedLabel}</p>
       <div className="flex flex-wrap items-center justify-center gap-3">
         <StarsRow value={display} disabled size="lg" />
         <span className="text-sm font-semibold text-[#333]" dir="ltr">
@@ -142,24 +145,32 @@ export function ToolRatingBar({
             : "— / 5"}
         </span>
         <span className="text-sm text-[#666]">
-          {stats.count > 0 ? `${stats.count} صوتاً` : "لا تقييمات بعد"}
+          {stats.count > 0
+            ? `${stats.count} ${messages.ratingsCount}`
+            : messages.noRatingsYet}
         </span>
       </div>
       <p className="w-full text-center text-xs text-[#888]">
-        التقييم مرة واحدة بعد كل استخدام للأداة — عند التنزيل
+        {messages.rateOnceOnDownload}
       </p>
     </div>
   );
 }
 
-const HINTS = ["سيء", "مقبول", "جيد", "رائع", "ممتاز"] as const;
-
 export function SiteRatingCard() {
+  const { messages } = useLocale();
   const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
   const [voted, setVoted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(0);
   const [picked, setPicked] = useState(0);
+  const HINTS = [
+    messages.starBad,
+    messages.starOk,
+    messages.starGood,
+    messages.starGreat,
+    messages.starExcellent,
+  ] as const;
 
   useEffect(() => {
     setVoted(hasRatedSite());
@@ -196,7 +207,7 @@ export function SiteRatingCard() {
   const hint =
     preview >= 1
       ? HINTS[Math.min(5, Math.round(preview)) - 1]
-      : "اضغط على النجوم للتقييم مرة واحدة";
+      : messages.clickStarsOnce;
 
   return (
     <section className="relative mt-14 overflow-hidden border-y border-[#dce8f5] bg-[#eef5fc]">
@@ -223,20 +234,20 @@ export function SiteRatingCard() {
         </div>
 
         <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-[#122033] sm:text-4xl">
-          ما رأيك في الموقع؟
+          {messages.siteFeedbackTitle}
         </h2>
         <p className="mx-auto mt-3 max-w-md text-[15px] leading-8 text-[#3d4f63]">
-          تقييمات الأدوات تتجمّع هنا. تقييم الموقع مرة واحدة فقط.
+          {messages.siteFeedbackSub}
         </p>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-100">
             <Sparkles className="h-3.5 w-3.5" />
-            مجاني بالكامل
+            {messages.completelyFree}
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1 text-[11px] font-bold text-sky-800 ring-1 ring-sky-100">
             <ShieldCheck className="h-3.5 w-3.5" />
-            بدون علامة مائية
+            {messages.noWatermark}
           </span>
         </div>
 
@@ -244,7 +255,7 @@ export function SiteRatingCard() {
           {voted ? (
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
               <Check className="h-4 w-4" />
-              شكراً — تم حفظ تقييمك
+              {messages.thankYouRating}
             </div>
           ) : (
             <p className="mb-5 text-sm font-bold text-[#E8874A]">{hint}</p>
@@ -286,8 +297,8 @@ export function SiteRatingCard() {
 
             <p className="text-sm text-[#5a6d80]">
               {stats.count > 0
-                ? `تجميع ${stats.count} تقييماً من كل الأدوات والموقع`
-                : "تقييمات الأدوات تظهر هنا تلقائياً"}
+                ? `${stats.count} ${messages.ratingsAggregate}`
+                : messages.noRatingsYet}
             </p>
           </div>
         </div>

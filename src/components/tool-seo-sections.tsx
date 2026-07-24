@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
+import { useLocale } from "@/components/locale-provider";
 import { ToolRatingBar } from "@/components/star-rating";
 import type { ToolSeoContent } from "@/lib/tool-seo-content";
 
@@ -13,6 +14,7 @@ export function ToolSeoSections({
   content: ToolSeoContent;
   toolSlug: string;
 }) {
+  const { messages } = useLocale();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
@@ -22,11 +24,11 @@ export function ToolSeoSections({
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
             <Sparkles className="h-3.5 w-3.5" />
-            مجاني بالكامل
+            {messages.completelyFree}
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-800">
             <ShieldCheck className="h-3.5 w-3.5" />
-            بدون علامة مائية
+            {messages.noWatermark}
           </span>
         </div>
       </div>
@@ -78,7 +80,7 @@ export function ToolSeoSections({
       </section>
 
       <section>
-        <h2 className="mb-6 text-2xl font-bold text-[#111]">الأسئلة الشائعة</h2>
+        <h2 className="mb-6 text-2xl font-bold text-[#111]">{messages.faqTitle}</h2>
         <ul className="space-y-3">
           {content.faqs.map((faq, i) => {
             const open = openFaq === i;

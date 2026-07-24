@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useLocale } from "@/components/locale-provider";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   buildCssGradient,
@@ -258,6 +259,7 @@ function PalettePanel({
   title: string;
   description: string;
 }) {
+  const { messages } = useLocale();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -313,10 +315,10 @@ function PalettePanel({
         }}
       >
         <p className="text-sm font-bold text-[#333]">
-          اسحب صورة أو اختر من جهازك لاستخراج الألوان
+          {messages.dragFile}
         </p>
         <label className="mt-3 inline-flex cursor-pointer rounded-md bg-[#2563eb] px-5 py-2 text-sm font-bold text-white hover:bg-[#1d4ed8]">
-          اختيار صورة
+          {messages.chooseImage}
           <input
             type="file"
             accept="image/*"
