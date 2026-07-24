@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AiToolsWorkspace } from "@/components/ai-tools-workspace";
 import { CalculatorsWorkspace } from "@/components/calculators-workspace";
@@ -12,6 +13,9 @@ import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
 import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
+import { DEFAULT_LOCALE, isLocaleCode } from "@/lib/i18n/locales";
+import { getMessages } from "@/lib/i18n/messages";
+import { getToolTitle } from "@/lib/i18n/tool-titles";
 import {
   getToolKeywords,
   getToolPageDescription,
@@ -92,8 +96,16 @@ export default async function ToolPage({ params }: Props) {
   const tool = getTool(slug);
   if (!tool) notFound();
 
+  const cookieStore = await cookies();
+  const rawLang = cookieStore.get("tool2day_lang")?.value;
+  const locale =
+    rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
+  const messages = getMessages(locale);
+  const displayTitle = getToolTitle(tool.slug, locale, tool.title);
+
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
+  const categoryLabel = messages.categories[tool.category].sectionTitle;
   const isPdf = slug === "pdf-editor";
   const isCv = slug === "cv-builder";
   const kind = getToolKind(slug);
@@ -137,7 +149,10 @@ export default async function ToolPage({ params }: Props) {
     kind === "ai-erase" ||
     isImageConverter ||
     kind === "video-content-ideas";
-  const tagline = cleanTagline(seo.tagline);
+  const tagline =
+    locale === "ar"
+      ? cleanTagline(seo.tagline)
+      : `${displayTitle} — free, right in your browser`;
 
   return (
     <div
@@ -149,14 +164,14 @@ export default async function ToolPage({ params }: Props) {
         href={`/#${category.anchor}`}
         className="text-sm font-bold text-[#1d4ed8] transition hover:underline"
       >
-        ← {category.sectionTitle}
+        ← {categoryLabel}
       </Link>
 
       <div className="mt-8 flex flex-col items-center text-center">
         <Link
           href="/"
           className="mb-5 inline-flex w-full max-w-[22rem] justify-center transition hover:opacity-90 sm:max-w-[28rem]"
-          aria-label="Tool2Day — العودة للصفحة الرئيسية"
+          aria-label="Tool2Day — Home"
         >
           <Image
             src="/brand/logo-hero-eyes.png"
@@ -184,14 +199,14 @@ export default async function ToolPage({ params }: Props) {
             <Icon className="h-8 w-8 stroke-[2] text-[#111]" />
           )}
           <h1 className="text-3xl font-extrabold tracking-tight text-[#0a0a0a] sm:text-4xl">
-            {tool.title}
+            {displayTitle}
           </h1>
         </div>
         <p className="mt-3 max-w-xl text-base font-semibold leading-8 text-[#222]">
           {tagline}
         </p>
         <p className="mt-2 text-sm font-extrabold text-emerald-800">
-          مجاني بالكامل
+          {messages.completelyFree}
         </p>
       </div>
 

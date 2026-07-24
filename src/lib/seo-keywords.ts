@@ -831,7 +831,7 @@ export function getToolPageDescription(tool: Tool, tagline?: string) {
 }
 
 export const siteSeo = {
-  title: "Tool2Day | أدوات تحويل وتحرير الملفات مجاناً",
+  title: "Tool2Day | Free online file conversion & editing tools",
   description:
-    "Tool2Day — الأدوات الإلكترونية لتحويل وتحرير الفيديو والصوت وPDF والملفات مجاناً وبدون علامة مائية. محرر فيديو، مسجل شاشة، محوّل خطوط، أدوات PDF والمزيد.",
+    "Tool2Day — free online tools for video, audio, PDF, and files with no watermark. Video editor, screen recorder, converters, PDF tools, AI utilities, and more.",
 } as const;

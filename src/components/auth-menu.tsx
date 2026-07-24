@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LogOut, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { User as AuthUser } from "@supabase/supabase-js";
+import { useLocale } from "@/components/locale-provider";
 import { createClient } from "@/lib/supabase/client";
 
 function getAvatarUrl(user: AuthUser): string | null {
@@ -29,11 +30,12 @@ function getDisplayName(user: AuthUser): string {
     meta.name ||
     meta.preferred_username ||
     user.email?.split("@")[0] ||
-    "حسابي"
+    "Account"
   );
 }
 
 export function AuthMenu() {
+  const { messages, localeDef } = useLocale();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
@@ -97,7 +99,7 @@ export function AuthMenu() {
         className="inline-flex items-center gap-1.5 transition hover:opacity-80"
       >
         <User className="h-4 w-4" strokeWidth={2.25} />
-        <span className="hidden sm:inline">تسجيل الدخول</span>
+        <span className="hidden sm:inline">{messages.login}</span>
       </Link>
     );
   }
@@ -137,7 +139,7 @@ export function AuthMenu() {
       </button>
       {open ? (
         <div
-          dir="rtl"
+          dir={localeDef.dir}
           className="absolute end-0 top-full z-50 mt-2 min-w-52 overflow-hidden rounded-lg border border-white/10 bg-[#1c1c1c] py-1 shadow-xl"
         >
           <div className="flex items-center gap-3 border-b border-white/10 px-3 py-3">
@@ -169,7 +171,7 @@ export function AuthMenu() {
             className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-white hover:bg-white/10 disabled:opacity-60"
           >
             <LogOut className="h-4 w-4" />
-            تسجيل الخروج
+            {messages.logout}
           </button>
         </div>
       ) : null}

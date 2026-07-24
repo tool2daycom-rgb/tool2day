@@ -1,5 +1,9 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useLocale } from "@/components/locale-provider";
+import { getToolTitle } from "@/lib/i18n/tool-titles";
 import { isToolLive } from "@/lib/processors/active-tools";
 import {
   categoryMeta,
@@ -10,12 +14,14 @@ import {
 
 function CategorySection({ category }: { category: ToolCategory }) {
   const tools = getToolsByCategory(category);
+  const { locale, messages } = useLocale();
   const meta = categoryMeta[category];
+  const sectionTitle = messages.categories[category].sectionTitle;
 
   return (
     <section id={meta.anchor} className="scroll-mt-24 py-10 sm:py-12">
       <h2 className="mb-6 text-2xl font-bold text-[#1a1a1a] sm:text-[1.75rem]">
-        {meta.sectionTitle}
+        {sectionTitle}
       </h2>
       <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {tools.map((tool) => {
@@ -38,10 +44,12 @@ function CategorySection({ category }: { category: ToolCategory }) {
                       : "text-[#aaa]"
                   }`}
                 />
-                <span className="text-[15px] leading-6">{tool.title}</span>
+                <span className="text-[15px] leading-6">
+                  {getToolTitle(tool.slug, locale, tool.title)}
+                </span>
                 {live ? (
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    مجاناً
+                    {messages.free}
                   </span>
                 ) : null}
               </Link>
@@ -54,6 +62,8 @@ function CategorySection({ category }: { category: ToolCategory }) {
 }
 
 export function HomeDirectory() {
+  const { messages } = useLocale();
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="mb-12 text-center sm:mb-16">
@@ -69,9 +79,7 @@ export function HomeDirectory() {
           />
         </div>
         <h1 className="mx-auto mt-4 max-w-2xl text-base leading-8 text-[#333] sm:text-lg">
-          الأدوات الإلكترونية لتحويل الفيديو والصوت وPDF والملفات —{" "}
-          <span className="font-bold text-emerald-700">مجاناً</span> وبدون علامة
-          مائية
+          {messages.heroLine}
         </h1>
       </div>
 

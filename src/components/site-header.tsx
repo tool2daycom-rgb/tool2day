@@ -6,7 +6,6 @@ import {
   Calculator,
   ChevronDown,
   FileText,
-  Globe,
   Music2,
   RefreshCcw,
   Share2,
@@ -17,13 +16,15 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { AuthMenu } from "@/components/auth-menu";
 import { BrandLogo } from "@/components/brand-logo";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { useLocale } from "@/components/locale-provider";
 import {
   categoryMeta,
   getToolsByCategory,
   type ToolCategory,
 } from "@/lib/tools";
+import { getToolTitle } from "@/lib/i18n/tool-titles";
 
-/** مولدات أولاً، ثم الحسابات، ثم الذكاء الاصطناعي، ثم السوشيال */
 const desktopNavOrder: ToolCategory[] = [
   "generators",
   "calculators",
@@ -51,6 +52,7 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
 export function SiteHeader() {
   const [open, setOpen] = useState<ToolCategory | null>(null);
   const navRef = useRef<HTMLElement>(null);
+  const { locale, messages, localeDef } = useLocale();
 
   useEffect(() => {
     if (!open) return;
@@ -75,16 +77,14 @@ export function SiteHeader() {
         dir="ltr"
         className="flex h-14 w-full items-center gap-2 px-2 sm:gap-3 sm:px-3 lg:px-4"
       >
-        {/* الشعار مثبت في أقصى يسار الصفحة لإفساح الشريط للقوائم */}
         <Link
           href="/"
           className="relative z-10 -ms-0.5 flex shrink-0 items-center pe-1"
-          aria-label="Tool2Day — الصفحة الرئيسية"
+          aria-label="Tool2Day — Home"
         >
           <BrandLogo size="sm" showWord />
         </Link>
 
-        {/* overflow-visible ضروري حتى تظهر الستائر تحت الشريط */}
         <nav
           ref={navRef}
           className="relative z-20 hidden min-w-0 flex-1 items-center overflow-visible md:flex"
@@ -94,6 +94,7 @@ export function SiteHeader() {
               const items = getToolsByCategory(category);
               const isOpen = open === category;
               const Icon = categoryIcon[category];
+              const label = messages.categories[category].label;
               return (
                 <div
                   key={category}
@@ -113,7 +114,7 @@ export function SiteHeader() {
                     }
                   >
                     <Icon className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-                    <span>{categoryMeta[category].label}</span>
+                    <span>{label}</span>
                     <ChevronDown
                       className={`h-3.5 w-3.5 opacity-90 transition ${
                         isOpen ? "rotate-180" : ""
@@ -124,7 +125,7 @@ export function SiteHeader() {
                   {isOpen ? (
                     <div
                       role="menu"
-                      dir="rtl"
+                      dir={localeDef.dir}
                       className={`absolute top-full z-[60] pt-1 ${
                         category === "video"
                           ? "left-0 w-[min(34rem,90vw)] lg:left-1/2 lg:-translate-x-1/2"
@@ -150,7 +151,13 @@ export function SiteHeader() {
                                   onClick={() => setOpen(null)}
                                 >
                                   <ToolIcon className="h-4 w-4 shrink-0" />
-                                  <span>{tool.title}</span>
+                                  <span>
+                                    {getToolTitle(
+                                      tool.slug,
+                                      locale,
+                                      tool.title,
+                                    )}
+                                  </span>
                                 </Link>
                               </li>
                             );
@@ -166,20 +173,13 @@ export function SiteHeader() {
         </nav>
 
         <div className="relative z-10 ms-auto flex shrink-0 items-center gap-3 pe-0.5 text-sm font-bold text-white sm:gap-4">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 transition hover:opacity-80"
-            aria-label="اللغة"
-          >
-            <Globe className="h-4 w-4" strokeWidth={2.25} />
-            <span className="hidden sm:inline">AR</span>
-          </button>
+          <LanguageSwitcher />
           <AuthMenu />
         </div>
       </div>
 
       <div
-        dir="rtl"
+        dir={localeDef.dir}
         className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-2 md:hidden"
       >
         {desktopNavOrder.map((category) => (
@@ -192,7 +192,7 @@ export function SiteHeader() {
                 : "border-white/20 text-white"
             }`}
           >
-            {categoryMeta[category].label}
+            {messages.categories[category].label}
           </Link>
         ))}
       </div>

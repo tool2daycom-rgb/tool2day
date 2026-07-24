@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { Cairo, Syne } from "next/font/google";
 import { CookieConsent } from "@/components/cookie-consent";
+import { LocaleProvider } from "@/components/locale-provider";
 import { RatingGateModal } from "@/components/rating-gate-modal";
 import { getAllSiteKeywords, siteSeo } from "@/lib/seo-keywords";
 import "./globals.css";
@@ -29,13 +30,15 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://tool2day.com",
     languages: {
+      en: "https://tool2day.com",
       ar: "https://tool2day.com",
       "x-default": "https://tool2day.com",
     },
   },
   openGraph: {
     type: "website",
-    locale: "ar_AR",
+    locale: "en_US",
+    alternateLocale: ["ar_AR"],
     url: "https://tool2day.com",
     siteName: "Tool2Day",
     title: siteSeo.title,
@@ -79,9 +82,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="ar"
-      dir="rtl"
+      lang="en"
+      dir="ltr"
       className={`${cairo.variable} ${syne.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full font-sans">
         <Script id="consent-default" strategy="beforeInteractive">
@@ -97,9 +101,25 @@ export default function RootLayout({
             });
           `}
         </Script>
-        {children}
-        <CookieConsent />
-        <RatingGateModal />
+        <Script id="locale-boot" strategy="beforeInteractive">
+          {`
+            try {
+              var k='tool2day_lang';
+              var v=localStorage.getItem(k) || (document.cookie.match(/(?:^|; )tool2day_lang=([^;]*)/)||[])[1];
+              if (v) v=decodeURIComponent(v);
+              var rtl={ar:1,he:1,fa:1};
+              if (v) {
+                document.documentElement.lang=v;
+                document.documentElement.dir=rtl[v]?'rtl':'ltr';
+              }
+            } catch(e) {}
+          `}
+        </Script>
+        <LocaleProvider>
+          {children}
+          <CookieConsent />
+          <RatingGateModal />
+        </LocaleProvider>
       </body>
     </html>
   );
