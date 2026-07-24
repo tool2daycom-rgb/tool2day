@@ -51,12 +51,17 @@ import {
   ImageMinus,
   Maximize2,
   Eraser,
+  Hash,
+  Braces,
+  Lightbulb,
+  ImageDown,
 } from "lucide-react";
 
 export type ToolCategory =
   | "generators"
   | "calculators"
   | "ai"
+  | "social-dev"
   | "video"
   | "audio"
   | "pdf"
@@ -91,6 +96,11 @@ export const categoryMeta: Record<
     sectionTitle: "أدوات الذكاء الاصطناعي السريعة",
     anchor: "ai",
   },
+  "social-dev": {
+    label: "سوشيال",
+    sectionTitle: "أدوات المطورين والسوشيال ميديا",
+    anchor: "social-dev",
+  },
   video: {
     label: "الفيديو",
     sectionTitle: "أدوات الفيديو",
@@ -122,6 +132,7 @@ export const navCategories: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
+  "social-dev",
   "converters",
   "pdf",
   "audio",
@@ -166,6 +177,44 @@ export const tools: Tool[] = [
     category: "generators",
     accept: "text/plain",
     icon: Code2,
+  },
+
+  // Social & Dev utils
+  {
+    slug: "thumbnail-downloader",
+    title: "تحميل صور مصغّرة يوتيوب وانستغرام",
+    description:
+      "استخرج ونزّل صور الغلاف المصغّرة من روابط يوتيوب أو انستغرام بجودة عالية.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: ImageDown,
+  },
+  {
+    slug: "hashtag-generator",
+    title: "مولد هاشتاغات ذكي",
+    description:
+      "ولّد هاشتاغات حسب الموضوع والمنصة (انستغرام، تيك توك، يوتيوب، إكس) لتوسيع الوصول.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: Hash,
+  },
+  {
+    slug: "code-formatter",
+    title: "منسّق JSON وHTML Encoder",
+    description:
+      "نسّق JSON، وصحّح الأخطاء، ورمّز أو فك ترميز HTML للاستخدام في التطوير والويب.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: Braces,
+  },
+  {
+    slug: "video-content-ideas",
+    title: "مولد عناوين وأسئلة الفيديوهات",
+    description:
+      "أدخل كلمة مفتاحية واحصل على أسئلة، مقارنات، أفكار أبجدية، وعناوين جاهزة لصنّاع المحتوى.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: Lightbulb,
   },
 
   // Calculators hub
@@ -736,6 +785,7 @@ export const categoryOrder: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
+  "social-dev",
   "video",
   "audio",
   "pdf",

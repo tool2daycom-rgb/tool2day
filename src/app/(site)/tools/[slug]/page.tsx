@@ -7,6 +7,7 @@ import { CalculatorsWorkspace } from "@/components/calculators-workspace";
 import { GeneratorsWorkspace } from "@/components/generators-workspace";
 import { ImageConverterWorkspace } from "@/components/image-converter-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
+import { SocialDevWorkspace } from "@/components/social-dev-workspace";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
@@ -117,12 +118,22 @@ export default async function ToolPage({ params }: Props) {
     kind === "ai-remove-bg" ||
     kind === "ai-upscale" ||
     kind === "ai-erase";
+  const isSocialDev =
+    kind === "thumbnail-downloader" ||
+    kind === "hashtag-generator" ||
+    kind === "code-formatter" ||
+    kind === "video-content-ideas";
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const isImageConverter = slug === "image-converter";
   const seo = getToolSeoContent(tool);
   const isWide =
-    isPdf || isCv || isCurrency || kind === "ai-erase" || isImageConverter;
+    isPdf ||
+    isCv ||
+    isCurrency ||
+    kind === "ai-erase" ||
+    isImageConverter ||
+    kind === "video-content-ideas";
   const tagline = cleanTagline(seo.tagline);
 
   return (
@@ -231,6 +242,19 @@ export default async function ToolPage({ params }: Props) {
                 | "ai-remove-bg"
                 | "ai-upscale"
                 | "ai-erase"
+            }
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : isSocialDev ? (
+          <SocialDevWorkspace
+            kind={
+              kind as
+                | "thumbnail-downloader"
+                | "hashtag-generator"
+                | "code-formatter"
+                | "video-content-ideas"
             }
             slug={tool.slug}
             title={tool.title}

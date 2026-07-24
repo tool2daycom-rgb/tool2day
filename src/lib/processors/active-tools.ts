@@ -65,6 +65,10 @@ export type ActiveToolKind =
   | "ai-remove-bg"
   | "ai-upscale"
   | "ai-erase"
+  | "thumbnail-downloader"
+  | "hashtag-generator"
+  | "code-formatter"
+  | "video-content-ideas"
   | "archive-extract"
   | "archive-convert"
   | "ebook-convert"
@@ -111,6 +115,10 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "ai-remove-bg": "ai-remove-bg",
   "ai-upscale": "ai-upscale",
   "ai-erase": "ai-erase",
+  "thumbnail-downloader": "thumbnail-downloader",
+  "hashtag-generator": "hashtag-generator",
+  "code-formatter": "code-formatter",
+  "video-content-ideas": "video-content-ideas",
   "audio-converter": "audio-convert",
   "trim-audio": "audio-trim",
   "change-audio-volume": "audio-volume",

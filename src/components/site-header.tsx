@@ -9,6 +9,7 @@ import {
   Globe,
   Music2,
   RefreshCcw,
+  Share2,
   Sparkles,
   Video,
   Wrench,
@@ -22,11 +23,12 @@ import {
   type ToolCategory,
 } from "@/lib/tools";
 
-/** مولدات أولاً، ثم الحسابات، ثم الذكاء الاصطناعي */
+/** مولدات أولاً، ثم الحسابات، ثم الذكاء الاصطناعي، ثم السوشيال */
 const desktopNavOrder: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
+  "social-dev",
   "video",
   "audio",
   "pdf",
@@ -38,6 +40,7 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
   generators: Sparkles,
   calculators: Calculator,
   ai: Bot,
+  "social-dev": Share2,
   video: Video,
   audio: Music2,
   pdf: FileText,
