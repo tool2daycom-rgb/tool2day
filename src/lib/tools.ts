@@ -655,7 +655,8 @@ export const tools: Tool[] = [
   {
     slug: "image-converter",
     title: "محوّل الصور",
-    description: "حوّل بين JPG وPNG وWebP والمزيد.",
+    description:
+      "تحويل متقدم (WebP/AVIF)، ضغط وتصغير الحجم، صورة بروفايل دائرية، وقص أو دمج الصور.",
     category: "converters",
     accept: "image/*,.svg,image/svg+xml",
     icon: FileImage,

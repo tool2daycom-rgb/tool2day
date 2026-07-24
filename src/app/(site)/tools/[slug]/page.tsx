@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { AiToolsWorkspace } from "@/components/ai-tools-workspace";
 import { CalculatorsWorkspace } from "@/components/calculators-workspace";
 import { GeneratorsWorkspace } from "@/components/generators-workspace";
+import { ImageConverterWorkspace } from "@/components/image-converter-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
@@ -118,8 +119,10 @@ export default async function ToolPage({ params }: Props) {
     kind === "ai-erase";
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
+  const isImageConverter = slug === "image-converter";
   const seo = getToolSeoContent(tool);
-  const isWide = isPdf || isCv || isCurrency || kind === "ai-erase";
+  const isWide =
+    isPdf || isCv || isCurrency || kind === "ai-erase" || isImageConverter;
   const tagline = cleanTagline(seo.tagline);
 
   return (
@@ -235,6 +238,12 @@ export default async function ToolPage({ params }: Props) {
           />
         ) : isVideoToText ? (
           <VideoToTextWorkspace
+            slug={tool.slug}
+            title={tool.title}
+            description={tool.description}
+          />
+        ) : isImageConverter ? (
+          <ImageConverterWorkspace
             slug={tool.slug}
             title={tool.title}
             description={tool.description}

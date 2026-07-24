@@ -59,7 +59,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
 
   const [videoFormat, setVideoFormat] = useState<"mp4" | "webm" | "mov">("mp4");
   const [audioFormat, setAudioFormat] = useState<"mp3" | "wav" | "aac" | "ogg">("mp3");
-  const [imageFormat, setImageFormat] = useState<"jpeg" | "png" | "webp">("jpeg");
+  const [imageFormat, setImageFormat] = useState<"jpeg" | "png" | "webp" | "avif">("jpeg");
   const [fontTarget, setFontTarget] = useState<"ttf" | "otf" | "woff">("woff");
   const [startSec, setStartSec] = useState("0");
   const [endSec, setEndSec] = useState("10");
@@ -1000,10 +1000,11 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         )}
         {kind === "image-convert" && (
           <Field label="صيغة الصورة">
-            <select className={sel} value={imageFormat} onChange={(e) => setImageFormat(e.target.value as "jpeg" | "png" | "webp")}>
+            <select className={sel} value={imageFormat} onChange={(e) => setImageFormat(e.target.value as "jpeg" | "png" | "webp" | "avif")}>
               <option value="jpeg">JPG</option>
               <option value="png">PNG</option>
               <option value="webp">WebP</option>
+              <option value="avif">AVIF</option>
             </select>
           </Field>
         )}
