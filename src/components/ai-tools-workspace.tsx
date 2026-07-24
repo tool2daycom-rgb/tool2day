@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   cleanArticleText,
@@ -30,8 +31,8 @@ export type AiToolKind =
 type Props = {
   kind: AiToolKind;
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
 };
 
 const field =
@@ -41,7 +42,8 @@ const btn =
 const btnPrimary = `${btn} bg-[#111] text-white hover:bg-[#333]`;
 const btnGhost = `${btn} border border-[#ddd] text-[#222] hover:bg-[#f7f7f7]`;
 
-export function AiToolsWorkspace({ kind, slug, title, description }: Props) {
+export function AiToolsWorkspace({ kind, slug, arTitle, arDescription }: Props) {
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   useEffect(() => {
     setDownloadRatingContext(slug);
     return () => setDownloadRatingContext(null);

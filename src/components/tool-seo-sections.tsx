@@ -1,21 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { useLocale } from "@/components/locale-provider";
 import { ToolRatingBar } from "@/components/star-rating";
-import type { ToolSeoContent } from "@/lib/tool-seo-content";
+import { getToolTitle } from "@/lib/i18n/tool-titles";
+import { getToolSeoContent } from "@/lib/tool-seo-content";
 
 export function ToolSeoSections({
-  content,
   toolSlug,
+  arTitle,
 }: {
-  content: ToolSeoContent;
   toolSlug: string;
+  arTitle: string;
 }) {
-  const { messages } = useLocale();
+  const { locale, messages } = useLocale();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  const content = useMemo(() => {
+    const displayTitle = getToolTitle(toolSlug, locale, arTitle);
+    return getToolSeoContent(
+      { slug: toolSlug, title: arTitle },
+      { locale, title: displayTitle },
+    );
+  }, [toolSlug, arTitle, locale]);
 
   return (
     <div className="mt-16 space-y-16 border-t border-dashed border-[#ddd] pt-14">

@@ -1,6 +1,7 @@
 import type { LocaleCode } from "@/lib/i18n/locales";
 import { getMessages, type UiMessages } from "@/lib/i18n/messages";
-import type { Tool } from "@/lib/tools";
+
+export type ToolLike = { slug: string; title: string };
 
 export type ToolFaq = { q: string; a: string };
 
@@ -76,7 +77,7 @@ function localizedContent(name: string, m: UiMessages): ToolSeoContent {
     whyTitle: m.whyUs,
     why: whyFromMessages(m),
     faqs: [
-      { q: m.faqFreeQ.replace("this tool", name).replace("الأداة", name), a: m.faqFreeA },
+      { q: m.faqFreeQ.replace("{{tool}}", name), a: m.faqFreeA },
       { q: m.faqWaterQ, a: m.faqWaterA },
       { q: m.faqInstallQ, a: m.faqInstallA },
       { q: m.faqWhereQ, a: m.faqWhereA },
@@ -85,7 +86,7 @@ function localizedContent(name: string, m: UiMessages): ToolSeoContent {
   };
 }
 
-function defaultContentAr(tool: Tool): ToolSeoContent {
+function defaultContentAr(tool: ToolLike): ToolSeoContent {
   const name = tool.title;
   return {
     tagline: `${name} مجاناً مباشرة من المتصفح`,
@@ -193,7 +194,7 @@ const overrides: Record<string, ToolSeoContent> = {
 };
 
 export function getToolSeoContent(
-  tool: Tool,
+  tool: ToolLike,
   opts?: { locale?: LocaleCode; title?: string },
 ): ToolSeoContent {
   const locale = opts?.locale ?? "en";

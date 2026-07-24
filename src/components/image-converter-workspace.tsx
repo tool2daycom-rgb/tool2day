@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   circularCropImage,
@@ -16,8 +17,8 @@ type Mode = "convert" | "compress" | "circle" | "crop";
 
 type Props = {
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
 };
 
 const field =
@@ -56,8 +57,9 @@ function formatBytes(n: number) {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function ImageConverterWorkspace({ slug, title, description }: Props) {
+export function ImageConverterWorkspace({ slug, arTitle, arDescription }: Props) {
   const { messages } = useLocale();
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   const [mode, setMode] = useState<Mode>("convert");
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);

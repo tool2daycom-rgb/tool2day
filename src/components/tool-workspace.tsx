@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { useToolDisplay } from "@/hooks/use-tool-display";
+import { getFieldLabels } from "@/lib/i18n/field-labels";
 import {
   getToolKind,
   MAX_CLIENT_FILE_MB,
@@ -15,8 +17,8 @@ import {
 
 type Props = {
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
   accept: string;
 };
 
@@ -43,8 +45,10 @@ const noFileKinds = new Set<ActiveToolKind>([
 
 const sel = "block w-full rounded-md border border-[#ddd] bg-white px-3 py-2";
 
-export function ToolWorkspace({ slug, title, description, accept }: Props) {
-  const { messages } = useLocale();
+export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
+  const { locale, messages } = useLocale();
+  const fields = getFieldLabels(locale);
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   const kind = useMemo(() => getToolKind(slug), [slug]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -794,7 +798,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-dashed border-[#d4d4d4] bg-[#fafafa] p-4 text-center">
-              <p className="text-sm font-bold text-[#111]">1) ملف الفيديو</p>
+              <p className="text-sm font-bold text-[#111]">{fields.videoFile}</p>
               <p className="mt-1 text-xs text-[#888]">MP4 / WebM / MOV</p>
               <button
                 type="button"
@@ -822,7 +826,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
               ) : null}
             </div>
             <div className="rounded-lg border border-dashed border-[#d4d4d4] bg-[#fafafa] p-4 text-center">
-              <p className="text-sm font-bold text-[#111]">2) ملف الصورة</p>
+              <p className="text-sm font-bold text-[#111]">{fields.imageFile}</p>
               <p className="mt-1 text-xs text-[#888]">PNG / JPG / WebP</p>
               <button
                 type="button"
@@ -920,21 +924,23 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         {kind === "video-add-image" && (
           <>
-            <Field label="حجم الصورة على الفيديو">
+            <Field label={fields.imageSizeOnVideo}>
               <select
                 className={sel}
                 value={imgScale}
                 onChange={(e) => setImgScale(e.target.value)}
               >
-                <option value="0.12">صغير جداً (12%)</option>
-                <option value="0.2">صغير (20%)</option>
-                <option value="0.28">متوسط (28%)</option>
-                <option value="0.4">كبير (40%)</option>
-                <option value="0.55">أكبر (55%)</option>
-                <option value="0.7">ملء شبه كامل (70%)</option>
+                <option value="0.12">{fields.tiny}</option>
+                <option value="0.2">{fields.small}</option>
+                <option value="0.28">{fields.mid}</option>
+                <option value="0.4">{fields.large}</option>
+                <option value="0.55">{fields.larger}</option>
+                <option value="0.7">{fields.almostFull}</option>
               </select>
             </Field>
-            <Field label={`شفافية الصورة (${Math.round(Number(imgOpacity) * 100)}%)`}>
+            <Field
+              label={`${fields.imageOpacity} (${Math.round(Number(imgOpacity) * 100)}%)`}
+            >
               <input
                 className="mt-2 w-full accent-[#2563eb]"
                 type="range"
@@ -944,23 +950,19 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
                 value={imgOpacity}
                 onChange={(e) => setImgOpacity(e.target.value)}
               />
-              <div className="mt-1 flex justify-between text-[11px] text-[#888]">
-                <span>شفاف</span>
-                <span>واضح</span>
-              </div>
             </Field>
             <div className="sm:col-span-2">
               <p className="mb-2 text-sm font-semibold text-[#333]">
-                موضع الصورة
+                {fields.position}
               </p>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {(
                   [
-                    ["top-right", "أعلى يمين"],
-                    ["top-left", "أعلى يسار"],
-                    ["center", "الوسط"],
-                    ["bottom-right", "أسفل يمين"],
-                    ["bottom-left", "أسفل يسار"],
+                    ["top-right", fields.topRight],
+                    ["top-left", fields.topLeft],
+                    ["center", fields.center],
+                    ["bottom-right", fields.bottomRight],
+                    ["bottom-left", fields.bottomLeft],
                   ] as const
                 ).map(([id, label]) => (
                   <button
@@ -982,7 +984,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </>
         )}
         {kind === "video-convert" && (
-          <Field label="صيغة الفيديو">
+          <Field label={fields.videoFormat}>
             <select className={sel} value={videoFormat} onChange={(e) => setVideoFormat(e.target.value as "mp4" | "webm" | "mov")}>
               <option value="mp4">MP4</option>
               <option value="webm">WebM</option>
@@ -991,7 +993,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </Field>
         )}
         {kind === "audio-convert" && (
-          <Field label="صيغة الصوت">
+          <Field label={fields.audioFormat}>
             <select className={sel} value={audioFormat} onChange={(e) => setAudioFormat(e.target.value as "mp3" | "wav" | "aac" | "ogg")}>
               <option value="mp3">MP3</option>
               <option value="wav">WAV</option>
@@ -1001,7 +1003,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </Field>
         )}
         {kind === "image-convert" && (
-          <Field label="صيغة الصورة">
+          <Field label={fields.imageFormat}>
             <select className={sel} value={imageFormat} onChange={(e) => setImageFormat(e.target.value as "jpeg" | "png" | "webp" | "avif")}>
               <option value="jpeg">JPG</option>
               <option value="png">PNG</option>
@@ -1011,7 +1013,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </Field>
         )}
         {kind === "font-convert" && (
-          <Field label="صيغة الخط">
+          <Field label={fields.fontFormat}>
             <select className={sel} value={fontTarget} onChange={(e) => setFontTarget(e.target.value as "ttf" | "otf" | "woff")}>
               <option value="ttf">TTF</option>
               <option value="otf">OTF</option>
@@ -1021,31 +1023,31 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         )}
         {(kind === "video-trim" || kind === "audio-trim" || kind === "video-editor") && (
           <>
-            <Field label="البداية (ث)">
+            <Field label={fields.startSec}>
               <input className={sel} type="number" value={startSec} onChange={(e) => setStartSec(e.target.value)} />
             </Field>
-            <Field label="النهاية (ث)">
+            <Field label={fields.endSec}>
               <input className={sel} type="number" value={endSec} onChange={(e) => setEndSec(e.target.value)} />
             </Field>
           </>
         )}
         {kind === "video-editor" && (
           <>
-            <Field label="تدوير">
+            <Field label={fields.rotate}>
               <select className={sel} value={editRotate} onChange={(e) => setEditRotate(e.target.value as "0" | "90" | "180" | "270")}>
-                <option value="0">بدون</option>
+                <option value="0">{fields.none}</option>
                 <option value="90">90</option>
                 <option value="180">180</option>
                 <option value="270">270</option>
               </select>
             </Field>
-            <Field label="السرعة">
+            <Field label={fields.speed}>
               <input className={sel} type="number" step="0.1" min="0.5" max="2" value={speed} onChange={(e) => setSpeed(e.target.value)} />
             </Field>
           </>
         )}
         {(kind === "video-rotate" || kind === "pdf-rotate") && (
-          <Field label="الزاوية">
+          <Field label={fields.angle}>
             <select className={sel} value={rotateDeg} onChange={(e) => setRotateDeg(e.target.value as "90" | "180" | "270")}>
               <option value="90">90</option>
               <option value="180">180</option>
@@ -1054,15 +1056,15 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </Field>
         )}
         {kind === "video-flip" && (
-          <Field label="القلب">
+          <Field label={fields.flip}>
             <select className={sel} value={flipMode} onChange={(e) => setFlipMode(e.target.value as "h" | "v")}>
-              <option value="h">أفقي</option>
-              <option value="v">عمودي</option>
+              <option value="h">{fields.horizontal}</option>
+              <option value="v">{fields.vertical}</option>
             </select>
           </Field>
         )}
         {kind === "video-resize" && (
-          <Field label="العرض">
+          <Field label={fields.width}>
             <select className={sel} value={width} onChange={(e) => setWidth(e.target.value)}>
               <option value="640">640</option>
               <option value="1280">1280</option>
@@ -1072,7 +1074,7 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         )}
         {kind === "video-enhance" && (
           <>
-            <Field label="الدقة المستهدفة">
+            <Field label={fields.targetResolution}>
               <select
                 className={sel}
                 value={enhanceTarget}
@@ -1082,10 +1084,10 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
               >
                 <option value="1080">Full HD — 1080p</option>
                 <option value="1440">QHD — 1440p</option>
-                <option value="4k">4K UHD — أفضل وضوح</option>
+                <option value="4k">{fields.bestClarity}</option>
               </select>
             </Field>
-            <Field label="قوة التحسين">
+            <Field label={fields.enhanceStrength}>
               <select
                 className={sel}
                 value={enhanceStrength}
@@ -1095,20 +1097,15 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
                   )
                 }
               >
-                <option value="light">خفيف — أسرع</option>
-                <option value="medium">متوسط — متوازن</option>
-                <option value="strong">قوي — أقصى جودة (أبطأ)</option>
+                <option value="light">{fields.light}</option>
+                <option value="medium">{fields.medium}</option>
+                <option value="strong">{fields.strong}</option>
               </select>
             </Field>
-            <p className="sm:col-span-2 text-xs leading-6 text-[#666]">
-              يطبّق تنعيم الضوضاء، رفع الدقة بمحرّك Lanczos، توضيح الحواف، وتحسين
-              التباين/الألوان، ثم ترميز عالي الجودة. المقاطع الطويلة قد تستغرق
-              وقتاً أطول داخل المتصفح.
-            </p>
           </>
         )}
         {(kind === "video-speed" || kind === "audio-speed") && (
-          <Field label="السرعة 0.5–2">
+          <Field label={fields.speedRange}>
             <input className={sel} type="number" step="0.1" min="0.5" max="2" value={speed} onChange={(e) => setSpeed(e.target.value)} />
           </Field>
         )}
@@ -1118,17 +1115,17 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           </Field>
         )}
         {kind === "video-loop" && (
-          <Field label="التكرارات">
+          <Field label={fields.loops}>
             <input className={sel} type="number" min="2" max="10" value={loops} onChange={(e) => setLoops(e.target.value)} />
           </Field>
         )}
         {kind === "audio-pitch" && (
-          <Field label="الطبقة">
+          <Field label={fields.pitch}>
             <input className={sel} type="number" value={pitch} onChange={(e) => setPitch(e.target.value)} />
           </Field>
         )}
         {kind === "video-add-text" && (
-          <Field label="النص على الفيديو">
+          <Field label={fields.textOnVideo}>
             <input className={sel} value={overlayText} onChange={(e) => setOverlayText(e.target.value)} />
           </Field>
         )}
@@ -1136,8 +1133,8 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
           <>
             <Field label="X"><input className={sel} type="number" value={cropX} onChange={(e) => setCropX(e.target.value)} /></Field>
             <Field label="Y"><input className={sel} type="number" value={cropY} onChange={(e) => setCropY(e.target.value)} /></Field>
-            <Field label="العرض"><input className={sel} type="number" value={cropW} onChange={(e) => setCropW(e.target.value)} /></Field>
-            <Field label="الارتفاع"><input className={sel} type="number" value={cropH} onChange={(e) => setCropH(e.target.value)} /></Field>
+            <Field label={fields.width}><input className={sel} type="number" value={cropW} onChange={(e) => setCropW(e.target.value)} /></Field>
+            <Field label={fields.height}><input className={sel} type="number" value={cropH} onChange={(e) => setCropH(e.target.value)} /></Field>
           </>
         )}
         {kind === "video-delogo" && (
@@ -1148,27 +1145,27 @@ export function ToolWorkspace({ slug, title, description, accept }: Props) {
         )}
         {kind === "pdf-split" && (
           <>
-            <Field label="التقسيم">
+            <Field label={fields.split}>
               <select className={sel} value={splitMode} onChange={(e) => setSplitMode(e.target.value as "all" | "range")}>
-                <option value="all">كل الصفحات ZIP</option>
-                <option value="range">نطاق</option>
+                <option value="all">{fields.allPagesZip}</option>
+                <option value="range">{fields.range}</option>
               </select>
             </Field>
             {splitMode === "range" && (
               <>
-                <Field label="من"><input className={sel} type="number" min={1} value={pageFrom} onChange={(e) => setPageFrom(e.target.value)} /></Field>
-                <Field label="إلى"><input className={sel} type="number" min={1} value={pageTo} onChange={(e) => setPageTo(e.target.value)} /></Field>
+                <Field label={fields.from}><input className={sel} type="number" min={1} value={pageFrom} onChange={(e) => setPageFrom(e.target.value)} /></Field>
+                <Field label={fields.to}><input className={sel} type="number" min={1} value={pageTo} onChange={(e) => setPageTo(e.target.value)} /></Field>
               </>
             )}
           </>
         )}
         {(kind === "pdf-protect" || kind === "pdf-unlock") && (
-          <Field label="كلمة المرور">
+          <Field label={fields.password}>
             <input className={sel} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
         )}
         {(kind === "screen-recorder" || kind === "voice-recorder" || kind === "video-recorder") && (
-          <Field label="مدة التسجيل (ث)">
+          <Field label={fields.recordDuration}>
             <input className={sel} type="number" min={3} max={60} value={recordSecs} onChange={(e) => setRecordSecs(e.target.value)} />
           </Field>
         )}

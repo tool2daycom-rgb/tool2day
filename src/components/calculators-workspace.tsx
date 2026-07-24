@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeftRight, RefreshCw } from "lucide-react";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   ACTIVITY_LABELS_AR,
@@ -49,14 +50,20 @@ export type CalculatorKind =
 type Props = {
   kind: CalculatorKind;
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
 };
 
 const field =
   "w-full rounded-md border border-[#ddd] bg-white px-3 py-2 text-sm text-[#222] outline-none focus:border-[#2563eb]";
 
-export function CalculatorsWorkspace({ kind, slug, title, description }: Props) {
+export function CalculatorsWorkspace({
+  kind,
+  slug,
+  arTitle,
+  arDescription,
+}: Props) {
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   useEffect(() => {
     setDownloadRatingContext(slug);
     return () => setDownloadRatingContext(null);

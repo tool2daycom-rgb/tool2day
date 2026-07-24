@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocale } from "@/components/locale-provider";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   MAX_TRANSCRIBE_DURATION_SEC,
@@ -13,12 +14,13 @@ import { formatProcessError } from "@/lib/processors/ffmpeg-client";
 
 type Props = {
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
 };
 
-export function VideoToTextWorkspace({ slug, title, description }: Props) {
+export function VideoToTextWorkspace({ slug, arTitle, arDescription }: Props) {
   const { messages } = useLocale();
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("ar");

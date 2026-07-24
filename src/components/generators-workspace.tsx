@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import { generateAllFancy } from "@/lib/processors/fancy-text";
 import {
@@ -31,14 +32,20 @@ export type GeneratorKind =
 type Props = {
   kind: GeneratorKind;
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
 };
 
 const field =
   "w-full rounded-md border border-[#ddd] bg-white px-3 py-2 text-sm text-[#222] outline-none focus:border-[#2563eb]";
 
-export function GeneratorsWorkspace({ kind, slug, title, description }: Props) {
+export function GeneratorsWorkspace({
+  kind,
+  slug,
+  arTitle,
+  arDescription,
+}: Props) {
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   useEffect(() => {
     setDownloadRatingContext(slug);
     return () => setDownloadRatingContext(null);

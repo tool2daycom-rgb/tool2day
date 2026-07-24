@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
   assembleContentIdeasFromSuggest,
@@ -30,8 +31,8 @@ export type SocialDevKind =
 type Props = {
   kind: SocialDevKind;
   slug: string;
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
 };
 
 const field =
@@ -74,7 +75,13 @@ async function downloadTxt(slug: string, text: string, name: string) {
   );
 }
 
-export function SocialDevWorkspace({ kind, slug, title, description }: Props) {
+export function SocialDevWorkspace({
+  kind,
+  slug,
+  arTitle,
+  arDescription,
+}: Props) {
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   useEffect(() => {
     setDownloadRatingContext(slug);
     return () => setDownloadRatingContext(null);

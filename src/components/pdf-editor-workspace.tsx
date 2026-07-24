@@ -10,12 +10,13 @@ import {
 } from "react";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
+import { useToolDisplay } from "@/hooks/use-tool-display";
 import { basename, downloadBlob, toBlob } from "@/lib/processors/ffmpeg-client";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 
 type Props = {
-  title: string;
-  description: string;
+  arTitle: string;
+  arDescription: string;
   slug?: string;
 };
 
@@ -212,10 +213,11 @@ async function loadArabicFontBytes() {
 }
 
 export function PdfEditorWorkspace({
-  title,
-  description,
+  arTitle,
+  arDescription,
   slug = "pdf-editor",
 }: Props) {
+  const { title, description } = useToolDisplay(slug, arTitle, arDescription);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);

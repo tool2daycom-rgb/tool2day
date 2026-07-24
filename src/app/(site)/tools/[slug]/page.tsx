@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AiToolsWorkspace } from "@/components/ai-tools-workspace";
@@ -9,6 +8,7 @@ import { GeneratorsWorkspace } from "@/components/generators-workspace";
 import { ImageConverterWorkspace } from "@/components/image-converter-workspace";
 import { PdfEditorWorkspace } from "@/components/pdf-editor-workspace";
 import { SocialDevWorkspace } from "@/components/social-dev-workspace";
+import { ToolPageIntro } from "@/components/tool-page-intro";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
@@ -61,19 +61,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const seo = getToolSeoContent(tool, { locale, title: displayTitle });
   const title = getToolPageTitle(tool);
   const description = getToolPageDescription(tool, seo.tagline);
+  const messages = getMessages(locale);
+  const metaDescription =
+    locale === "ar"
+      ? description
+      : `${displayTitle} — ${messages.freeInBrowser}. ${messages.noWatermark}.`;
   return {
     title: locale === "ar" ? title : displayTitle,
-    description:
-      locale === "ar"
-        ? description
-        : `${displayTitle} — free online tool on Tool2Day, no watermark.`,
+    description: metaDescription,
     keywords: getToolKeywords(tool),
     openGraph: {
       title: `${locale === "ar" ? title : displayTitle} | Tool2Day`,
-      description:
-        locale === "ar"
-          ? description
-          : `${displayTitle} — free online tool on Tool2Day, no watermark.`,
+      description: metaDescription,
       url: `https://tool2day.com/tools/${tool.slug}`,
       siteName: "Tool2Day",
       locale: locale === "ar" ? "ar_AR" : locale === "en" ? "en_US" : locale,
@@ -82,23 +81,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     twitter: {
       card: "summary_large_image",
       title: `${locale === "ar" ? title : displayTitle} | Tool2Day`,
-      description:
-        locale === "ar"
-          ? description
-          : `${displayTitle} — free online tool on Tool2Day, no watermark.`,
+      description: metaDescription,
     },
     alternates: {
       canonical: `https://tool2day.com/tools/${tool.slug}`,
     },
   };
-}
-
-function cleanTagline(tagline: string) {
-  return tagline
-    .replace(/\s*[—–-]\s*بدون علامة مائية/g, "")
-    .replace(/\s*وبدون علامة مائية/g, "")
-    .replace(/\s*بدون علامة مائية/g, "")
-    .trim();
 }
 
 export default async function ToolPage({ params }: Props) {
@@ -110,16 +98,8 @@ export default async function ToolPage({ params }: Props) {
   const tool = getTool(slug);
   if (!tool) notFound();
 
-  const cookieStore = await cookies();
-  const rawLang = cookieStore.get("tool2day_lang")?.value;
-  const locale =
-    rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
-  const messages = getMessages(locale);
-  const displayTitle = getToolTitle(tool.slug, locale, tool.title);
-
   const Icon = tool.icon;
   const category = categoryMeta[tool.category];
-  const categoryLabel = messages.categories[tool.category].sectionTitle;
   const isPdf = slug === "pdf-editor";
   const isCv = slug === "cv-builder";
   const kind = getToolKind(slug);
@@ -155,7 +135,6 @@ export default async function ToolPage({ params }: Props) {
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const isImageConverter = slug === "image-converter";
-  const seo = getToolSeoContent(tool, { locale, title: displayTitle });
   const isWide =
     isPdf ||
     isCv ||
@@ -163,11 +142,6 @@ export default async function ToolPage({ params }: Props) {
     kind === "ai-erase" ||
     isImageConverter ||
     kind === "video-content-ideas";
-  const tagline = cleanTagline(seo.tagline);
-  const toolDescription =
-    locale === "ar"
-      ? tool.description
-      : `${displayTitle} — ${messages.freeInBrowser}`;
 
   return (
     <div
@@ -175,69 +149,40 @@ export default async function ToolPage({ params }: Props) {
         isWide ? "max-w-[1400px]" : "max-w-3xl"
       }`}
     >
-      <Link
-        href={`/#${category.anchor}`}
-        className="text-sm font-bold text-[#1d4ed8] transition hover:underline"
+      <ToolPageIntro
+        slug={tool.slug}
+        arTitle={tool.title}
+        categoryAnchor={category.anchor}
+        categoryKey={tool.category}
       >
-        ← {categoryLabel}
-      </Link>
-
-      <div className="mt-8 flex flex-col items-center text-center">
-        <Link
-          href="/"
-          className="mb-5 inline-flex w-full max-w-[22rem] justify-center transition hover:opacity-90 sm:max-w-[28rem]"
-          aria-label="Tool2Day — Home"
-        >
+        {isCurrency ? (
           <Image
-            src="/brand/logo-hero-eyes.png"
-            alt="TOOL2DAY"
-            width={920}
-            height={220}
-            className="h-auto w-full object-contain"
-            priority
+            src="/brand/currency-gold-coin.png"
+            alt=""
+            width={96}
+            height={96}
+            className="h-14 w-14 rounded-full object-cover shadow-md sm:h-16 sm:w-16"
             unoptimized
+            aria-hidden
           />
-        </Link>
-
-        <div className="flex items-center justify-center gap-3 sm:gap-4">
-          {isCurrency ? (
-            <Image
-              src="/brand/currency-gold-coin.png"
-              alt=""
-              width={96}
-              height={96}
-              className="h-14 w-14 rounded-full object-cover shadow-md sm:h-16 sm:w-16"
-              unoptimized
-              aria-hidden
-            />
-          ) : (
-            <Icon className="h-8 w-8 stroke-[2] text-[#111]" />
-          )}
-          <h1 className="text-3xl font-extrabold tracking-tight text-[#0a0a0a] sm:text-4xl">
-            {displayTitle}
-          </h1>
-        </div>
-        <p className="mt-3 max-w-xl text-base font-semibold leading-8 text-[#222]">
-          {tagline}
-        </p>
-        <p className="mt-2 text-sm font-extrabold text-emerald-800">
-          {messages.completelyFree}
-        </p>
-      </div>
+        ) : (
+          <Icon className="h-8 w-8 stroke-[2] text-[#111]" />
+        )}
+      </ToolPageIntro>
 
       <div className="mt-8">
         {isPdf ? (
           <PdfEditorWorkspace
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
             slug={tool.slug}
           />
         ) : isUtility ? (
           <UtilityToolWorkspace
             kind={kind as "text-tools" | "error-detector" | "speed-test"}
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : isGenerator ? (
           <GeneratorsWorkspace
@@ -252,8 +197,8 @@ export default async function ToolPage({ params }: Props) {
                 | "css-gradient-generator"
             }
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : isCalculator ? (
           <CalculatorsWorkspace
@@ -266,8 +211,8 @@ export default async function ToolPage({ params }: Props) {
                 | "currency-exchange"
             }
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : isAiTool ? (
           <AiToolsWorkspace
@@ -280,8 +225,8 @@ export default async function ToolPage({ params }: Props) {
                 | "ai-erase"
             }
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : isSocialDev ? (
           <SocialDevWorkspace
@@ -293,32 +238,32 @@ export default async function ToolPage({ params }: Props) {
                 | "video-content-ideas"
             }
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : isVideoToText ? (
           <VideoToTextWorkspace
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : isImageConverter ? (
           <ImageConverterWorkspace
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
           />
         ) : (
           <ToolWorkspace
             slug={tool.slug}
-            title={displayTitle}
-            description={toolDescription}
+            arTitle={tool.title}
+            arDescription={tool.description}
             accept={tool.accept}
           />
         )}
       </div>
 
-      <ToolSeoSections content={seo} toolSlug={tool.slug} />
+      <ToolSeoSections toolSlug={tool.slug} arTitle={tool.title} />
     </div>
   );
 }
