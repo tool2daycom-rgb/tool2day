@@ -105,7 +105,10 @@ export default async function ToolPage({ params }: Props) {
     kind === "cv-builder" ||
     kind === "fancy-text" ||
     kind === "email-generator" ||
-    kind === "css-generator";
+    kind === "css-generator" ||
+    kind === "color-converter" ||
+    kind === "color-palette-extractor" ||
+    kind === "css-gradient-generator";
   const isCalculator =
     kind === "calorie-calculator" ||
     kind === "loan-calculator" ||
@@ -214,6 +217,9 @@ export default async function ToolPage({ params }: Props) {
                 | "fancy-text"
                 | "email-generator"
                 | "css-generator"
+                | "color-converter"
+                | "color-palette-extractor"
+                | "css-gradient-generator"
             }
             slug={tool.slug}
             title={tool.title}

@@ -55,6 +55,9 @@ export type ActiveToolKind =
   | "fancy-text"
   | "email-generator"
   | "css-generator"
+  | "color-converter"
+  | "color-palette-extractor"
+  | "css-gradient-generator"
   | "calorie-calculator"
   | "loan-calculator"
   | "crypto-calculator"
@@ -105,6 +108,9 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "fancy-text": "fancy-text",
   "email-generator": "email-generator",
   "css-generator": "css-generator",
+  "color-converter": "color-converter",
+  "color-palette-extractor": "color-palette-extractor",
+  "css-gradient-generator": "css-gradient-generator",
   "calorie-calculator": "calorie-calculator",
   "loan-calculator": "loan-calculator",
   "crypto-calculator": "crypto-calculator",

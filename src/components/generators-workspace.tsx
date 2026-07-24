@@ -16,12 +16,17 @@ import {
   type CssPreset,
 } from "@/lib/processors/css-generator";
 import { CvBuilderWorkspace } from "@/components/cv-builder-workspace";
+import {
+  ColorToolsWorkspace,
+  type ColorToolKind,
+} from "@/components/color-tools-workspace";
 
 export type GeneratorKind =
   | "cv-builder"
   | "fancy-text"
   | "email-generator"
-  | "css-generator";
+  | "css-generator"
+  | ColorToolKind;
 
 type Props = {
   kind: GeneratorKind;
@@ -49,6 +54,20 @@ export function GeneratorsWorkspace({ kind, slug, title, description }: Props) {
   }
   if (kind === "email-generator") {
     return <EmailPanel slug={slug} title={title} description={description} />;
+  }
+  if (
+    kind === "color-converter" ||
+    kind === "color-palette-extractor" ||
+    kind === "css-gradient-generator"
+  ) {
+    return (
+      <ColorToolsWorkspace
+        kind={kind}
+        slug={slug}
+        title={title}
+        description={description}
+      />
+    );
   }
   return <CssPanel slug={slug} title={title} description={description} />;
 }

@@ -55,6 +55,9 @@ import {
   Braces,
   Lightbulb,
   ImageDown,
+  Pipette,
+  Palette,
+  Blend,
 } from "lucide-react";
 
 export type ToolCategory =
@@ -177,6 +180,33 @@ export const tools: Tool[] = [
     category: "generators",
     accept: "text/plain",
     icon: Code2,
+  },
+  {
+    slug: "color-converter",
+    title: "محوّل أكواد الألوان",
+    description:
+      "حوّل الألوان بين HEX وRGB وHSL وCMYK مع منتقي لون ومعاينة فورية.",
+    category: "generators",
+    accept: "text/plain",
+    icon: Pipette,
+  },
+  {
+    slug: "color-palette-extractor",
+    title: "مستخرج لوحة الألوان من الصور",
+    description:
+      "ارفع صورة واستخرج الألوان الأساسية مع أكواد HEX وRGB وHSL جاهزة للنسخ.",
+    category: "generators",
+    accept: "image/*",
+    icon: Palette,
+  },
+  {
+    slug: "css-gradient-generator",
+    title: "مولد التدرجات اللونية",
+    description:
+      "أنشئ تدرجات CSS خطية أو دائرية بمعاينة مباشرة وانسخ الكود جاهزاً.",
+    category: "generators",
+    accept: "text/plain",
+    icon: Blend,
   },
 
   // Social & Dev utils
