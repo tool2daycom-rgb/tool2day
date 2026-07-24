@@ -24,6 +24,7 @@ import {
   POPULAR_PAIRS,
   WORLD_CURRENCIES,
   currencyLabel,
+  currencyCodeWithSymbol,
   getCurrency,
 } from "@/lib/processors/world-currencies";
 import {
@@ -723,7 +724,9 @@ function CurrencyPanel({
 
       <div className="rounded-2xl border border-[#e8e8e8] bg-gradient-to-b from-[#fafafa] to-white p-4 sm:p-5">
         <p className="text-center text-2xl font-bold tabular-nums text-[#111] sm:text-3xl">
-          1 {from} = {rate == null ? "…" : formatMoney(rate, rate < 1 ? 6 : 4)} {to}
+          1 {currencyCodeWithSymbol(from)} ={" "}
+          {rate == null ? "…" : formatMoney(rate, rate < 1 ? 6 : 4)}{" "}
+          {currencyCodeWithSymbol(to)}
         </p>
         {change != null && changePct != null ? (
           <p
@@ -870,24 +873,30 @@ function CurrencyPanel({
                 >
                   {goldQuoteOptions.map((c) => (
                     <option key={c} value={c}>
-                      {c}
+                      {currencyCodeWithSymbol(c)}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
             <p className="mt-2 text-sm tabular-nums text-amber-900">
-              🥇 أونصة: {goldOunceQuote == null ? "…" : formatMoney(goldOunceQuote)} {goldQuote}
-              {goldUsd != null ? ` · ${formatMoney(goldUsd)} USD` : ""}
+              🥇 أونصة: {goldOunceQuote == null ? "…" : formatMoney(goldOunceQuote)}{" "}
+              {currencyCodeWithSymbol(goldQuote)}
+              {goldUsd != null
+                ? ` · ${formatMoney(goldUsd)} ${currencyCodeWithSymbol("USD")}`
+                : ""}
               {goldSar != null && goldQuote !== "SAR"
-                ? ` · ${formatMoney(goldSar)} SAR`
+                ? ` · ${formatMoney(goldSar)} ${currencyCodeWithSymbol("SAR")}`
                 : ""}
             </p>
             <p className="mt-1 text-sm tabular-nums text-amber-900">
-              🥈 أونصة فضة: {silverUsd == null ? "…" : formatMoney(silverUsd)} USD
+              🥈 أونصة فضة:{" "}
+              {silverUsd == null ? "…" : formatMoney(silverUsd)}{" "}
+              {currencyCodeWithSymbol("USD")}
             </p>
             <p className="mt-1 text-[11px] text-amber-800/80">
-              غرام عيار 24 ≈ {gram24 == null ? "…" : formatMoney(gram24)} {goldQuote}
+              غرام عيار 24 ≈ {gram24 == null ? "…" : formatMoney(gram24)}{" "}
+              {currencyCodeWithSymbol(goldQuote)}
               {" · "}1 أونصة = {TROY_OUNCE_GRAMS} غ
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -899,7 +908,7 @@ function CurrencyPanel({
                   setTo(goldQuote);
                 }}
               >
-                ذهب → {goldQuote}
+                ذهب → {currencyCodeWithSymbol(goldQuote)}
               </button>
               <button
                 type="button"
@@ -932,8 +941,8 @@ function CurrencyPanel({
                     }}
                   >
                     <span className="text-sm font-semibold">
-                      {getCurrency(row.a).flag}
-                      {getCurrency(row.b).flag} {row.a}/{row.b}
+                      {getCurrency(row.a).flag} {currencyCodeWithSymbol(row.a)} /{" "}
+                      {getCurrency(row.b).flag} {currencyCodeWithSymbol(row.b)}
                     </span>
                     <span className="text-end">
                       <span className="block text-sm font-bold tabular-nums">
@@ -987,7 +996,8 @@ function CurrencyPanel({
         <div className="rounded-xl border border-amber-200 bg-white p-4">
           <p className="text-sm font-bold text-[#222]">سعر غرام الذهب حسب العيار</p>
           <p className="mt-1 text-[11px] text-[#888]">
-            عيارات 24 · 22 · 21 · 18 · 14 · بعملة {goldQuote}
+            عيارات 24 · 22 · 21 · 18 · 14 · بعملة{" "}
+            {currencyCodeWithSymbol(goldQuote)}
           </p>
           <div className="mt-3 overflow-x-auto rounded-lg border border-[#eee]">
             <table className="w-full text-sm">
@@ -996,7 +1006,7 @@ function CurrencyPanel({
                   <th className="px-3 py-2 text-start font-semibold">العيار</th>
                   <th className="px-3 py-2 text-start font-semibold">نقاء</th>
                   <th className="px-3 py-2 text-start font-semibold">
-                    سعر الغرام ({goldQuote})
+                    سعر الغرام ({currencyCodeWithSymbol(goldQuote)})
                   </th>
                 </tr>
               </thead>
@@ -1027,7 +1037,8 @@ function CurrencyPanel({
         <div className="rounded-xl border border-amber-200 bg-white p-4">
           <p className="text-sm font-bold text-[#222]">ربع · نص · ليرة ذهب</p>
           <p className="mt-1 text-[11px] text-[#888]">
-            أوزان 1.804 / 3.608 / 7.216 غ · عيار 22 · بعملة {goldQuote}
+            أوزان 1.804 / 3.608 / 7.216 غ · عيار 22 · بعملة{" "}
+            {currencyCodeWithSymbol(goldQuote)}
           </p>
           <div className="mt-3 grid gap-2">
             {(liraRows || []).map((row) => (
@@ -1043,7 +1054,9 @@ function CurrencyPanel({
                 </div>
                 <p className="text-lg font-bold tabular-nums text-amber-950">
                   {formatMoney(row.price)}{" "}
-                  <span className="text-xs font-semibold">{goldQuote}</span>
+                  <span className="text-xs font-semibold">
+                    {currencyCodeWithSymbol(goldQuote)}
+                  </span>
                 </p>
               </div>
             ))}
