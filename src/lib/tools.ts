@@ -211,7 +211,7 @@ export const tools: Tool[] = [
     slug: "video-content-ideas",
     title: "مولد عناوين وأسئلة الفيديوهات",
     description:
-      "أدخل كلمة مفتاحية واحصل على أسئلة وعناوين من اقتراحات بحث جوجل الحقيقية، مع مقارنات وأفكار أبجدية لصنّاع المحتوى.",
+      "أسئلة وعناوين وترندات يوتيوب حسب الكلمة المفتاحية.",
     category: "social-dev",
     accept: "text/plain",
     icon: Lightbulb,
