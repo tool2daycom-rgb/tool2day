@@ -13,10 +13,12 @@ import {
   generateHashtags,
   generateVideoContentIdeasLocal,
   looksLikeInstagram,
+  mergeYoutubeTrends,
   minifyJson,
   youtubeThumbnailUrls,
   type ContentIdeas,
   type SocialPlatform,
+  type YoutubeTrendVideo,
 } from "@/lib/processors/social-dev-tools";
 
 export type SocialDevKind =
@@ -446,6 +448,16 @@ function IdeasPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ideas, setIdeas] = useState<ContentIdeas | null>(null);
+  const [ytConfigured, setYtConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void fetch("/api/youtube-trends")
+      .then((r) => r.json())
+      .then((d: { configured?: boolean }) =>
+        setYtConfigured(Boolean(d.configured)),
+      )
+      .catch(() => setYtConfigured(false));
+  }, []);
 
   const seoText = useMemo(
     () => (ideas ? contentIdeasToSeoText(ideas) : ""),
@@ -463,26 +475,57 @@ function IdeasPanel({
     beginToolUse(slug);
     try {
       const queries = buildSuggestQueries(t);
-      const res = await fetch("/api/suggest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ queries }),
-      });
-      const data = (await res.json()) as {
+      const [suggestRes, ytRes] = await Promise.all([
+        fetch("/api/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ queries }),
+        }),
+        fetch("/api/youtube-trends", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ q: t }),
+        }),
+      ]);
+
+      const suggestData = (await suggestRes.json()) as {
         results?: Record<string, string[]>;
         error?: string;
       };
-      if (!res.ok) {
-        throw new Error(data.error || "فشل جلب اقتراحات جوجل");
-      }
-      const assembled = assembleContentIdeasFromSuggest(t, data.results || {});
+      const ytData = (await ytRes.json()) as {
+        configured?: boolean;
+        videos?: YoutubeTrendVideo[];
+        error?: string;
+      };
+
+      setYtConfigured(Boolean(ytData.configured));
+
+      let assembled = assembleContentIdeasFromSuggest(
+        t,
+        suggestData.results || {},
+      );
+      assembled = mergeYoutubeTrends(assembled, ytData.videos || []);
       setIdeas(assembled);
       setOpenLetter(assembled.alphabetical[0]?.letter ?? null);
-      if (assembled.source === "local") {
-        setError(
-          "تعذّر الوصول لاقتراحات جوجل حالياً — عُرضت نتائج احتياطية محلية.",
+
+      const notes: string[] = [];
+      if (assembled.source === "local" && !(ytData.videos || []).length) {
+        notes.push("تعذّر Suggest — نتائج احتياطية محلية");
+      } else if (!suggestData.results || assembled.questions.length === 0) {
+        /* ok */
+      }
+      if (!ytData.configured) {
+        notes.push(
+          "YouTube غير مفعّل: أضف YOUTUBE_API_KEY في Vercel لتظهر الترندات",
+        );
+      } else if (ytData.error) {
+        notes.push(ytData.error);
+      } else if ((ytData.videos || []).length) {
+        notes.push(
+          `تم جلب ${(ytData.videos || []).length} عنواناً من يوتيوب (صلة + الأكثر مشاهدة)`,
         );
       }
+      setError(notes.length ? notes.join(" · ") : null);
     } catch (e) {
       setIdeas(generateVideoContentIdeasLocal(t));
       setError(
@@ -498,10 +541,20 @@ function IdeasPanel({
   return (
     <Shell title={title} description={description}>
       <p className="rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3 py-2 text-xs font-semibold leading-6 text-[#555]">
-        يعتمد على{" "}
-        <span className="font-extrabold text-[#111]">Google Suggest</span>: ندمج
-        كلمتك مع (كيف، ما هو، أين، أفضل، مقارنة…) ثم نجلب اقتراحات البحث الحقيقية
-        ونرتّبها في أقسام.
+        <span className="font-extrabold text-[#111]">Google Suggest</span> للأسئلة
+        والاقتراحات +{" "}
+        <span className="font-extrabold text-[#111]">YouTube Data API</span>{" "}
+        لعناوين وترندات حقيقية حسب كلمتك.
+        {ytConfigured === false ? (
+          <span className="mt-1 block text-amber-700">
+            المفتاح غير مضبوط بعد — Suggest يعمل، والترندات تُفعَّل بعد إضافة{" "}
+            <code className="rounded bg-white px-1">YOUTUBE_API_KEY</code>.
+          </span>
+        ) : ytConfigured ? (
+          <span className="mt-1 block text-emerald-700">
+            YouTube API متصل وجاهز للترندات.
+          </span>
+        ) : null}
       </p>
       <label className="block text-xs font-bold text-[#444]">
         الكلمة المفتاحية / الموضوع
@@ -522,7 +575,7 @@ function IdeasPanel({
           disabled={busy || !topic.trim()}
           onClick={() => void generate()}
         >
-          {busy ? "جارٍ جلب اقتراحات جوجل…" : "ولّد من Google Suggest"}
+          {busy ? "جارٍ جلب Suggest + يوتيوب…" : "ولّد أفكاراً وترندات"}
         </button>
         {ideas ? (
           <>
@@ -549,18 +602,61 @@ function IdeasPanel({
         ) : null}
       </div>
       {error ? <p className="text-sm font-bold text-amber-700">{error}</p> : null}
-      {ideas?.source === "google" ? (
-        <p className="text-xs font-bold text-emerald-700">
-          مصدر النتائج: اقتراحات بحث جوجل الفعلية
-        </p>
-      ) : null}
 
       {!ideas ? (
         <p className="text-sm font-semibold text-[#777]">
-          اكتب موضوعاً ثم اضغط التوليد لعرض الأسئلة والعناوين من اقتراحات جوجل.
+          اكتب موضوعاً ثم اضغط التوليد لعرض اقتراحات جوجل وترندات يوتيوب.
         </p>
       ) : (
         <>
+          {ideas.youtube.length > 0 ? (
+            <section>
+              <h3 className="mb-2 text-sm font-extrabold text-[#111]">
+                ترندات يوتيوب — عناوين رائجة حسب الموضوع
+              </h3>
+              <ul className="space-y-2 rounded-lg border border-[#eee] bg-[#fafafa] p-3">
+                {ideas.youtube.map((v) => (
+                  <li
+                    key={v.id}
+                    className="flex gap-3 rounded-md border border-[#eee] bg-white p-2"
+                  >
+                    {v.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={v.thumbnail}
+                        alt=""
+                        className="h-14 w-24 shrink-0 rounded object-cover"
+                      />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={v.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-bold text-[#111] hover:text-[#2563eb]"
+                      >
+                        {v.title}
+                      </a>
+                      <p className="mt-0.5 text-[11px] font-semibold text-[#777]">
+                        {v.channel}
+                        {v.order === "viewCount" ? " · الأكثر مشاهدة" : " · صلة"}
+                      </p>
+                      <div className="mt-1 flex gap-2">
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-[#2563eb]"
+                          onClick={() => void copyText(v.title)}
+                        >
+                          نسخ العنوان
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section>
             <h3 className="mb-2 text-sm font-extrabold text-[#111]">
               الأسئلة (ماذا · كيف · لماذا · أين · متى)

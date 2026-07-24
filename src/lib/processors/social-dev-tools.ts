@@ -201,13 +201,24 @@ export function decodeHtml(input: string): string {
   );
 }
 
+export type YoutubeTrendVideo = {
+  id: string;
+  title: string;
+  channel: string;
+  publishedAt: string;
+  thumbnail: string | null;
+  url: string;
+  order: "relevance" | "viewCount" | "date";
+};
+
 export type ContentIdeas = {
   topic: string;
   questions: string[];
   comparisons: string[];
   alphabetical: { letter: string; ideas: string[] }[];
   titles: string[];
-  source: "google" | "local";
+  youtube: YoutubeTrendVideo[];
+  source: "google" | "local" | "google+youtube";
 };
 
 const arabicLetters = "أابتثجحخدذرزسشصضطظعغفقكلمنهوي".split("");
@@ -333,7 +344,11 @@ export function assembleContentIdeasFromSuggest(
 
   const hasGoogle = all.length > 0;
   if (!hasGoogle) {
-    return { ...generateVideoContentIdeasLocal(t), source: "local" };
+    return {
+      ...generateVideoContentIdeasLocal(t),
+      source: "local",
+      youtube: [],
+    };
   }
 
   // املأ الأقسام الناقصة باحتياطي محلي خفيف
@@ -344,7 +359,23 @@ export function assembleContentIdeasFromSuggest(
     comparisons: comparisons.length ? comparisons : local.comparisons,
     alphabetical: alphabetical.length ? alphabetical : local.alphabetical,
     titles: titles.length ? titles : local.titles,
+    youtube: [],
     source: "google",
+  };
+}
+
+/** دمج عناوين وترندات يوتيوب مع نتائج Suggest */
+export function mergeYoutubeTrends(
+  ideas: ContentIdeas,
+  videos: YoutubeTrendVideo[],
+): ContentIdeas {
+  if (!videos.length) return ideas;
+  const ytTitles = uniqKeepOrder(videos.map((v) => v.title));
+  return {
+    ...ideas,
+    youtube: videos,
+    titles: uniqKeepOrder([...ytTitles, ...ideas.titles]).slice(0, 45),
+    source: ideas.source === "local" ? "google+youtube" : "google+youtube",
   };
 }
 
@@ -406,6 +437,7 @@ export function generateVideoContentIdeasLocal(topic: string): ContentIdeas {
     comparisons,
     alphabetical,
     titles,
+    youtube: [],
     source: "local",
   };
 }
@@ -418,8 +450,23 @@ export function generateVideoContentIdeas(topic: string): ContentIdeas {
 export function contentIdeasToSeoText(ideas: ContentIdeas): string {
   const lines: string[] = [];
   lines.push(`مولد أفكار فيديو: ${ideas.topic}`);
-  lines.push(`المصدر: ${ideas.source === "google" ? "Google Suggest" : "محلي"}`);
+  lines.push(
+    `المصدر: ${
+      ideas.source === "google+youtube"
+        ? "Google Suggest + YouTube"
+        : ideas.source === "google"
+          ? "Google Suggest"
+          : "محلي"
+    }`,
+  );
   lines.push("");
+  if (ideas.youtube.length) {
+    lines.push("## ترندات يوتيوب (عناوين رائجة)");
+    for (const v of ideas.youtube) {
+      lines.push(`- ${v.title} — ${v.channel} — ${v.url}`);
+    }
+    lines.push("");
+  }
   lines.push("## الأسئلة");
   for (const q of ideas.questions) lines.push(`- ${q}`);
   lines.push("");
