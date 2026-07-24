@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeftRight, RefreshCw } from "lucide-react";
+import { ArrowLeftRight, Pencil, RefreshCw } from "lucide-react";
 import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
@@ -722,8 +722,8 @@ function CurrencyPanel({
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      <div className="rounded-2xl border border-[#e8e8e8] bg-gradient-to-b from-[#fafafa] to-white p-4 sm:p-5">
-        <p className="text-center text-2xl font-bold tabular-nums text-[#111] sm:text-3xl">
+      <div className="rounded-2xl border border-[#cfcfcf] bg-white p-4 shadow-[0_8px_28px_rgba(0,0,0,0.08)] sm:p-6">
+        <p className="text-center text-lg font-bold tabular-nums text-[#222] sm:text-xl">
           1 {currencyCodeWithSymbol(from)} ={" "}
           {rate == null ? "…" : formatMoney(rate, rate < 1 ? 6 : 4)}{" "}
           {currencyCodeWithSymbol(to)}
@@ -740,93 +740,129 @@ function CurrencyPanel({
           </p>
         ) : null}
 
-        <div className="mt-5 grid items-end gap-3 sm:grid-cols-[1fr_auto_1fr]">
-          <div className="rounded-xl border border-[#ddd] bg-white p-3">
-            <p className="text-xs font-semibold text-[#777]">من</p>
-            <select
-              className={`${field} mt-1`}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            >
-              {filtered.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {currencyLabel(c.code)}
-                </option>
-              ))}
-            </select>
-            <input
-              className={`${field} mt-2 text-lg font-semibold tabular-nums`}
-              type="number"
-              min={0}
-              step="any"
-              value={amountFrom}
-              onChange={(e) => {
-                setEditSide("from");
-                setAmountFrom(Number(e.target.value) || 0);
-                if (rate != null) {
-                  setAmountTo(
-                    String(
-                      Number(
-                        (Number(e.target.value || 0) * rate).toFixed(
-                          rate < 1 ? 8 : 4,
+        <div className="mt-6 grid items-center gap-3 sm:grid-cols-[1fr_auto_1fr] sm:gap-4">
+          {/* من */}
+          <div className="min-w-0">
+            <p className="mb-2 text-sm font-bold text-[#333]">من</p>
+            <div className="overflow-hidden rounded-xl border-2 border-[#333] bg-white shadow-[0_4px_14px_rgba(0,0,0,0.1)]">
+              <div className="relative border-b border-[#d4d4d4] bg-[#ececec]">
+                <select
+                  className="w-full cursor-pointer appearance-none bg-transparent py-3 pe-9 ps-3 text-sm font-bold text-[#111] outline-none"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  aria-label="عملة المصدر"
+                >
+                  {filtered.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {currencyLabel(c.code)}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[#555]">
+                  ▾
+                </span>
+              </div>
+              <label className="relative flex items-center gap-2 px-3 py-4 sm:px-4 sm:py-5">
+                <span className="shrink-0 text-2xl font-extrabold text-[#111] sm:text-3xl">
+                  {getCurrency(from).symbol}
+                </span>
+                <input
+                  className="min-w-0 flex-1 border-0 bg-transparent text-3xl font-extrabold tabular-nums text-[#0a0a0a] outline-none sm:text-4xl"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={amountFrom}
+                  onChange={(e) => {
+                    setEditSide("from");
+                    setAmountFrom(Number(e.target.value) || 0);
+                    if (rate != null) {
+                      setAmountTo(
+                        String(
+                          Number(
+                            (Number(e.target.value || 0) * rate).toFixed(
+                              rate < 1 ? 8 : 4,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                }
-              }}
-            />
+                      );
+                    }
+                  }}
+                />
+                <Pencil
+                  className="h-4 w-4 shrink-0 text-[#888]"
+                  aria-hidden
+                />
+              </label>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={swap}
-            className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-[#ddd] bg-white text-[#333] hover:bg-[#f5f5f5]"
+            className="mx-auto mt-6 flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#2563eb] bg-[#eff6ff] text-[#2563eb] shadow-sm transition hover:bg-[#dbeafe] sm:mt-8"
             aria-label="تبديل العملات"
           >
-            <ArrowLeftRight className="h-4 w-4" />
+            <ArrowLeftRight className="h-5 w-5" strokeWidth={2.5} />
           </button>
 
-          <div className="rounded-xl border border-[#ddd] bg-white p-3">
-            <p className="text-xs font-semibold text-[#777]">إلى</p>
-            <select
-              className={`${field} mt-1`}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            >
-              {filtered.map((c) => (
-                <option key={`to-${c.code}`} value={c.code}>
-                  {currencyLabel(c.code)}
-                </option>
-              ))}
-            </select>
-            <input
-              className={`${field} mt-2 text-lg font-semibold tabular-nums`}
-              type="number"
-              min={0}
-              step="any"
-              value={amountTo}
-              onChange={(e) => {
-                setEditSide("to");
-                setAmountTo(e.target.value);
-                if (rate != null && rate !== 0) {
-                  setAmountFrom(
-                    Number(
-                      (Number(e.target.value || 0) / rate).toFixed(
-                        rate < 1 ? 8 : 4,
-                      ),
-                    ),
-                  );
-                }
-              }}
-            />
+          {/* إلى */}
+          <div className="min-w-0">
+            <p className="mb-2 text-sm font-bold text-[#333]">إلى</p>
+            <div className="overflow-hidden rounded-xl border-2 border-[#333] bg-white shadow-[0_4px_14px_rgba(0,0,0,0.1)]">
+              <div className="relative border-b border-[#d4d4d4] bg-[#ececec]">
+                <select
+                  className="w-full cursor-pointer appearance-none bg-transparent py-3 pe-9 ps-3 text-sm font-bold text-[#111] outline-none"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  aria-label="عملة الهدف"
+                >
+                  {filtered.map((c) => (
+                    <option key={`to-${c.code}`} value={c.code}>
+                      {currencyLabel(c.code)}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-[#555]">
+                  ▾
+                </span>
+              </div>
+              <label className="relative flex items-center gap-2 px-3 py-4 sm:px-4 sm:py-5">
+                <span className="shrink-0 text-2xl font-extrabold text-[#111] sm:text-3xl">
+                  {getCurrency(to).symbol}
+                </span>
+                <input
+                  className="min-w-0 flex-1 border-0 bg-transparent text-3xl font-extrabold tabular-nums text-[#0a0a0a] outline-none sm:text-4xl"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={amountTo}
+                  onChange={(e) => {
+                    setEditSide("to");
+                    setAmountTo(e.target.value);
+                    if (rate != null && rate !== 0) {
+                      setAmountFrom(
+                        Number(
+                          (Number(e.target.value || 0) / rate).toFixed(
+                            rate < 1 ? 8 : 4,
+                          ),
+                        ),
+                      );
+                    }
+                  }}
+                />
+                <Pencil
+                  className="h-4 w-4 shrink-0 text-[#888]"
+                  aria-hidden
+                />
+              </label>
+            </div>
           </div>
         </div>
 
-        <label className="mt-3 block text-xs font-semibold text-[#555]">
+        <label className="mt-5 block text-xs font-semibold text-[#555]">
           بحث سريع عن عملة
           <input
-            className={`${field} mt-1`}
+            className={`${field} mt-1 border-[#bbb]`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="مثال: ذهب، SAR، Euro…"
