@@ -207,94 +207,218 @@ export type ContentIdeas = {
   comparisons: string[];
   alphabetical: { letter: string; ideas: string[] }[];
   titles: string[];
+  source: "google" | "local";
 };
 
 const arabicLetters = "أابتثجحخدذرزسشصضطظعغفقكلمنهوي".split("");
 
-export function generateVideoContentIdeas(topic: string): ContentIdeas {
-  const t = topic.trim() || "موضوعك";
+/** بادئات استفهام تُدمَج مع الكلمة ثم تُرسل لـ Google Suggest */
+export const QUESTION_PREFIXES = [
+  "كيف",
+  "ما هو",
+  "ما هي",
+  "أين",
+  "متى",
+  "لماذا",
+  "أفضل",
+  "هل",
+  "من",
+  "طريقة",
+  "شرح",
+  "أخطاء",
+] as const;
 
-  const questions = [
-    `ما هو ${t}؟`,
-    `كيف تبدأ في ${t} من الصفر؟`,
-    `لماذا ${t} مهم في 2026؟`,
-    `أين تتعلم ${t} مجاناً؟`,
-    `متى يكون الوقت مناسباً لبدء ${t}؟`,
-    `من يحتاج إلى ${t} حقاً؟`,
-    `كيف تحترف ${t} بسرعة؟`,
-    `ما أخطاء المبتدئين في ${t}؟`,
-    `كيف تربح من ${t}؟`,
-    `ما أفضل أدوات ${t}؟`,
-    `كيف تختار مسار ${t} المناسب لك؟`,
-    `هل ${t} مناسب للمبتدئين؟`,
-    `كيف تقيس نجاحك في ${t}؟`,
-    `ما الفرق بين ${t} للمبتدئين والمحترفين؟`,
-    `كيف تبني خطة أسبوعية لـ ${t}؟`,
-  ];
+export const COMPARISON_PREFIXES = [
+  "مقارنة بين",
+  "مقابل",
+  "الفرق بين",
+  "أفضل من",
+  "بدون",
+  "للمبتدئين",
+  "vs",
+] as const;
 
-  const comparisons = [
-    `مقارنة بين ${t} والطريقة التقليدية`,
-    `${t} مقابل البدائل الشائعة — أيهما أفضل؟`,
-    `أفضل منصات لـ ${t} مقارنةً ببعضها`,
-    `${t} للمبتدئين vs للمحترفين`,
-    `مجاني أم مدفوع في عالم ${t}؟`,
-    `العمل الحر في ${t} مقابل الوظيفة الثابتة`,
-    `أدوات ${t} الرخيصة مقابل الاحترافية`,
-    `${t} في الوطن العربي مقارنة بالعالم`,
-    `قصير المدى أم طويل المدى في ${t}`,
-    `تعلم ${t} وحدك أم مع كورس؟`,
-  ];
+export function buildSuggestQueries(topic: string): string[] {
+  const t = topic.trim();
+  if (!t) return [];
+  const qs: string[] = [t];
 
-  const alphabetical = arabicLetters.map((letter) => ({
-    letter,
-    ideas: [
-      `${letter} — أفكار حول ${t} تبدأ بـ «${letter}»`,
-      `${letter} — عنوان فيديو: «${letter}سرار ${t} التي لا يخبرك بها أحد»`,
-      `${letter} — سؤال للجمهور عن ${t}`,
-    ],
-  }));
+  // إذا بدأ الموضوع بأداة استفهام لا نضاعفها
+  const startsWithQ = /^(كيف|ما\s*هو|ما\s*هي|أين|متى|لماذا|هل|من|أفضل)\b/i.test(
+    t,
+  );
 
-  // أيضاً حروف إنجليزية لأفكار لاتنتهي
-  const en = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  for (const letter of en) {
-    alphabetical.push({
-      letter,
-      ideas: [
-        `${letter} — ${t} tips starting with ${letter}`,
-        `${letter} — Video idea: "${letter} things about ${t}"`,
-      ],
-    });
+  if (!startsWithQ) {
+    for (const p of QUESTION_PREFIXES) qs.push(`${p} ${t}`);
+  } else {
+    // الموضوع أصلاً سؤال — نقترح تكملات مباشرة
+    qs.push(t, `${t} `, `أفضل ${t}`, `شرح ${t}`);
   }
 
-  const titles = [
-    `${t} للمبتدئين: الدليل الكامل 2026`,
-    `كيف تبدأ ${t} اليوم وتتجنّب أكبر 7 أخطاء`,
-    `أسرار ${t} التي غيّرت نتائج صنّاع المحتوى`,
-    `${t} من صفر إلى احتراف — خطوة بخطوة`,
-    `هل يستحق ${t} وقتك؟ الإجابة الصريحة`,
-    `أفضل 10 نصائح في ${t} جربتها بنفسي`,
-    `${t}: ما لن يخبرك به الكورسات المدفوعة`,
-    `خطة 30 يوماً لإتقان ${t}`,
-    `تركت الوظائف وبدأت ${t} — هذه قصتي`,
-    `${t} في 15 دقيقة فقط (شرح سريع)`,
-    `أدوات مجانية لا غنى عنها في ${t}`,
-    `لماذا فشل معظم الناس في ${t}؟`,
-    `${t} للعرب: فرص حقيقية أم وهم؟`,
-    `قبل أن تبدأ ${t} شاهد هذا الفيديو`,
-    `أسئلة الجمهور عن ${t} — أجيب عليها كلها`,
-    `مقارنة صادقة: طرق ${t} الشائعة`,
-    `${t} بدون رأس مال — هل ممكن؟`,
-    `روتيني اليومي مع ${t}`,
-    `أخطاء قتلت تقدمي في ${t} وكيف أصلحتها`,
-    `عنوان فيديو يوتيوب قوي عن ${t} يجلب مشاهدات`,
+  for (const p of COMPARISON_PREFIXES) qs.push(`${p} ${t}`);
+
+  // أبجدية عربية: حرف + الموضوع
+  for (const letter of arabicLetters.slice(0, 14)) {
+    qs.push(`${t} ${letter}`);
+  }
+  // حروف إنجليزية شائعة للعناوين
+  for (const letter of "ABCDEFGHIJ") {
+    qs.push(`${t} ${letter}`);
+  }
+
+  return [...new Set(qs)].slice(0, 36);
+}
+
+function uniqKeepOrder(items: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of items) {
+    const s = raw.replace(/\s+/g, " ").trim();
+    if (!s) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+function capitalizeTitle(s: string): string {
+  const t = s.trim();
+  if (!t) return t;
+  // عناوين فيديو خفيفة من اقتراح البحث
+  if (/[؟?]$/.test(t)) return t;
+  if (t.length < 40) return `${t} — شرح كامل`;
+  return t;
+}
+
+export function assembleContentIdeasFromSuggest(
+  topic: string,
+  results: Record<string, string[]>,
+): ContentIdeas {
+  const t = topic.trim() || "موضوعك";
+  const all = uniqKeepOrder(Object.values(results).flat());
+
+  const questionHints =
+    /^(كيف|ما\s*هو|ما\s*هي|أين|متى|لماذا|هل|من|طريقة|شرح|أخطاء|أفضل)/i;
+  const compareHints = /(مقارنة|مقابل|الفرق|vs|بدون|للمبتدئين|أفضل من)/i;
+
+  const questions = uniqKeepOrder([
+    ...all.filter((s) => questionHints.test(s) || /[؟?]/.test(s)),
+    ...QUESTION_PREFIXES.flatMap((p) => results[`${p} ${t}`] || []),
+  ]).slice(0, 40);
+
+  const comparisons = uniqKeepOrder([
+    ...all.filter((s) => compareHints.test(s)),
+    ...COMPARISON_PREFIXES.flatMap((p) => results[`${p} ${t}`] || []),
+  ]).slice(0, 25);
+
+  const alphabetical: { letter: string; ideas: string[] }[] = [];
+  for (const letter of [...arabicLetters, ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"]) {
+    const fromKey = results[`${t} ${letter}`] || [];
+    const startsWithLetter = all.filter((s) => {
+      const cleaned = s.replace(/^[#\s]+/, "");
+      return cleaned.startsWith(letter) || cleaned.includes(` ${letter}`);
+    });
+    const ideas = uniqKeepOrder([...fromKey, ...startsWithLetter]).slice(0, 8);
+    if (ideas.length) alphabetical.push({ letter, ideas });
+  }
+
+  const titles = uniqKeepOrder([
+    ...(results[t] || []).map(capitalizeTitle),
+    ...all
+      .filter((s) => !questionHints.test(s) && s.length >= 12)
+      .map(capitalizeTitle),
+  ]).slice(0, 35);
+
+  const hasGoogle = all.length > 0;
+  if (!hasGoogle) {
+    return { ...generateVideoContentIdeasLocal(t), source: "local" };
+  }
+
+  // املأ الأقسام الناقصة باحتياطي محلي خفيف
+  const local = generateVideoContentIdeasLocal(t);
+  return {
+    topic: t,
+    questions: questions.length ? questions : local.questions,
+    comparisons: comparisons.length ? comparisons : local.comparisons,
+    alphabetical: alphabetical.length ? alphabetical : local.alphabetical,
+    titles: titles.length ? titles : local.titles,
+    source: "google",
+  };
+}
+
+/** احتياطي محلي إذا تعذّر Google Suggest */
+export function generateVideoContentIdeasLocal(topic: string): ContentIdeas {
+  const t = topic.trim() || "موضوعك";
+  const startsWithQ = /^(كيف|ما\s*هو|ما\s*هي|أين|متى|لماذا|هل|من|أفضل)\b/i.test(
+    t,
+  );
+
+  const questions = startsWithQ
+    ? [
+        t,
+        `${t}؟`,
+        `شرح ${t}`,
+        `أفضل إجابة عن: ${t}`,
+        `${t} للمبتدئين`,
+        `${t} بالتفصيل`,
+      ]
+    : [
+        `ما هو ${t}؟`,
+        `كيف تبدأ في ${t} من الصفر؟`,
+        `لماذا ${t} مهم في 2026؟`,
+        `أين تتعلم ${t} مجاناً؟`,
+        `متى يكون الوقت مناسباً لبدء ${t}؟`,
+        `كيف تحترف ${t} بسرعة؟`,
+        `ما أخطاء المبتدئين في ${t}؟`,
+        `كيف تربح من ${t}؟`,
+        `ما أفضل أدوات ${t}؟`,
+        `هل ${t} مناسب للمبتدئين؟`,
+      ];
+
+  const comparisons = [
+    `مقارنة بين ${t} والبدائل`,
+    `${t} مقابل الطرق التقليدية`,
+    `الفرق بين ${t} للمبتدئين والمحترفين`,
+    `أفضل أدوات ${t} — مقارنة`,
+    `${t} بدون رأس مال`,
+    `${t} للمبتدئين`,
   ];
 
-  return { topic: t, questions, comparisons, alphabetical, titles };
+  const alphabetical = arabicLetters.slice(0, 12).map((letter) => ({
+    letter,
+    ideas: [`${t} ${letter}`, `أفكار ${t} بحرف ${letter}`],
+  }));
+
+  const titles = [
+    `${t} للمبتدئين: الدليل الكامل`,
+    `كيف تبدأ ${t} اليوم`,
+    `أسرار ${t} التي لا يخبرك بها أحد`,
+    `${t} من صفر إلى احتراف`,
+    `أفضل نصائح في ${t}`,
+    `أخطاء شائعة في ${t}`,
+  ];
+
+  return {
+    topic: t,
+    questions,
+    comparisons,
+    alphabetical,
+    titles,
+    source: "local",
+  };
+}
+
+/** @deprecated استخدم assembleContentIdeasFromSuggest أو المحلي */
+export function generateVideoContentIdeas(topic: string): ContentIdeas {
+  return generateVideoContentIdeasLocal(topic);
 }
 
 export function contentIdeasToSeoText(ideas: ContentIdeas): string {
   const lines: string[] = [];
   lines.push(`مولد أفكار فيديو: ${ideas.topic}`);
+  lines.push(`المصدر: ${ideas.source === "google" ? "Google Suggest" : "محلي"}`);
   lines.push("");
   lines.push("## الأسئلة");
   for (const q of ideas.questions) lines.push(`- ${q}`);

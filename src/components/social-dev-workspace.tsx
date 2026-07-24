@@ -3,16 +3,19 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
 import {
+  assembleContentIdeasFromSuggest,
+  buildSuggestQueries,
   contentIdeasToSeoText,
   decodeHtml,
   encodeHtml,
   extractYoutubeId,
   formatJson,
   generateHashtags,
-  generateVideoContentIdeas,
+  generateVideoContentIdeasLocal,
   looksLikeInstagram,
   minifyJson,
   youtubeThumbnailUrls,
+  type ContentIdeas,
   type SocialPlatform,
 } from "@/lib/processors/social-dev-tools";
 
@@ -440,17 +443,75 @@ function IdeasPanel({
 }) {
   const [topic, setTopic] = useState("تطوير الويب");
   const [openLetter, setOpenLetter] = useState<string | null>("أ");
-  const ideas = useMemo(() => generateVideoContentIdeas(topic), [topic]);
-  const seoText = useMemo(() => contentIdeasToSeoText(ideas), [ideas]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ideas, setIdeas] = useState<ContentIdeas | null>(null);
+
+  const seoText = useMemo(
+    () => (ideas ? contentIdeasToSeoText(ideas) : ""),
+    [ideas],
+  );
+
+  async function generate() {
+    const t = topic.trim();
+    if (!t) {
+      setError("أدخل كلمة مفتاحية");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    beginToolUse(slug);
+    try {
+      const queries = buildSuggestQueries(t);
+      const res = await fetch("/api/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queries }),
+      });
+      const data = (await res.json()) as {
+        results?: Record<string, string[]>;
+        error?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.error || "فشل جلب اقتراحات جوجل");
+      }
+      const assembled = assembleContentIdeasFromSuggest(t, data.results || {});
+      setIdeas(assembled);
+      setOpenLetter(assembled.alphabetical[0]?.letter ?? null);
+      if (assembled.source === "local") {
+        setError(
+          "تعذّر الوصول لاقتراحات جوجل حالياً — عُرضت نتائج احتياطية محلية.",
+        );
+      }
+    } catch (e) {
+      setIdeas(generateVideoContentIdeasLocal(t));
+      setError(
+        e instanceof Error
+          ? `${e.message} — تم التبديل للاحتياطي المحلي`
+          : "فشل التوليد",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Shell title={title} description={description}>
+      <p className="rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3 py-2 text-xs font-semibold leading-6 text-[#555]">
+        يعتمد على{" "}
+        <span className="font-extrabold text-[#111]">Google Suggest</span>: ندمج
+        كلمتك مع (كيف، ما هو، أين، أفضل، مقارنة…) ثم نجلب اقتراحات البحث الحقيقية
+        ونرتّبها في أقسام.
+      </p>
       <label className="block text-xs font-bold text-[#444]">
         الكلمة المفتاحية / الموضوع
         <input
           className={field}
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void generate();
+          }}
           placeholder='مثال: "الربح من الإنترنت" أو "تطوير الويب"'
         />
       </label>
@@ -458,131 +519,156 @@ function IdeasPanel({
         <button
           type="button"
           className={btnPrimary}
-          onClick={() => {
-            beginToolUse(slug);
-            void copyText(seoText);
-          }}
+          disabled={busy || !topic.trim()}
+          onClick={() => void generate()}
         >
-          نسخ كل الأفكار (نص SEO)
+          {busy ? "جارٍ جلب اقتراحات جوجل…" : "ولّد من Google Suggest"}
         </button>
-        <button
-          type="button"
-          className={btnGhost}
-          onClick={() =>
-            void downloadTxt(slug, seoText, `video-ideas-${Date.now()}.txt`)
-          }
-        >
-          تنزيل ملف نصي
-        </button>
-      </div>
-
-      <section>
-        <h3 className="mb-2 text-sm font-extrabold text-[#111]">
-          الأسئلة (ماذا · كيف · لماذا · أين · متى)
-        </h3>
-        <ul className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]">
-          {ideas.questions.map((q) => (
-            <li key={q} className="flex items-start justify-between gap-2">
-              <span>{q}</span>
-              <button
-                type="button"
-                className="shrink-0 text-xs font-bold text-[#2563eb]"
-                onClick={() => void copyText(q)}
-              >
-                نسخ
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="mb-2 text-sm font-extrabold text-[#111]">
-          حروف الجر والمقارنات
-        </h3>
-        <ul className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]">
-          {ideas.comparisons.map((c) => (
-            <li key={c} className="flex items-start justify-between gap-2">
-              <span>{c}</span>
-              <button
-                type="button"
-                className="shrink-0 text-xs font-bold text-[#2563eb]"
-                onClick={() => void copyText(c)}
-              >
-                نسخ
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="mb-2 text-sm font-extrabold text-[#111]">
-          عناوين جاهزة للفيديوهات
-        </h3>
-        <ul className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]">
-          {ideas.titles.map((t) => (
-            <li key={t} className="flex items-start justify-between gap-2">
-              <span>{t}</span>
-              <button
-                type="button"
-                className="shrink-0 text-xs font-bold text-[#2563eb]"
-                onClick={() => void copyText(t)}
-              >
-                نسخ
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="mb-2 text-sm font-extrabold text-[#111]">
-          الأبجدية — أفكار لا تنتهي
-        </h3>
-        <div className="mb-3 flex flex-wrap gap-1">
-          {ideas.alphabetical.slice(0, 35).map((b) => (
+        {ideas ? (
+          <>
             <button
-              key={b.letter}
               type="button"
-              onClick={() =>
-                setOpenLetter((cur) => (cur === b.letter ? null : b.letter))
-              }
-              className={`min-w-8 rounded-md px-2 py-1 text-xs font-extrabold ${
-                openLetter === b.letter
-                  ? "bg-[#111] text-white"
-                  : "border border-[#ddd] bg-white text-[#333]"
-              }`}
+              className={btnGhost}
+              onClick={() => {
+                beginToolUse(slug);
+                void copyText(seoText);
+              }}
             >
-              {b.letter}
+              نسخ كل الأفكار (نص SEO)
             </button>
-          ))}
-        </div>
-        {openLetter
-          ? ideas.alphabetical
-              .filter((b) => b.letter === openLetter)
-              .map((b) => (
-                <ul
-                  key={b.letter}
-                  className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]"
-                >
-                  {b.ideas.map((i) => (
-                    <li key={i}>{i}</li>
-                  ))}
-                </ul>
-              ))
-          : null}
-      </section>
+            <button
+              type="button"
+              className={btnGhost}
+              onClick={() =>
+                void downloadTxt(slug, seoText, `video-ideas-${Date.now()}.txt`)
+              }
+            >
+              تنزيل ملف نصي
+            </button>
+          </>
+        ) : null}
+      </div>
+      {error ? <p className="text-sm font-bold text-amber-700">{error}</p> : null}
+      {ideas?.source === "google" ? (
+        <p className="text-xs font-bold text-emerald-700">
+          مصدر النتائج: اقتراحات بحث جوجل الفعلية
+        </p>
+      ) : null}
 
-      {/* نص غني بالكلمات المفتاحية لأرشفة أفضل عند مشاركة/فهرسة الصفحة */}
-      <details className="rounded-lg border border-[#eee] bg-white p-3">
-        <summary className="cursor-pointer text-sm font-extrabold text-[#111]">
-          عرض نص SEO الكامل للفهرسة والنسخ
-        </summary>
-        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-6 text-[#444]">
-          {seoText}
-        </pre>
-      </details>
+      {!ideas ? (
+        <p className="text-sm font-semibold text-[#777]">
+          اكتب موضوعاً ثم اضغط التوليد لعرض الأسئلة والعناوين من اقتراحات جوجل.
+        </p>
+      ) : (
+        <>
+          <section>
+            <h3 className="mb-2 text-sm font-extrabold text-[#111]">
+              الأسئلة (ماذا · كيف · لماذا · أين · متى)
+            </h3>
+            <ul className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]">
+              {ideas.questions.map((q) => (
+                <li key={q} className="flex items-start justify-between gap-2">
+                  <span>{q}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-bold text-[#2563eb]"
+                    onClick={() => void copyText(q)}
+                  >
+                    نسخ
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-sm font-extrabold text-[#111]">
+              حروف الجر والمقارنات
+            </h3>
+            <ul className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]">
+              {ideas.comparisons.map((c) => (
+                <li key={c} className="flex items-start justify-between gap-2">
+                  <span>{c}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-bold text-[#2563eb]"
+                    onClick={() => void copyText(c)}
+                  >
+                    نسخ
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-sm font-extrabold text-[#111]">
+              عناوين جاهزة للفيديوهات
+            </h3>
+            <ul className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]">
+              {ideas.titles.map((t) => (
+                <li key={t} className="flex items-start justify-between gap-2">
+                  <span>{t}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-bold text-[#2563eb]"
+                    onClick={() => void copyText(t)}
+                  >
+                    نسخ
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="mb-2 text-sm font-extrabold text-[#111]">
+              الأبجدية — أفكار لا تنتهي
+            </h3>
+            <div className="mb-3 flex flex-wrap gap-1">
+              {ideas.alphabetical.slice(0, 35).map((b) => (
+                <button
+                  key={b.letter}
+                  type="button"
+                  onClick={() =>
+                    setOpenLetter((cur) => (cur === b.letter ? null : b.letter))
+                  }
+                  className={`min-w-8 rounded-md px-2 py-1 text-xs font-extrabold ${
+                    openLetter === b.letter
+                      ? "bg-[#111] text-white"
+                      : "border border-[#ddd] bg-white text-[#333]"
+                  }`}
+                >
+                  {b.letter}
+                </button>
+              ))}
+            </div>
+            {openLetter
+              ? ideas.alphabetical
+                  .filter((b) => b.letter === openLetter)
+                  .map((b) => (
+                    <ul
+                      key={b.letter}
+                      className="space-y-1.5 rounded-lg border border-[#eee] bg-[#fafafa] p-3 text-sm font-semibold text-[#333]"
+                    >
+                      {b.ideas.map((i) => (
+                        <li key={i}>{i}</li>
+                      ))}
+                    </ul>
+                  ))
+              : null}
+          </section>
+
+          <details className="rounded-lg border border-[#eee] bg-white p-3">
+            <summary className="cursor-pointer text-sm font-extrabold text-[#111]">
+              عرض نص SEO الكامل للفهرسة والنسخ
+            </summary>
+            <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-6 text-[#444]">
+              {seoText}
+            </pre>
+          </details>
+        </>
+      )}
     </Shell>
   );
 }
