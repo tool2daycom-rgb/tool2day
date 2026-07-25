@@ -25,6 +25,7 @@ export const toolImageIcons: Record<string, string> = {
   "color-converter": "/brand/tools/color-converter.png",
   "css-gradient-generator": "/brand/tools/css-gradient-generator.png",
   "calorie-calculator": "/brand/tools/calorie-calculator.png",
+  "loan-calculator": "/brand/tools/loan-calculator.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
