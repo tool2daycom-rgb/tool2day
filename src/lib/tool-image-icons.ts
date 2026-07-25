@@ -32,6 +32,7 @@ export const toolImageIcons: Record<string, string> = {
   "ai-ocr": "/brand/tools/ai-ocr.png",
   "ai-summarize": "/brand/tools/ai-summarize.png",
   "ai-remove-bg": "/brand/tools/ai-remove-bg.png",
+  "ai-upscale": "/brand/tools/ai-upscale.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
