@@ -5,6 +5,7 @@ export const toolImageIcons: Record<string, string> = {
   "pdf-split": "/brand/tools/pdf-split.png",
   "pdf-merge": "/brand/tools/pdf-merge.png",
   "pdf-compress": "/brand/tools/pdf-compress.png",
+  "pdf-unlock": "/brand/tools/pdf-unlock.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
