@@ -20,6 +20,7 @@ export const toolImageIcons: Record<string, string> = {
   "cv-builder": "/brand/tools/cv-builder.png",
   "fancy-text": "/brand/tools/fancy-text.png",
   "email-generator": "/brand/tools/email-generator.png",
+  "css-generator": "/brand/tools/css-generator.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
