@@ -182,17 +182,7 @@ export default async function ToolPage({ params }: Props) {
         categoryAnchor={category.anchor}
         categoryKey={tool.category}
       >
-        {isCurrency ? (
-          <Image
-            src="/brand/currency-gold-coin.png"
-            alt=""
-            width={96}
-            height={96}
-            className="h-14 w-14 rounded-full object-cover shadow-md sm:h-16 sm:w-16"
-            unoptimized
-            aria-hidden
-          />
-        ) : getToolImageIcon(tool.slug) ? (
+        {getToolImageIcon(tool.slug) ? (
           <Image
             src={getToolImageIcon(tool.slug)!}
             alt=""
