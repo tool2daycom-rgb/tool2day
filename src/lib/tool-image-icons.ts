@@ -23,6 +23,7 @@ export const toolImageIcons: Record<string, string> = {
   "css-generator": "/brand/tools/css-generator.png",
   "color-palette-extractor": "/brand/tools/color-palette-extractor.png",
   "color-converter": "/brand/tools/color-converter.png",
+  "css-gradient-generator": "/brand/tools/css-gradient-generator.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
