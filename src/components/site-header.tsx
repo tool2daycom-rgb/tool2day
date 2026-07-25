@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import { AuthMenu } from "@/components/auth-menu";
 import { BrandLogo } from "@/components/brand-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ToolIcon } from "@/components/tool-icon";
 import { useLocale } from "@/components/locale-provider";
 import {
   categoryMeta,
@@ -141,7 +142,6 @@ export function SiteHeader() {
                           }
                         >
                           {items.map((tool) => {
-                            const ToolIcon = tool.icon;
                             return (
                               <li key={tool.slug}>
                                 <Link
@@ -150,7 +150,13 @@ export function SiteHeader() {
                                   className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
                                   onClick={() => setOpen(null)}
                                 >
-                                  <ToolIcon className="h-4 w-4 shrink-0" />
+                                  <ToolIcon
+                                    slug={tool.slug}
+                                    Icon={tool.icon}
+                                    size="sm"
+                                    className="text-white"
+                                    strokeWidth={2}
+                                  />
                                   <span>
                                     {getToolTitle(
                                       tool.slug,

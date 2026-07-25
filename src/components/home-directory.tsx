@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useLocale } from "@/components/locale-provider";
+import { ToolIcon } from "@/components/tool-icon";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
 import { isToolLive } from "@/lib/processors/active-tools";
 import {
@@ -25,7 +26,6 @@ function CategorySection({ category }: { category: ToolCategory }) {
       </h2>
       <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         {tools.map((tool) => {
-          const Icon = tool.icon;
           const live = isToolLive(tool.slug);
           return (
             <li key={tool.slug}>
@@ -37,12 +37,16 @@ function CategorySection({ category }: { category: ToolCategory }) {
                     : "text-[#888] hover:text-[#555]"
                 }`}
               >
-                <Icon
-                  className={`h-5 w-5 shrink-0 stroke-[1.5] transition ${
+                <ToolIcon
+                  slug={tool.slug}
+                  Icon={tool.icon}
+                  size="sm"
+                  className={
                     live
-                      ? "text-[#333] group-hover:text-[#2563eb]"
-                      : "text-[#aaa]"
-                  }`}
+                      ? "text-[#333] group-hover:opacity-90"
+                      : "opacity-50"
+                  }
+                  strokeWidth={1.5}
                 />
                 <span className="text-[15px] leading-6">
                   {getToolTitle(tool.slug, locale, tool.title)}

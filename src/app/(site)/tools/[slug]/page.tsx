@@ -27,6 +27,7 @@ import {
 import { getToolSeoContent } from "@/lib/tool-seo-content";
 import { categoryMeta, getTool, tools } from "@/lib/tools";
 import { getToolKind } from "@/lib/processors/active-tools";
+import { getToolImageIcon } from "@/lib/tool-image-icons";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -188,6 +189,16 @@ export default async function ToolPage({ params }: Props) {
             width={96}
             height={96}
             className="h-14 w-14 rounded-full object-cover shadow-md sm:h-16 sm:w-16"
+            unoptimized
+            aria-hidden
+          />
+        ) : getToolImageIcon(tool.slug) ? (
+          <Image
+            src={getToolImageIcon(tool.slug)!}
+            alt=""
+            width={64}
+            height={64}
+            className="h-14 w-14 object-contain sm:h-16 sm:w-16"
             unoptimized
             aria-hidden
           />
