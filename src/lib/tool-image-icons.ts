@@ -13,6 +13,7 @@ export const toolImageIcons: Record<string, string> = {
   "pdf-to-word": "/brand/tools/pdf-to-word.png",
   "pdf-to-excel": "/brand/tools/pdf-to-excel.png",
   "pdf-to-png": "/brand/tools/pdf-to-png.png",
+  "jpg-to-pdf": "/brand/tools/jpg-to-pdf.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
