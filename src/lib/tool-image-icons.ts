@@ -30,6 +30,7 @@ export const toolImageIcons: Record<string, string> = {
   "timezone-calculator": "/brand/tools/timezone-calculator.png",
   "currency-exchange": "/brand/tools/currency-exchange.png",
   "ai-ocr": "/brand/tools/ai-ocr.png",
+  "ai-summarize": "/brand/tools/ai-summarize.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
