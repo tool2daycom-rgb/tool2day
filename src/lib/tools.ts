@@ -350,6 +350,15 @@ export const tools: Tool[] = [
     accept: "image/*",
     icon: Eraser,
   },
+  {
+    slug: "png-library",
+    title: "مكتبة PNG بدون خلفية",
+    description:
+      "تصفّح آلاف الصور الشفافة الجاهزة للتنزيل، أو ارفع PNG خاصتك للمكتبة مع العنوان والكلمات المفتاحية.",
+    category: "ai",
+    accept: "image/png",
+    icon: ImageDown,
+  },
 
   // Video
   {

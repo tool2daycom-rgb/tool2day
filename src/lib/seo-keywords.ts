@@ -393,6 +393,14 @@ const toolExtraKeywords: Record<string, string[]> = {
     "object remover",
     "magic erase",
   ],
+  "png-library": [
+    "مكتبة png",
+    "صور بدون خلفية",
+    "تحميل png شفاف",
+    "png library",
+    "transparent png download",
+    "رفع png",
+  ],
   "thumbnail-downloader": [
     "تحميل صورة مصغرة يوتيوب",
     "youtube thumbnail downloader",
