@@ -104,7 +104,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       setPixabayConfigured(Boolean(data.providers?.pixabayConfigured));
       setStatus(
         data.items?.length
-          ? `عُثر على ${data.items.length} صورة`
+          ? null
           : "لا نتائج — جرّب كلمة أخرى أو ارفع PNG",
       );
     } catch (e) {
@@ -495,13 +495,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
               onChange={(e) => setAutoCut(e.target.checked)}
               className="mt-0.5 h-4 w-4"
             />
-            <span>
-              إزالة الخلفية بالذكاء الاصطناعي
-              <span className="mt-0.5 block text-xs font-normal text-[#777]">
-                اتركه مقفولاً لصور PNG الشفافة الجاهزة (أفضل جودة). فعّله فقط
-                للصور ذات خلفية بيضاء/ملونة.
-              </span>
-            </span>
+            <span>إزالة الخلفية بالذكاء الاصطناعي</span>
           </label>
 
           <div
