@@ -100,13 +100,8 @@ async function callWhisperCompatible(opts: {
   if (opts.language && opts.language !== "auto") {
     body.append("language", opts.language);
   }
-  // توجيه إملائي لأسماء شائعة يخطئ فيها Whisper (عربي/إنجليزي)
-  if (opts.language === "ar" || opts.language === "auto") {
-    body.append(
-      "prompt",
-      "ترجمة عربية صحيحة. أسماء: أوكرانيا، أوروبا، النمسا، ألمانيا، تركيا، بولندا. لهجة شامية: عم نعيش، عم ننتقل.",
-    );
-  }
+  // بدون prompt طويل — Whisper يكرّر الـ prompt بدل كلام الفيديو
+  body.append("temperature", "0");
 
   const res = await fetch(opts.endpoint, {
     method: "POST",
@@ -121,7 +116,7 @@ async function callWhisperCompatible(opts: {
   if (!res.ok) {
     throw new Error(data.error?.message || `فشل Whisper (${res.status})`);
   }
-  const text = (data.text || "").trim();
+  const text = stripPromptLeakage((data.text || "").trim());
   if (!text) throw new Error("لم يُستخرج نص من الملف");
 
   const cues: SegmentCue[] | undefined = Array.isArray(data.segments)
@@ -129,10 +124,26 @@ async function callWhisperCompatible(opts: {
         .map((s) => ({
           start: Number(s.start) || 0,
           end: Math.max(Number(s.start) || 0, Number(s.end) || 0) + 0.01,
-          text: (s.text || "").trim(),
+          text: stripPromptLeakage((s.text || "").trim()),
         }))
         .filter((c) => c.text)
     : undefined;
 
   return { text, cues };
+}
+
+/** يزيل نص الـ prompt الذي يكرّره Whisper أحياناً بدل الكلام الحقيقي */
+function stripPromptLeakage(text: string): string {
+  if (!text) return "";
+  let t = text.replace(/\s+/gu, " ").trim();
+  if (
+    /لهجة شامية/u.test(t) ||
+    /ترجمة عربية صحيحة/u.test(t) ||
+    (/أسماء:?\s*(?:أوكرانيا|أوروبا|اوروبا)/u.test(t) &&
+      /النمسا|تركيا|بولندا/u.test(t)) ||
+    /عم نعيش[،,]?\s*عم ننتقل/u.test(t)
+  ) {
+    return "";
+  }
+  return t;
 }

@@ -227,11 +227,11 @@ export function syncCuesToDuration(
   }
 
   const last = sorted[sorted.length - 1]!;
-  const span = Math.max(0.5, last.end - sorted[0]!.start);
-  const targetSpan = Math.max(0.5, durationSec - sorted[0]!.start - 0.05);
-  // إن انحرف التوقيت عن مدة الفيديو بشكل واضح، أعد التناسب
-  if (Math.abs(last.end - durationSec) > 1.25 || last.end > durationSec + 0.4) {
+  // لا نوسّع التوقيت لملء المدة إن كان التفريغ ناقصاً — فقط نقصّ ما تجاوز المدة
+  if (last.end > durationSec + 0.4) {
     const origin = sorted[0]!.start;
+    const span = Math.max(0.5, last.end - origin);
+    const targetSpan = Math.max(0.5, durationSec - origin - 0.05);
     const scale = targetSpan / span;
     for (const c of sorted) {
       c.start = origin + (c.start - origin) * scale;
@@ -243,10 +243,12 @@ export function syncCuesToDuration(
     c.start = Math.max(0, Math.min(durationSec - 0.2, c.start));
     c.end = Math.max(c.start + 0.35, Math.min(durationSec, c.end));
   }
-  sorted[sorted.length - 1]!.end = Math.max(
-    sorted[sorted.length - 1]!.start + 0.35,
-    Math.min(durationSec, Math.max(sorted[sorted.length - 1]!.end, durationSec - 0.05)),
-  );
+  if (last.end > durationSec - 0.05) {
+    sorted[sorted.length - 1]!.end = Math.min(
+      durationSec,
+      Math.max(sorted[sorted.length - 1]!.start + 0.35, durationSec - 0.05),
+    );
+  }
 
   return sorted;
 }

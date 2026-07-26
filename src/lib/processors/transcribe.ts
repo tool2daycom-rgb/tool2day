@@ -173,6 +173,16 @@ export async function transcribeViaServerChunked(
 
   for (let i = 0; i < slices.length; i++) {
     const slice = slices[i]!;
+    const nextStart =
+      i + 1 < slices.length ? slices[i + 1]!.startSec : Number.POSITIVE_INFINITY;
+    // قص عند منتصف التداخل حتى لا نفقد كلاماً ولا نكرّر
+    const keepUntil =
+      i + 1 < slices.length
+        ? (slice.startSec + SERVER_CHUNK_SECONDS + nextStart) / 2
+        : Number.POSITIVE_INFINITY;
+    const keepFrom =
+      i === 0 ? 0 : (slices[i - 1]!.startSec + SERVER_CHUNK_SECONDS + slice.startSec) / 2;
+
     onStatus?.(
       `تفريغ سحابي عالي الدقة ${i + 1}/${slices.length} (Whisper Large)…`,
     );
@@ -183,17 +193,16 @@ export async function transcribeViaServerChunked(
     if (part.text) texts.push(part.text);
     const cues = (part.cues?.length
       ? part.cues
-      : splitTextToCues(part.text, SERVER_CHUNK_SECONDS)
+      : splitTextToCues(part.text, Math.min(SERVER_CHUNK_SECONDS, durationSec - slice.startSec))
     ).map((c) => ({
       start: c.start + slice.startSec,
       end: c.end + slice.startSec,
       text: c.text,
     }));
-    // تجاهل تداخل البداية مع المقطع السابق
-    const filtered =
-      i === 0
-        ? cues
-        : cues.filter((c) => c.start >= slice.startSec + SERVER_CHUNK_OVERLAP * 0.6);
+    const filtered = cues.filter((c) => {
+      const mid = (c.start + c.end) / 2;
+      return mid >= keepFrom - 0.01 && mid < keepUntil + 0.01;
+    });
     allCues.push(...filtered);
     await yieldUi();
   }
@@ -592,13 +601,11 @@ export async function transcribeLocally(
   if (lang && lang.code !== "auto") {
     baseOpts.language = lang.whisperName;
   }
-  // يوجّه النموذج لتهجئة أوضح (أسماء ودول)
+  // prompt قصير جداً فقط — الطويل يجعل Whisper يكرّر التوجيه بدل الكلام
   if (lang?.code === "ar") {
-    baseOpts.initial_prompt =
-      "النص باللغة العربية بتهجئة صحيحة للأسماء والدول والمدن مثل أوروبا والنمسا وأوكرانيا.";
+    baseOpts.initial_prompt = "العربية.";
   } else if (lang?.code === "en") {
-    baseOpts.initial_prompt =
-      "Clear English transcript with correct spelling of place names.";
+    baseOpts.initial_prompt = "English.";
   }
 
   const parts: string[] = [];
@@ -689,9 +696,36 @@ export async function transcribeMediaFile(
     `استُخرج ${formatClock(durationSec)} من الصوت — بدء التفريغ الكامل…`,
   );
 
-  // المسار الأدق: Whisper Large على الخادم (مقطّع) إن وُجد مفتاح Groq/OpenAI
+  const serverMaxMin = quality === "accurate" ? 12 : 8;
+  const fitsSingleUpload =
+    audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= serverMaxMin * 60;
+
+  // فيديوهات قصيرة/متوسطة: طلب واحد أدق وأكمل من التقطيع
+  if (quality === "accurate" && fitsSingleUpload) {
+    onStatus?.("تفريغ سحابي كامل دفعة واحدة (Whisper Large)…");
+    try {
+      const server = await transcribeViaServer(audio, languageCode, true);
+      if (server?.text) {
+        onProgress?.(1);
+        const cues =
+          server.cues?.length
+            ? server.cues
+            : splitTextToCues(server.text, durationSec);
+        return {
+          ...server,
+          provider: `${server.provider}-large`,
+          durationSec,
+          cues,
+        };
+      }
+    } catch {
+      // سقوط للتقطيع ثم المحلي
+    }
+  }
+
+  // مقاطع أطول: تقطيع ثم Whisper Large
   if (quality === "accurate") {
-    onStatus?.("البحث عن محرك سحابي عالي الدقة (Whisper Large)…");
+    onStatus?.("تفريغ سحابي مقطّع عالي الدقة (Whisper Large)…");
     try {
       const cloud = await transcribeViaServerChunked(
         audio,
@@ -709,10 +743,8 @@ export async function transcribeMediaFile(
     }
   }
 
-  // مقاطع قصيرة: جرّب الخادم دفعة واحدة
-  const serverMaxMin = quality === "accurate" ? 12 : 8;
-  if (audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= serverMaxMin * 60) {
-    onStatus?.("محاولة التفريغ عالي الدقة على الخادم…");
+  if (fitsSingleUpload && quality !== "accurate") {
+    onStatus?.("محاولة التفريغ على الخادم…");
     try {
       const server = await transcribeViaServer(audio, languageCode, true);
       if (server) {
