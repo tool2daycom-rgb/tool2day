@@ -6,10 +6,9 @@ export const maxDuration = 60;
 const MAX_BYTES = 4 * 1024 * 1024;
 
 const VISION_MODELS = [
+  "qwen/qwen3.6-27b",
   "meta-llama/llama-4-scout-17b-16e-instruct",
-  "llama-4-scout-17b-16e-instruct",
   "meta-llama/llama-4-maverick-17b-128e-instruct",
-  "llama-4-maverick-17b-128e-instruct",
 ];
 
 /**
@@ -152,6 +151,7 @@ async function callVision(opts: {
         model: opts.model,
         temperature: 0.1,
         max_tokens: 200,
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "user",
