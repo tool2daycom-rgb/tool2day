@@ -11,12 +11,112 @@ export type KineticLine = {
   words: TranscriptWord[];
 };
 
+export type KineticPosition = "top" | "center" | "bottom";
+export type KineticEffect = "none" | "fade" | "pulse" | "pop" | "bounce";
+
 export type KineticStyle = {
   baseColor: string;
   highlightColor: string;
   fontSizePx: number;
   rtl: boolean;
+  position: KineticPosition;
+  effect: KineticEffect;
+  fontFamily: string;
 };
+
+export const KINETIC_POSITIONS: { id: KineticPosition; label: string }[] = [
+  { id: "top", label: "أعلى" },
+  { id: "center", label: "وسط" },
+  { id: "bottom", label: "أسفل" },
+];
+
+export const KINETIC_EFFECTS: { id: KineticEffect; label: string }[] = [
+  { id: "none", label: "تمييز لوني فقط" },
+  { id: "fade", label: "تلاشي" },
+  { id: "pulse", label: "نبض" },
+  { id: "pop", label: "ظهور مفاجئ" },
+  { id: "bounce", label: "ارتداد" },
+];
+
+export const KINETIC_FONTS: { id: string; label: string; stack: string; google?: string }[] = [
+  {
+    id: "tahoma",
+    label: "Tahoma",
+    stack: 'Tahoma, "Segoe UI", sans-serif',
+  },
+  {
+    id: "cairo",
+    label: "Cairo",
+    stack: '"Cairo", Tahoma, sans-serif',
+    google: "Cairo:wght@700;800",
+  },
+  {
+    id: "tajawal",
+    label: "Tajawal",
+    stack: '"Tajawal", Tahoma, sans-serif',
+    google: "Tajawal:wght@700;800",
+  },
+  {
+    id: "amiri",
+    label: "Amiri",
+    stack: '"Amiri", "Times New Roman", serif',
+    google: "Amiri:wght@700",
+  },
+  {
+    id: "noto",
+    label: "Noto Sans Arabic",
+    stack: '"Noto Sans Arabic", Tahoma, sans-serif',
+    google: "Noto+Sans+Arabic:wght@700;800",
+  },
+  {
+    id: "arial-black",
+    label: "Arial Black",
+    stack: '"Arial Black", Arial, sans-serif',
+  },
+  {
+    id: "impact",
+    label: "Impact",
+    stack: "Impact, Haettenschweiler, sans-serif",
+  },
+];
+
+export async function ensureKineticFont(stack: string): Promise<void> {
+  const font = KINETIC_FONTS.find((f) => f.stack === stack);
+  if (font?.google && typeof document !== "undefined") {
+    const id = `kinetic-font-${font.id}`;
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
+      document.head.appendChild(link);
+    }
+  }
+  if (typeof document !== "undefined" && document.fonts?.load) {
+    try {
+      await document.fonts.load(`800 36px ${stack.split(",")[0]!.trim()}`);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export function kineticOverlayY(
+  position: KineticPosition,
+  videoH: number,
+): string {
+  const pad = Math.max(28, Math.round(videoH * 0.1));
+  if (position === "top") return String(pad);
+  if (position === "center") return "(H-h)/2";
+  return `H-h-${pad}`;
+}
+
+export function kineticPreviewPositionClass(position: KineticPosition): string {
+  if (position === "top") return "top-[10%]";
+  if (position === "center") return "top-1/2 -translate-y-1/2";
+  return "bottom-[12%]";
+}
+
 
 /**
  * يجمع الكلمات في أسطر قصيرة بأسلوب ريلز/تيك توك.
@@ -91,20 +191,22 @@ export async function renderKineticPng(
   videoH: number,
   style: KineticStyle,
 ): Promise<Blob> {
+  await ensureKineticFont(style.fontFamily);
   const fontSize = Math.max(
     22,
     Math.round(style.fontSizePx * (videoH / 720)),
   );
   const padX = Math.round(fontSize * 0.55);
-  const padY = Math.round(fontSize * 0.45);
-  const lineH = Math.round(fontSize * 1.25);
+  const padY = Math.round(fontSize * 0.55);
+  const lineH = Math.round(fontSize * 1.35);
   const maxTextW = Math.min(videoW * 0.9, videoW - 48);
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas غير متاح");
 
-  ctx.font = `800 ${fontSize}px "Segoe UI", "Tahoma", "Arial Black", sans-serif`;
+  const fontCss = `800 ${fontSize}px ${style.fontFamily}`;
+  ctx.font = fontCss;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.direction = style.rtl ? "rtl" : "ltr";
@@ -118,15 +220,16 @@ export async function renderKineticPng(
         ...rows.map((r) => ctx.measureText(r.join(" ")).width),
         40,
       ) +
-        padX * 2,
+        padX * 2 +
+        fontSize * 0.4,
     ),
   );
-  const boxH = rows.length * lineH + padY * 2;
+  const boxH = rows.length * lineH + padY * 2 + Math.round(fontSize * 0.25);
   canvas.width = boxW;
   canvas.height = boxH;
 
   ctx.clearRect(0, 0, boxW, boxH);
-  ctx.font = `800 ${fontSize}px "Segoe UI", "Tahoma", "Arial Black", sans-serif`;
+  ctx.font = fontCss;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.direction = style.rtl ? "rtl" : "ltr";
@@ -135,29 +238,45 @@ export async function renderKineticPng(
 
   let flat = 0;
   rows.forEach((row, rowIdx) => {
-    const y = padY + lineH / 2 + rowIdx * lineH;
+    const yBase = padY + lineH / 2 + rowIdx * lineH;
     const full = row.join(" ");
     const totalW = ctx.measureText(full).width;
     let x = boxW / 2 - totalW / 2;
     if (style.rtl) {
-      // رسم من اليمين لليسار: نبدأ من الطرف الأيمن للنص
       x = boxW / 2 + totalW / 2;
     }
     for (let i = 0; i < row.length; i++) {
       const word = row[i]!;
       const wWidth = ctx.measureText(word).width;
       const space = i < row.length - 1 ? ctx.measureText(" ").width : 0;
-      const centerX = style.rtl
-        ? x - wWidth / 2
-        : x + wWidth / 2;
+      const centerX = style.rtl ? x - wWidth / 2 : x + wWidth / 2;
       const isActive = flat === activeIndex;
       const color = isActive ? style.highlightColor : style.baseColor;
 
+      let y = yBase;
+      let scale = 1;
+      let alpha = 1;
+      if (style.effect === "fade") {
+        alpha = isActive ? 1 : 0.4;
+      } else if (style.effect === "pulse" && isActive) {
+        scale = 1.18;
+      } else if (style.effect === "pop" && isActive) {
+        scale = 1.28;
+      } else if (style.effect === "bounce" && isActive) {
+        scale = 1.12;
+        y = yBase - fontSize * 0.12;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(centerX, y);
+      ctx.scale(scale, scale);
       ctx.lineWidth = Math.max(4, Math.round(fontSize * 0.14));
       ctx.strokeStyle = "#000000";
-      ctx.strokeText(word, centerX, y);
+      ctx.strokeText(word, 0, 0);
       ctx.fillStyle = color;
-      ctx.fillText(word, centerX, y);
+      ctx.fillText(word, 0, 0);
+      ctx.restore();
 
       if (style.rtl) x -= wWidth + space;
       else x += wWidth + space;
@@ -268,14 +387,14 @@ export async function downloadKineticBurnedVideo(
       pngNames.push(name);
     }
 
-    const bottomPad = Math.max(28, Math.round(h * 0.1));
+    const overlayY = kineticOverlayY(style.position, h);
     const parts: string[] = [];
     let lastLabel = "[0:v]";
     for (let i = 0; i < slice.length; i++) {
       const f = slice[i]!;
       const outLabel = i === slice.length - 1 ? "[vout]" : `[kb${b}_${i}]`;
       parts.push(
-        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:H-h-${bottomPad}:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
+        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
       );
       lastLabel = outLabel;
     }

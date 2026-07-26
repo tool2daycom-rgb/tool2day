@@ -11,13 +11,20 @@ import {
 } from "@/lib/processors/transcribe";
 import { formatProcessError } from "@/lib/processors/ffmpeg-client";
 import {
+  KINETIC_EFFECTS,
+  KINETIC_FONTS,
   KINETIC_MAX_DURATION_SEC,
   KINETIC_MIN_DURATION_SEC,
+  KINETIC_POSITIONS,
   activeKineticAt,
   buildWordsJson,
   downloadKineticBurnedVideo,
+  ensureKineticFont,
   groupWordsIntoLines,
+  kineticPreviewPositionClass,
+  type KineticEffect,
   type KineticLine,
+  type KineticPosition,
 } from "@/lib/processors/kinetic-captions";
 
 type Props = {
@@ -26,13 +33,27 @@ type Props = {
   arDescription: string;
 };
 
-const HIGHLIGHTS = [
+const COLORS = [
+  { id: "white", label: "أبيض", value: "#FFFFFF" },
   { id: "yellow", label: "أصفر", value: "#F5C518" },
   { id: "cyan", label: "سماوي", value: "#22D3EE" },
   { id: "lime", label: "ليموني", value: "#A3E635" },
   { id: "orange", label: "برتقالي", value: "#FB923C" },
   { id: "pink", label: "وردي", value: "#F472B6" },
+  { id: "red", label: "أحمر", value: "#F87171" },
+  { id: "black", label: "أسود", value: "#111111" },
 ];
+
+function effectClass(effect: KineticEffect, active: boolean): string {
+  if (!active) {
+    return effect === "fade" ? "opacity-40" : "";
+  }
+  if (effect === "pulse") return "animate-kinetic-pulse";
+  if (effect === "pop") return "animate-kinetic-pop";
+  if (effect === "bounce") return "animate-kinetic-bounce";
+  if (effect === "fade") return "opacity-100";
+  return "";
+}
 
 export function KineticCaptionsWorkspace({
   slug,
@@ -47,8 +68,12 @@ export function KineticCaptionsWorkspace({
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [language, setLanguage] = useState("ar");
+  const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
   const [fontSize, setFontSize] = useState(36);
+  const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[1]!.stack);
+  const [position, setPosition] = useState<KineticPosition>("bottom");
+  const [effect, setEffect] = useState<KineticEffect>("pulse");
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -78,6 +103,10 @@ export function KineticCaptionsWorkspace({
     };
   }, [previewUrl]);
 
+  useEffect(() => {
+    void ensureKineticFont(fontFamily);
+  }, [fontFamily]);
+
   function onPick(list: FileList | null) {
     const f = list?.[0];
     if (!f) return;
@@ -98,7 +127,7 @@ export function KineticCaptionsWorkspace({
 
   async function run() {
     if (!file) {
-      setError("ارفع فيديو طويلاً أولاً");
+      setError("ارفع فيديو أولاً");
       return;
     }
     const el = videoRef.current;
@@ -144,7 +173,7 @@ export function KineticCaptionsWorkspace({
       setProvider(result.provider);
       setDuration(result.durationSec);
       setStatus(
-        `جاهز: ${result.words.length} كلمة · ${grouped.length} سطر حركي · ${Math.round(result.durationSec / 60)} د`,
+        `جاهز: ${result.words.length} كلمة · ${grouped.length} سطر حركي`,
       );
     } catch (e) {
       setError(formatProcessError(e));
@@ -166,7 +195,10 @@ export function KineticCaptionsWorkspace({
 
   async function burn() {
     if (!file || !lines.length) return;
-    if (!file.type.startsWith("video/") && !/\.(mp4|webm|mov|mkv|m4v)$/i.test(file.name)) {
+    if (
+      !file.type.startsWith("video/") &&
+      !/\.(mp4|webm|mov|mkv|m4v)$/i.test(file.name)
+    ) {
       setError("الحرق يحتاج ملف فيديو");
       return;
     }
@@ -174,14 +206,18 @@ export function KineticCaptionsWorkspace({
     setExporting(true);
     setError(null);
     try {
+      await ensureKineticFont(fontFamily);
       await downloadKineticBurnedVideo(
         file,
         lines,
         {
-          baseColor: "#FFFFFF",
+          baseColor,
           highlightColor: highlight,
           fontSizePx: fontSize,
           rtl,
+          position,
+          effect,
+          fontFamily,
         },
         (r) => setProgress(Math.round(r * 100)),
         (msg) => setStatus(msg),
@@ -196,13 +232,31 @@ export function KineticCaptionsWorkspace({
 
   return (
     <section className="rounded-2xl border border-[#e8e8e8] bg-white p-5 shadow-sm sm:p-7">
+      <style>{`
+        @keyframes kinetic-pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.18); }
+        }
+        @keyframes kinetic-pop {
+          0% { transform: scale(0.7); opacity: 0.5; }
+          100% { transform: scale(1.2); opacity: 1; }
+        }
+        @keyframes kinetic-bounce {
+          0%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-10px); }
+          70% { transform: translateY(-3px); }
+        }
+        .animate-kinetic-pulse { display: inline-block; animation: kinetic-pulse 0.55s ease-in-out infinite; }
+        .animate-kinetic-pop { display: inline-block; animation: kinetic-pop 0.28s ease-out; }
+        .animate-kinetic-bounce { display: inline-block; animation: kinetic-bounce 0.45s ease; }
+      `}</style>
+
       <h2 className="text-lg font-bold text-[#111] sm:text-xl">{title}</h2>
       <p className="mt-2 text-sm leading-7 text-[#555]">{description}</p>
       <p className="mt-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-xs leading-6 text-[#92400e]">
         المدة المدعومة: من {KINETIC_MIN_DURATION_SEC} ثوانٍ حتى{" "}
         {KINETIC_MAX_DURATION_SEC / 60} دقائق — ترجمة حركية ملونة كلمة بكلمة
-        (Kinetic Typography / Word-level Timed Subtitles) بأسلوب ريلز وتيك توك،
-        مع حرق داخل الفيديو.
+        بأسلوب ريلز وتيك توك.
       </p>
 
       <div
@@ -215,7 +269,7 @@ export function KineticCaptionsWorkspace({
         }}
       >
         <p className="text-sm font-bold text-[#c2410c]">
-          اسحب فيديو طويل أو اضغط للاختيار
+          اسحب فيديو أو اضغط للاختيار
         </p>
         <p className="mt-1 text-xs text-[#777]">
           MP4 · MOV · WEBM · حتى {MAX_VIDEO_TO_TEXT_MB}MB · من{" "}
@@ -239,7 +293,7 @@ export function KineticCaptionsWorkspace({
         </p>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="text-xs font-semibold text-[#444]">
           لغة الصوت
           <select
@@ -254,6 +308,67 @@ export function KineticCaptionsWorkspace({
           </select>
         </label>
         <label className="text-xs font-semibold text-[#444]">
+          مكان الكلام
+          <select
+            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
+            value={position}
+            onChange={(e) => setPosition(e.target.value as KineticPosition)}
+            disabled={busy}
+          >
+            {KINETIC_POSITIONS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-[#444]">
+          طريقة العرض
+          <select
+            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
+            value={effect}
+            onChange={(e) => setEffect(e.target.value as KineticEffect)}
+            disabled={busy}
+          >
+            {KINETIC_EFFECTS.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-[#444]">
+          نوع الخط
+          <select
+            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
+            value={fontFamily}
+            onChange={(e) => setFontFamily(e.target.value)}
+            disabled={busy}
+            style={{ fontFamily }}
+          >
+            {KINETIC_FONTS.map((f) => (
+              <option key={f.id} value={f.stack} style={{ fontFamily: f.stack }}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-[#444]">
+          لون الخط
+          <select
+            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
+            value={baseColor}
+            onChange={(e) => setBaseColor(e.target.value)}
+            disabled={busy}
+          >
+            {COLORS.map((c) => (
+              <option key={c.id} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-semibold text-[#444]">
           لون الكلمة النشطة
           <select
             className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
@@ -261,7 +376,7 @@ export function KineticCaptionsWorkspace({
             onChange={(e) => setHighlight(e.target.value)}
             disabled={busy}
           >
-            {HIGHLIGHTS.map((c) => (
+            {COLORS.filter((c) => c.id !== "black").map((c) => (
               <option key={c.id} value={c.value}>
                 {c.label}
               </option>
@@ -276,7 +391,7 @@ export function KineticCaptionsWorkspace({
             onChange={(e) => setFontSize(Number(e.target.value))}
             disabled={busy}
           >
-            {[28, 32, 36, 44, 52].map((n) => (
+            {[28, 32, 36, 44, 52, 60].map((n) => (
               <option key={n} value={n}>
                 {n}px
               </option>
@@ -320,28 +435,33 @@ export function KineticCaptionsWorkspace({
           />
           {active && (
             <div
-              className="pointer-events-none absolute inset-x-0 bottom-[12%] flex justify-center px-4"
+              className={`pointer-events-none absolute inset-x-0 flex justify-center px-4 ${kineticPreviewPositionClass(position)}`}
               dir={rtl ? "rtl" : "ltr"}
             >
               <p
-                className="max-w-[92%] text-center text-2xl font-extrabold leading-snug sm:text-3xl"
+                className="max-w-[92%] text-center font-extrabold leading-snug"
                 style={{
+                  fontFamily,
+                  fontSize: `clamp(1.1rem, ${fontSize * 0.045}vw, ${fontSize}px)`,
                   WebkitTextStroke: "2px #000",
                   paintOrder: "stroke fill",
                 }}
               >
-                {active.line.words.map((w, i) => (
-                  <span
-                    key={`${w.start}-${i}`}
-                    style={{
-                      color:
-                        i === active.activeIndex ? highlight : "#FFFFFF",
-                      marginInline: "0.18em",
-                    }}
-                  >
-                    {w.word}
-                  </span>
-                ))}
+                {active.line.words.map((w, i) => {
+                  const isActive = i === active.activeIndex;
+                  return (
+                    <span
+                      key={`${w.start}-${i}`}
+                      className={effectClass(effect, isActive)}
+                      style={{
+                        color: isActive ? highlight : baseColor,
+                        marginInline: "0.18em",
+                      }}
+                    >
+                      {w.word}
+                    </span>
+                  );
+                })}
               </p>
             </div>
           )}
