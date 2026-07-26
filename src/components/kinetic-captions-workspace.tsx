@@ -86,7 +86,7 @@ export function KineticCaptionsWorkspace({
   const [language, setLanguage] = useState("ar");
   const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
-  const [fontSize, setFontSize] = useState(52);
+  const [fontSize, setFontSize] = useState(44);
   const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[0]!.stack);
   const [position, setPosition] = useState<KineticPosition>("bottom");
   const [effect, setEffect] = useState<KineticEffect>("none");
@@ -100,16 +100,11 @@ export function KineticCaptionsWorkspace({
   const [lines, setLines] = useState<KineticLine[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [videoNaturalW, setVideoNaturalW] = useState(0);
   const [previewClientW, setPreviewClientW] = useState(0);
 
   const rtl = language === "ar" || language === "fa" || language === "he";
   const resolvedFont = resolveKineticFontStack(fontFamily);
-  const previewFontPx = kineticPreviewFontPx(
-    fontSize,
-    videoNaturalW,
-    previewClientW,
-  );
+  const previewFontPx = kineticPreviewFontPx(fontSize);
 
   const active = useMemo(
     () => activeKineticAt(lines, currentTime),
@@ -131,6 +126,23 @@ export function KineticCaptionsWorkspace({
     void ensureKineticFont(fontFamily);
   }, [fontFamily]);
 
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !previewUrl) return;
+    const sync = () => setPreviewClientW(v.clientWidth || 0);
+    sync();
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(sync)
+        : null;
+    ro?.observe(v);
+    window.addEventListener("resize", sync);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [previewUrl]);
+
   function onPick(list: FileList | null) {
     const f = list?.[0];
     if (!f) return;
@@ -147,7 +159,6 @@ export function KineticCaptionsWorkspace({
     setError(null);
     setStatus(null);
     setDuration(0);
-    setVideoNaturalW(0);
     setPreviewClientW(0);
   }
 
@@ -256,6 +267,8 @@ export function KineticCaptionsWorkspace({
           baseColor,
           highlightColor: highlight,
           fontSizePx: fontSize,
+          previewClientW:
+            previewClientW || videoRef.current?.clientWidth || 0,
           rtl,
           position,
           effect,
@@ -506,7 +519,7 @@ export function KineticCaptionsWorkspace({
                   style={{
                     fontFamily: resolvedFont,
                     fontWeight: 900,
-                    fontSize: `${previewFontPx || fontSize}px`,
+                    fontSize: `${previewFontPx}px`,
                     textShadow:
                       "0 0 2px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
                     wordBreak: "normal",

@@ -27,6 +27,8 @@ export type KineticStyle = {
   baseColor: string;
   highlightColor: string;
   fontSizePx: number;
+  /** عرض معاينة الفيديو على الشاشة — لمطابقة حجم التنزيل مع ما يظهر */
+  previewClientW?: number;
   rtl: boolean;
   position: KineticPosition;
   effect: KineticEffect;
@@ -95,35 +97,28 @@ export const KINETIC_FONTS: {
 ];
 
 /**
- * حجم الخط في إحداثيات الفيديو (بكسل حقيقي).
- * اختيار 52 على فيديو 720 → ~120px (~17% من العرض) ليظهر كبيراً مثل ريلز.
+ * حجم الخط في بكسلات الفيديو ليطابق المعاينة بصرياً.
+ * الرقم المختار = الحجم في المعاينة؛ يُكبَّر بنسبة عرض الفيديو / عرض المعاينة.
  */
 export function kineticBurnFontPx(
   selectedPx: number,
   videoW: number,
+  previewClientW = 0,
 ): number {
-  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 52;
-  const REF_VIEW_W = 310;
-  const scaled = Math.round(safe * (videoW / REF_VIEW_W));
-  // حد أدنى قوي — لا يقل عن ~14% من عرض الفيديو
-  const floor = Math.round(videoW * 0.14);
-  return Math.max(floor, scaled);
+  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 44;
+  const viewW =
+    previewClientW > 40 ? previewClientW : Math.min(390, Math.max(280, videoW * 0.45));
+  const scaled = Math.round(safe * (videoW / viewW));
+  // حدود معقولة: لا أصغر من ~4% ولا أكبر من ~11% من عرض الفيديو
+  const floor = Math.round(videoW * 0.04);
+  const ceiling = Math.round(videoW * 0.11);
+  return Math.min(ceiling, Math.max(floor, scaled));
 }
 
-/** حجم الخط في المعاينة ليطابق التنزيل بصرياً على إطار الفيديو */
-export function kineticPreviewFontPx(
-  selectedPx: number,
-  videoNaturalW: number,
-  previewClientW: number,
-): number {
-  if (!previewClientW) {
-    return Math.max(18, Math.round(selectedPx * 0.9));
-  }
-  if (!videoNaturalW) {
-    return Math.max(18, Math.round(selectedPx * (previewClientW / 310)));
-  }
-  const burn = kineticBurnFontPx(selectedPx, videoNaturalW);
-  return Math.max(16, Math.round(burn * (previewClientW / videoNaturalW)));
+/** في المعاينة نعرض الرقم المختار مباشرة — والتنزيل يُقاس ليطابقه */
+export function kineticPreviewFontPx(selectedPx: number): number {
+  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 44;
+  return Math.max(16, Math.min(84, Math.round(safe)));
 }
 
 export function getSiteCairoFamily(): string {
@@ -245,8 +240,7 @@ type RenderOpts = {
 };
 
 /**
- * يرسم الترجمة مباشرة على Canvas ببكسلات الفيديو (بدون html2canvas)
- * حتى يبقى الحجم كبيراً ومطابقاً للاختيار، مع إبقاء الكلمة كاملة متصلة.
+ * يرسم الترجمة على Canvas ببكسلات الفيديو — نفس الحجم النسبي للمعاينة.
  */
 export async function renderKineticPng(
   line: KineticLine,
@@ -258,15 +252,19 @@ export async function renderKineticPng(
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
   const family = resolveKineticFontStack(style.fontFamily);
-  const maxW = Math.max(120, Math.floor(videoW * 0.94));
+  const maxW = Math.max(120, Math.floor(videoW * 0.92));
 
-  let fontSize = kineticBurnFontPx(style.fontSizePx, videoW);
-  const minFont = Math.max(Math.round(videoW * 0.12), Math.round(fontSize * 0.88));
-  const gap = () => Math.max(10, Math.round(fontSize * 0.28));
-  const strokeW = () => Math.max(5, Math.round(fontSize * 0.14));
+  let fontSize = kineticBurnFontPx(
+    style.fontSizePx,
+    videoW,
+    style.previewClientW ?? 0,
+  );
+  const minFont = Math.max(18, Math.round(fontSize * 0.85));
+  const gap = () => Math.max(8, Math.round(fontSize * 0.22));
+  const strokeW = () => Math.max(3, Math.round(fontSize * 0.1));
 
   const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Canvas غير متاح");
 
   const fontCss = (size: number) => `900 ${size}px ${family}`;
@@ -296,19 +294,19 @@ export async function renderKineticPng(
       let dx = 0;
       let dy = 0;
       if (style.effect === "fade" && !isActive) opacity = 0.45;
-      if (isActive && style.effect === "pulse") scale = 1.12;
-      if (isActive && style.effect === "pop") scale = 1.2;
+      if (isActive && style.effect === "pulse") scale = 1.1;
+      if (isActive && style.effect === "pop") scale = 1.15;
       if (isActive && style.effect === "bounce") {
-        scale = 1.08;
-        dy = -Math.round(size * 0.08);
+        scale = 1.06;
+        dy = -Math.round(size * 0.06);
       }
-      if (isActive && style.effect === "zoom") scale = opts.zoomScale ?? 1.18;
+      if (isActive && style.effect === "zoom") scale = opts.zoomScale ?? 1.12;
       if (isActive && style.effect === "slide") {
         const p = opts.slideProgress ?? 1;
-        const from = style.rtl ? size * 0.35 : -size * 0.35;
+        const from = style.rtl ? size * 0.28 : -size * 0.28;
         dx = from * (1 - p);
       }
-      const baseW = Math.ceil(ctx.measureText(text).width);
+      const baseW = Math.max(1, Math.ceil(ctx.measureText(text).width));
       return {
         text,
         color: isActive ? style.highlightColor : style.baseColor,
@@ -325,18 +323,18 @@ export async function renderKineticPng(
   let totalW =
     words.reduce((s, w) => s + w.w, 0) + gap() * Math.max(0, words.length - 1);
   let guard = 0;
-  while (guard < 24 && fontSize > minFont && totalW > maxW) {
-    fontSize -= 2;
+  while (guard < 30 && fontSize > minFont && totalW > maxW) {
+    fontSize -= 1;
     words = buildWords(fontSize);
     totalW =
       words.reduce((s, w) => s + w.w, 0) + gap() * Math.max(0, words.length - 1);
     guard += 1;
   }
 
-  const padX = Math.max(12, Math.round(fontSize * 0.2));
-  const padY = Math.max(10, Math.round(fontSize * 0.22));
+  const padX = Math.max(10, Math.round(fontSize * 0.18));
+  const padY = Math.max(8, Math.round(fontSize * 0.2));
   const boxW = Math.min(maxW, Math.max(2, totalW + padX * 2 + strokeW() * 2));
-  const boxH = Math.max(2, Math.ceil(fontSize * 1.55) + padY * 2 + strokeW() * 2);
+  const boxH = Math.max(2, Math.ceil(fontSize * 1.45) + padY * 2 + strokeW() * 2);
   canvas.width = boxW;
   canvas.height = boxH;
 
@@ -349,7 +347,6 @@ export async function renderKineticPng(
   ctx.miterLimit = 2;
   ctx.lineWidth = strokeW();
 
-  // من اليمين لليسار بصرياً عند RTL: نرسم بترتيب الشاشة من اليسار
   const ordered = style.rtl ? [...words].reverse() : words;
   let x = (boxW - totalW) / 2;
   const midY = boxH / 2;
@@ -367,21 +364,6 @@ export async function renderKineticPng(
     ctx.fillText(w.text, 0, 0);
     ctx.restore();
     x += w.w + gap();
-  }
-
-  // تأكد أن الطبقة ليست فارغة (وإلا يبقى كابشن الإنستغرام الأصلي ظاهراً فقط)
-  const sample = ctx.getImageData(
-    0,
-    0,
-    Math.min(boxW, 64),
-    Math.min(boxH, 64),
-  ).data;
-  let solid = 0;
-  for (let i = 3; i < sample.length; i += 4) {
-    if (sample[i]! > 8) solid += 1;
-  }
-  if (solid < 20) {
-    throw new Error("فشل رسم الترجمة الحركية — أعد المحاولة");
   }
 
   return await new Promise((resolve, reject) => {
@@ -489,7 +471,7 @@ async function probeVideoSize(
   }
 }
 
-const BURN_BATCH = 28;
+const BURN_BATCH = 12;
 
 /**
  * يحرق الترجمة الحركية كلمة بكلمة داخل الفيديو.
@@ -550,9 +532,9 @@ export async function downloadKineticBurnedVideo(
     for (let i = 0; i < slice.length; i++) {
       const f = slice[i]!;
       const outLabel = i === slice.length - 1 ? "[vout]" : `[kb${b}_${i}]`;
-      // format=auto يحافظ على الشفافية؛ الوسط أفقياً بحجم الطبقة الحقيقي
+      // الوسط أفقياً بحجم الطبقة الحقيقي
       parts.push(
-        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:format=auto:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
+        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
       );
       lastLabel = outLabel;
     }
@@ -581,7 +563,7 @@ export async function downloadKineticBurnedVideo(
 
     const code = await ffmpeg.exec(args);
     if (typeof code === "number" && code !== 0) {
-      throw new Error("فشل تجهيز الفيديو للتنزيل");
+      throw new Error("فشل تجهيز الفيديو للتنزيل — جرّب حجم خط أصغر أو فيديو أقصر");
     }
     const data = await ffmpeg.readFile(output);
     current = new File([toBlob(data, "video/mp4")], `kinetic-partial-${b}.mp4`, {

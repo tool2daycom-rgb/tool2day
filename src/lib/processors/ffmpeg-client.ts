@@ -119,7 +119,13 @@ export function formatProcessError(err: unknown) {
       : typeof err === "string"
         ? err
         : "فشلت المعالجة";
+  if (/abort/i.test(msg)) {
+    return "تعذّر دمج الترجمة في الفيديو — أعد المحاولة أو اختر حجم خط أصغر";
+  }
   const log = getLastFfmpegLog();
+  if (log && /abort/i.test(log)) {
+    return "تعذّر دمج الترجمة في الفيديو — أعد المحاولة أو اختر حجم خط أصغر";
+  }
   if (log && !msg.includes(log)) {
     return `${msg}${log ? ` — ${log}` : ""}`;
   }
