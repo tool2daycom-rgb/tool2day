@@ -57,6 +57,9 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   const [caption, setCaption] = useState("");
   const [keywords, setKeywords] = useState(["", "", "", ""]);
   const [uploading, setUploading] = useState(false);
+  const [cutting, setCutting] = useState(false);
+  const [cutProgress, setCutProgress] = useState(0);
+  const [autoCut, setAutoCut] = useState(true);
 
   const visibleItems = useMemo(
     () => items.filter((item) => !broken[item.id]),
@@ -194,10 +197,52 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
     if (!f) return;
     setError(null);
     if (preview) URL.revokeObjectURL(preview);
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
+
     if (!caption) {
-      setCaption(f.name.replace(/\.png$/i, "").slice(0, 80));
+      setCaption(
+        f.name.replace(/\.(png|jpe?g|webp)$/i, "").slice(0, 80),
+      );
+    }
+
+    // بدون قص تلقائي: عرض الملف كما هو
+    if (!autoCut) {
+      setFile(f);
+      setPreview(URL.createObjectURL(f));
+      return;
+    }
+
+    setCutting(true);
+    setCutProgress(0);
+    setStatus("إزالة الخلفية — إبقاء الشعار/الكتابة فقط…");
+    try {
+      const { removeImageBackground } = await import(
+        "@/lib/processors/ai-micro-tools"
+      );
+      // personOnly: false حتى تبقى الشعارات والنصوص وليس الأشخاص فقط
+      const blob = await removeImageBackground(f, (p) => setCutProgress(p), {
+        personOnly: false,
+      });
+      const cutFile = new File(
+        [blob],
+        `${f.name.replace(/\.[^.]+$/, "") || "logo"}-transparent.png`,
+        { type: "image/png" },
+      );
+      setFile(cutFile);
+      setPreview(URL.createObjectURL(blob));
+      setStatus("تم قص الخلفية — راجع المعاينة ثم ارفع للمكتبة");
+    } catch (e) {
+      // إن فشل القص نعرض الأصل ونسمح بالرفع
+      setFile(f);
+      setPreview(URL.createObjectURL(f));
+      setError(
+        e instanceof Error
+          ? `تعذّر قص الخلفية تلقائياً: ${e.message} — يمكنك الرفع كما هي`
+          : "تعذّر قص الخلفية — يمكنك الرفع كما هي",
+      );
+      setStatus(null);
+    } finally {
+      setCutting(false);
+      setCutProgress(0);
     }
   }
 
@@ -480,45 +525,75 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
         </>
       ) : (
         <div className="mt-5 space-y-4">
+          <label className="flex items-center gap-2 text-sm font-semibold text-[#333]">
+            <input
+              type="checkbox"
+              checked={autoCut}
+              onChange={(e) => setAutoCut(e.target.checked)}
+              className="h-4 w-4"
+            />
+            إزالة الخلفية تلقائياً (إظهار الشعار/الكتابة فقط على الشفافية)
+          </label>
+
           <div
             className="cursor-pointer rounded-xl border border-dashed border-[#99f6e4] bg-[#f0fdfa] px-4 py-10 text-center"
-            onClick={() => fileRef.current?.click()}
+            onClick={() => !cutting && fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              void onPick(e.dataTransfer.files);
+              if (!cutting) void onPick(e.dataTransfer.files);
             }}
           >
             <p className="text-sm font-bold text-[#0f766e]">
-              ارفع PNG بخلفية شفافة
+              ارفع شعاراً أو صورة — تُزال الخلفية وتبقى الكتابة/الشعار فقط
             </p>
             <p className="mt-1 text-xs text-[#666]">
-              الصيغة: .png · الحد الأقصى 10MB · الحد الأدنى 128×128px
+              PNG · JPG · WEBP · حتى 10MB · الحد الأدنى 128×128px
             </p>
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,.png"
+              accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
               className="hidden"
+              disabled={cutting}
               onChange={(e) => void onPick(e.target.files)}
             />
           </div>
 
+          {cutting && (
+            <div>
+              <p className="mb-1 text-xs font-semibold text-[#0f766e]">
+                جاري قص الخلفية… {Math.round(cutProgress * 100)}%
+              </p>
+              <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
+                <div
+                  className="h-full rounded-full bg-[#0d9488] transition-all"
+                  style={{ width: `${Math.round(cutProgress * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {preview && (
-            <div
-              className="mx-auto flex max-h-56 max-w-xs items-center justify-center rounded-xl p-4"
-              style={{
-                backgroundImage: checker,
-                backgroundSize: "16px 16px",
-                backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={preview}
-                alt=""
-                className="max-h-48 max-w-full object-contain"
-              />
+            <div className="space-y-2">
+              <p className="text-center text-xs font-semibold text-[#666]">
+                المعاينة على خلفية شفافة (المربعات)
+              </p>
+              <div
+                className="mx-auto flex max-h-56 max-w-xs items-center justify-center rounded-xl p-4"
+                style={{
+                  backgroundImage: checker,
+                  backgroundSize: "16px 16px",
+                  backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview}
+                  alt=""
+                  className="max-h-48 max-w-full object-contain"
+                />
+              </div>
             </div>
           )}
 
@@ -554,7 +629,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
 
           <button
             type="button"
-            disabled={uploading || !file}
+            disabled={uploading || cutting || !file}
             onClick={() => void submitPng()}
             className="w-full rounded-lg bg-[#0d9488] px-5 py-3 text-sm font-bold text-white disabled:opacity-40"
           >
