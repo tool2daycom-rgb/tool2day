@@ -71,7 +71,7 @@ export function KineticCaptionsWorkspace({
   const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
   const [fontSize, setFontSize] = useState(36);
-  const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[1]!.stack);
+  const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[0]!.stack);
   const [position, setPosition] = useState<KineticPosition>("bottom");
   const [effect, setEffect] = useState<KineticEffect>("pulse");
   const [busy, setBusy] = useState(false);
@@ -181,6 +181,24 @@ export function KineticCaptionsWorkspace({
     } finally {
       setBusy(false);
     }
+  }
+
+  function updateWord(index: number, nextText: string) {
+    setWords((prev) => {
+      const next = prev.map((w, i) =>
+        i === index ? { ...w, word: nextText } : w,
+      );
+      setLines(groupWordsIntoLines(next.filter((w) => w.word.trim())));
+      return next;
+    });
+  }
+
+  function removeWord(index: number) {
+    setWords((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      setLines(groupWordsIntoLines(next));
+      return next;
+    });
   }
 
   async function downloadJson() {
@@ -421,50 +439,92 @@ export function KineticCaptionsWorkspace({
       )}
 
       {previewUrl && (
-        <div className="relative mt-5 overflow-hidden rounded-xl bg-black">
-          <video
-            ref={videoRef}
-            src={previewUrl}
-            controls
-            className="mx-auto max-h-[70vh] w-full"
-            onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-            onLoadedMetadata={(e) => {
-              const d = e.currentTarget.duration;
-              if (Number.isFinite(d)) setDuration(d);
-            }}
-          />
-          {active && (
-            <div
-              className={`pointer-events-none absolute inset-x-0 flex justify-center px-4 ${kineticPreviewPositionClass(position)}`}
-              dir={rtl ? "rtl" : "ltr"}
-            >
-              <p
-                className="max-w-[92%] text-center font-extrabold leading-snug"
-                style={{
-                  fontFamily,
-                  fontSize: `clamp(1.1rem, ${fontSize * 0.045}vw, ${fontSize}px)`,
-                  WebkitTextStroke: "2px #000",
-                  paintOrder: "stroke fill",
-                }}
+        <div className="mt-5 flex justify-center">
+          <div className="relative inline-block max-h-[75vh] max-w-full">
+            <video
+              ref={videoRef}
+              src={previewUrl}
+              controls
+              playsInline
+              className="block max-h-[75vh] w-auto max-w-full rounded-xl bg-black object-contain"
+              onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+              onLoadedMetadata={(e) => {
+                const d = e.currentTarget.duration;
+                if (Number.isFinite(d)) setDuration(d);
+              }}
+            />
+            {active && (
+              <div
+                className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center px-3 ${kineticPreviewPositionClass(position)}`}
+                dir={rtl ? "rtl" : "ltr"}
               >
-                {active.line.words.map((w, i) => {
-                  const isActive = i === active.activeIndex;
-                  return (
-                    <span
-                      key={`${w.start}-${i}`}
-                      className={effectClass(effect, isActive)}
-                      style={{
-                        color: isActive ? highlight : baseColor,
-                        marginInline: "0.18em",
-                      }}
-                    >
-                      {w.word}
-                    </span>
-                  );
-                })}
+                <p
+                  className="max-w-[94%] text-center font-bold leading-snug"
+                  style={{
+                    fontFamily,
+                    fontSize: `clamp(1rem, ${Math.round(fontSize * 0.55)}px, ${fontSize}px)`,
+                    textShadow:
+                      "0 0 3px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
+                  }}
+                >
+                  {active.line.words.map((w, i) => {
+                    const isActive = i === active.activeIndex;
+                    return (
+                      <span
+                        key={`${w.start}-${i}`}
+                        className={effectClass(effect, isActive)}
+                        style={{
+                          color: isActive ? highlight : baseColor,
+                          marginInline: "0.15em",
+                        }}
+                      >
+                        {w.word}
+                      </span>
+                    );
+                  })}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {words.length > 0 && (
+        <div className="mt-6 rounded-xl border border-[#eee] bg-[#fafafa] p-4">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-[#111]">تعديل الكلمات</h3>
+              <p className="mt-0.5 text-xs text-[#777]">
+                صحّح الأخطاء هنا — التعديل يظهر فوراً في المعاينة والتنزيل
               </p>
             </div>
-          )}
+            <p className="text-[11px] text-[#888]">{words.length} كلمة</p>
+          </div>
+          <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
+            {words.map((w, i) => (
+              <div key={`${w.start}-${i}`} className="flex gap-1">
+                <input
+                  className="min-w-0 flex-1 rounded-lg border border-[#ddd] bg-white px-2 py-1.5 text-sm"
+                  value={w.word}
+                  dir={rtl ? "rtl" : "ltr"}
+                  onChange={(e) => updateWord(i, e.target.value)}
+                  onFocus={() => {
+                    const el = videoRef.current;
+                    if (el) el.currentTime = Math.max(0, w.start);
+                  }}
+                  aria-label={`كلمة ${i + 1}`}
+                />
+                <button
+                  type="button"
+                  className="rounded-lg px-2 text-xs text-[#b91c1c]"
+                  title="حذف"
+                  onClick={() => removeWord(i)}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

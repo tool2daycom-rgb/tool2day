@@ -40,11 +40,6 @@ export const KINETIC_EFFECTS: { id: KineticEffect; label: string }[] = [
 
 export const KINETIC_FONTS: { id: string; label: string; stack: string; google?: string }[] = [
   {
-    id: "tahoma",
-    label: "Tahoma",
-    stack: 'Tahoma, "Segoe UI", sans-serif',
-  },
-  {
     id: "cairo",
     label: "Cairo",
     stack: '"Cairo", Tahoma, sans-serif',
@@ -57,28 +52,49 @@ export const KINETIC_FONTS: { id: string; label: string; stack: string; google?:
     google: "Tajawal:wght@700;800",
   },
   {
-    id: "amiri",
-    label: "Amiri",
-    stack: '"Amiri", "Times New Roman", serif',
-    google: "Amiri:wght@700",
-  },
-  {
     id: "noto",
     label: "Noto Sans Arabic",
     stack: '"Noto Sans Arabic", Tahoma, sans-serif',
     google: "Noto+Sans+Arabic:wght@700;800",
   },
   {
-    id: "arial-black",
-    label: "Arial Black",
-    stack: '"Arial Black", Arial, sans-serif',
+    id: "amiri",
+    label: "Amiri",
+    stack: '"Amiri", "Times New Roman", serif',
+    google: "Amiri:wght@700",
   },
   {
-    id: "impact",
-    label: "Impact",
-    stack: "Impact, Haettenschweiler, sans-serif",
+    id: "tahoma",
+    label: "Tahoma",
+    stack: 'Tahoma, "Segoe UI", sans-serif',
+  },
+  {
+    id: "arial",
+    label: "Arial",
+    stack: "Arial, Helvetica, sans-serif",
   },
 ];
+
+/** حدود سوداء حول الحرف بدون strokeText (يحافظ على اتصال الحروف العربية) */
+function fillTextWithOutline(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fill: string,
+  fontSize: number,
+) {
+  const r = Math.max(3, Math.round(fontSize * 0.1));
+  ctx.fillStyle = "#000000";
+  for (let ox = -r; ox <= r; ox += 1) {
+    for (let oy = -r; oy <= r; oy += 1) {
+      if (ox * ox + oy * oy > r * r) continue;
+      ctx.fillText(text, x + ox, y + oy);
+    }
+  }
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y);
+}
 
 export async function ensureKineticFont(stack: string): Promise<void> {
   const font = KINETIC_FONTS.find((f) => f.stack === stack);
@@ -92,12 +108,26 @@ export async function ensureKineticFont(stack: string): Promise<void> {
       document.head.appendChild(link);
     }
   }
-  if (typeof document !== "undefined" && document.fonts?.load) {
-    try {
-      await document.fonts.load(`800 36px ${stack.split(",")[0]!.trim()}`);
-    } catch {
-      /* ignore */
+  if (typeof document === "undefined" || !document.fonts) return;
+  const family = stack.split(",")[0]!.trim().replace(/"/g, "");
+  try {
+    await document.fonts.ready;
+    await Promise.all([
+      document.fonts.load(`700 48px "${family}"`),
+      document.fonts.load(`800 48px "${family}"`),
+      document.fonts.load(`700 72px "${family}"`),
+    ]);
+    // انتظر اكتمال تحميل الملف حتى لا يظهر الخط متقطعاً في الحرق
+    let tries = 0;
+    while (
+      !document.fonts.check(`800 48px "${family}"`) &&
+      tries < 20
+    ) {
+      await new Promise((r) => setTimeout(r, 100));
+      tries += 1;
     }
+  } catch {
+    /* ignore */
   }
 }
 
@@ -192,20 +222,20 @@ export async function renderKineticPng(
   style: KineticStyle,
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
-  const fontSize = Math.max(
-    22,
-    Math.round(style.fontSizePx * (videoH / 720)),
-  );
-  const padX = Math.round(fontSize * 0.55);
-  const padY = Math.round(fontSize * 0.55);
-  const lineH = Math.round(fontSize * 1.35);
-  const maxTextW = Math.min(videoW * 0.9, videoW - 48);
+  // حجم مناسب للفيديو العمودي (ارتفاع أكبر) بدون مبالغة تقطع الحروف
+  const scale = Math.min(1.35, Math.max(0.85, videoH / 1080));
+  const fontSize = Math.max(26, Math.round(style.fontSizePx * scale));
+  const padX = Math.round(fontSize * 0.7);
+  const padY = Math.round(fontSize * 0.65);
+  const lineH = Math.round(fontSize * 1.45);
+  const maxTextW = Math.min(videoW * 0.92, videoW - 32);
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas غير متاح");
 
-  const fontCss = `800 ${fontSize}px ${style.fontFamily}`;
+  const family = style.fontFamily.split(",")[0]!.trim();
+  const fontCss = `700 ${fontSize}px ${family}, ${style.fontFamily}`;
   ctx.font = fontCss;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -213,18 +243,15 @@ export async function renderKineticPng(
 
   const wordTexts = line.words.map((w) => w.word);
   const rows = wrapKineticWords(ctx, wordTexts, maxTextW - padX * 2);
+  const measured = Math.max(
+    ...rows.map((r) => ctx.measureText(r.join(" ")).width),
+    40,
+  );
   const boxW = Math.min(
     videoW,
-    Math.ceil(
-      Math.max(
-        ...rows.map((r) => ctx.measureText(r.join(" ")).width),
-        40,
-      ) +
-        padX * 2 +
-        fontSize * 0.4,
-    ),
+    Math.ceil(measured + padX * 2 + fontSize * 0.6),
   );
-  const boxH = rows.length * lineH + padY * 2 + Math.round(fontSize * 0.25);
+  const boxH = rows.length * lineH + padY * 2 + Math.round(fontSize * 0.4);
   canvas.width = boxW;
   canvas.height = boxH;
 
@@ -233,8 +260,6 @@ export async function renderKineticPng(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.direction = style.rtl ? "rtl" : "ltr";
-  ctx.lineJoin = "round";
-  ctx.miterLimit = 2;
 
   let flat = 0;
   rows.forEach((row, rowIdx) => {
@@ -254,28 +279,24 @@ export async function renderKineticPng(
       const color = isActive ? style.highlightColor : style.baseColor;
 
       let y = yBase;
-      let scale = 1;
+      let scaleWord = 1;
       let alpha = 1;
       if (style.effect === "fade") {
-        alpha = isActive ? 1 : 0.4;
+        alpha = isActive ? 1 : 0.45;
       } else if (style.effect === "pulse" && isActive) {
-        scale = 1.18;
+        scaleWord = 1.14;
       } else if (style.effect === "pop" && isActive) {
-        scale = 1.28;
+        scaleWord = 1.22;
       } else if (style.effect === "bounce" && isActive) {
-        scale = 1.12;
-        y = yBase - fontSize * 0.12;
+        scaleWord = 1.1;
+        y = yBase - fontSize * 0.1;
       }
 
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(centerX, y);
-      ctx.scale(scale, scale);
-      ctx.lineWidth = Math.max(4, Math.round(fontSize * 0.14));
-      ctx.strokeStyle = "#000000";
-      ctx.strokeText(word, 0, 0);
-      ctx.fillStyle = color;
-      ctx.fillText(word, 0, 0);
+      ctx.scale(scaleWord, scaleWord);
+      fillTextWithOutline(ctx, word, 0, 0, color, fontSize);
       ctx.restore();
 
       if (style.rtl) x -= wWidth + space;
