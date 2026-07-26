@@ -435,6 +435,9 @@ export function VideoSubtitlesWorkspace({
                   </option>
                 ))}
               </select>
+              <span className="mt-1 block text-[11px] font-normal text-[#888]">
+                يُطبَّق على المعاينة وتنزيل الفيديو بنفس الإعداد
+              </span>
             </label>
             <fieldset className="block text-sm font-semibold text-[#333]">
               <legend className="mb-1.5">لون الخط</legend>

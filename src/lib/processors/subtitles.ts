@@ -340,43 +340,71 @@ function wrapCanvasLines(
 async function renderCuePng(
   text: string,
   videoWidth: number,
-  opts: { color: string; fontSizePx: number; rtl: boolean },
+  videoHeight: number,
+  opts: {
+    color: string;
+    fontSizePx: number;
+    rtl: boolean;
+  },
 ): Promise<Blob> {
-  const width = Math.max(320, Math.min(1920, videoWidth));
+  // حجم الخط المختار (مثلاً 30) يُطبَّق كمرجع عند ارتفاع 720 ثم يُناسب دقة الفيديو
   const fontSize = Math.max(
-    22,
-    Math.min(64, Math.round(opts.fontSizePx * (width / 720))),
+    12,
+    Math.min(
+      Math.round(videoHeight * 0.055),
+      Math.round(opts.fontSizePx * (videoHeight / 720)),
+    ),
   );
-  const padX = Math.round(width * 0.04);
-  const lineH = Math.round(fontSize * 1.35);
+  const lineH = Math.round(fontSize * 1.3);
+  const maxTextW = Math.round(videoWidth * 0.88);
+  const padX = Math.round(fontSize * 0.55);
+  const padY = Math.round(fontSize * 0.35);
+
   const canvas = document.createElement("canvas");
-  canvas.width = width;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("تعذر رسم الترجمة");
-  ctx.font = `bold ${fontSize}px "Segoe UI", "Noto Sans Arabic", "Tahoma", sans-serif`;
+
+  const font = `bold ${fontSize}px "Segoe UI", "Noto Sans Arabic", "Tahoma", sans-serif`;
+  ctx.font = font;
+  ctx.direction = opts.rtl ? "rtl" : "ltr";
+  const lines = wrapCanvasLines(ctx, text, maxTextW - padX * 2);
+  if (!lines.length) {
+    canvas.width = 2;
+    canvas.height = 2;
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء صورة الترجمة"))),
+        "image/png",
+      );
+    });
+  }
+
+  const textW = Math.ceil(
+    Math.max(...lines.map((ln) => ctx.measureText(ln).width)),
+  );
+  const boxW = Math.min(maxTextW, textW + padX * 2);
+  const boxH = lines.length * lineH + padY * 2;
+  canvas.width = Math.max(2, boxW);
+  canvas.height = Math.max(2, boxH);
+
+  ctx.font = font;
   ctx.direction = opts.rtl ? "rtl" : "ltr";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const lines = wrapCanvasLines(ctx, text, width - padX * 2);
-  const boxH = Math.max(lineH + 24, lines.length * lineH + 28);
-  canvas.height = boxH;
-  // redraw after resize
-  ctx.font = `bold ${fontSize}px "Segoe UI", "Noto Sans Arabic", "Tahoma", sans-serif`;
-  ctx.direction = opts.rtl ? "rtl" : "ltr";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.clearRect(0, 0, width, boxH);
+  ctx.clearRect(0, 0, boxW, boxH);
+
+  // خلفية ضيقة حول النص فقط (مثل المعاينة) وليست بعرض الفيديو كامل
   ctx.fillStyle = "rgba(0,0,0,0.55)";
-  const bx = Math.round(padX * 0.4);
-  const bw = width - bx * 2;
-  ctx.fillRect(bx, 4, bw, boxH - 8);
+  ctx.fillRect(0, 0, boxW, boxH);
+
   ctx.fillStyle = opts.color || "#FFFFFF";
   ctx.shadowColor = "rgba(0,0,0,0.85)";
-  ctx.shadowBlur = 4;
+  ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.08));
   const startY = boxH / 2 - ((lines.length - 1) * lineH) / 2;
   lines.forEach((ln, i) => {
-    ctx.fillText(ln, width / 2, startY + i * lineH);
+    ctx.fillText(ln, boxW / 2, startY + i * lineH);
   });
+
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء صورة الترجمة"))),
@@ -393,7 +421,11 @@ const BURN_BATCH = 10;
 export async function downloadVideoWithBurnedSubtitles(
   video: File,
   cues: TranscriptCue[],
-  opts: { color: string; fontSizePx: number; rtl: boolean },
+  opts: {
+    color: string;
+    fontSizePx: number;
+    rtl: boolean;
+  },
   onProgress?: (ratio: number) => void,
   onStatus?: (msg: string) => void,
 ) {
@@ -421,7 +453,7 @@ export async function downloadVideoWithBurnedSubtitles(
     toBlob,
   } = await import("./ffmpeg-client");
 
-  const { w } = await probeVideoSize(video);
+  const { w, h } = await probeVideoSize(video);
   onStatus?.("تحضير طبقات الترجمة…");
 
   let current: File = video;
@@ -443,12 +475,14 @@ export async function downloadVideoWithBurnedSubtitles(
 
     const pngNames: string[] = [];
     for (let i = 0; i < slice.length; i++) {
-      const png = await renderCuePng(slice[i]!.text, w, opts);
+      const png = await renderCuePng(slice[i]!.text, w, h, opts);
       const name = `cue${b}_${i}.png`;
       await ffmpeg.writeFile(name, await fetchFile(png));
       pngNames.push(name);
     }
 
+    // هامش سفلي متناسب مع ارتفاع الفيديو (يشبه موضع المعاينة)
+    const bottomPad = Math.max(24, Math.round(h * 0.06));
     const parts: string[] = [];
     let lastLabel = "[0:v]";
     for (let i = 0; i < slice.length; i++) {
@@ -457,7 +491,7 @@ export async function downloadVideoWithBurnedSubtitles(
       const start = c.start.toFixed(3);
       const end = c.end.toFixed(3);
       parts.push(
-        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:H-h-48:enable='between(t\\,${start}\\,${end})'${outLabel}`,
+        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:H-h-${bottomPad}:enable='between(t\\,${start}\\,${end})'${outLabel}`,
       );
       lastLabel = outLabel;
     }
