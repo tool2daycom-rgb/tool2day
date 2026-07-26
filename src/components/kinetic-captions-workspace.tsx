@@ -17,7 +17,7 @@ import {
   KINETIC_MIN_DURATION_SEC,
   KINETIC_POSITIONS,
   activeKineticAt,
-  buildWordsJson,
+  buildWordsText,
   downloadKineticBurnedVideo,
   ensureKineticFont,
   groupWordsIntoLines,
@@ -88,7 +88,7 @@ export function KineticCaptionsWorkspace({
   const [fontSize, setFontSize] = useState(32);
   const fontFamily = KINETIC_FONTS[0]!.stack;
   const [position, setPosition] = useState<KineticPosition>("bottom");
-  const [effect, setEffect] = useState<KineticEffect>("slide");
+  const [effect, setEffect] = useState<KineticEffect>("none");
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -213,13 +213,15 @@ export function KineticCaptionsWorkspace({
     setLines(groupWordsIntoLines(next));
   }
 
-  async function downloadJson() {
+  async function downloadText() {
     if (!words.length) return;
     beginToolUse(slug);
     const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
     await downloadBlob(
-      new Blob([buildWordsJson(words)], { type: "application/json" }),
-      "kinetic-words.json",
+      new Blob([buildWordsText(words)], {
+        type: "text/plain;charset=utf-8",
+      }),
+      "kinetic-words.txt",
     );
   }
 
@@ -229,7 +231,7 @@ export function KineticCaptionsWorkspace({
       !file.type.startsWith("video/") &&
       !/\.(mp4|webm|mov|mkv|m4v)$/i.test(file.name)
     ) {
-      setError("الحرق يحتاج ملف فيديو");
+      setError("التنزيل يحتاج ملف فيديو");
       return;
     }
     beginToolUse(slug);
@@ -252,7 +254,7 @@ export function KineticCaptionsWorkspace({
         (r) => setProgress(Math.round(r * 100)),
         (msg) => setStatus(msg),
       );
-      setStatus("تم تنزيل الفيديو مع الترجمة الحركية");
+      setStatus("تم تنزيل الفيديو");
     } catch (e) {
       setError(formatProcessError(e));
     } finally {
@@ -498,7 +500,9 @@ export function KineticCaptionsWorkspace({
                         className={effectClass(effect, isActive)}
                         style={{
                           color: isActive ? highlight : baseColor,
-                          marginInline: "0.12em",
+                          marginInline: "0.4em",
+                          paddingInline: "0.08em",
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {visibleWordText(
@@ -564,14 +568,14 @@ export function KineticCaptionsWorkspace({
             onClick={() => void burn()}
             className="rounded-lg bg-[#111] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
           >
-            {exporting ? "جاري الحرق…" : "تنزيل فيديو مع الترجمة الحركية"}
+            {exporting ? "جاري تنزيل…" : "تنزيل فيديو مع الترجمة الحركية"}
           </button>
           <button
             type="button"
-            onClick={() => void downloadJson()}
+            onClick={() => void downloadText()}
             className="rounded-lg border border-[#ddd] bg-white px-4 py-2.5 text-sm font-semibold"
           >
-            تنزيل JSON (توقيت الكلمات)
+            تنزيل نص الكلمات (.txt)
           </button>
         </div>
       )}

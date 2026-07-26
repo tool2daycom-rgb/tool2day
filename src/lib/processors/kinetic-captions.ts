@@ -252,7 +252,7 @@ export async function renderKineticPng(
         transform = `translateX(${x}px)`;
       }
       parts.push(
-        `<span style="display:inline-block;color:${color};opacity:${opacity};transform:${transform};transform-origin:center;margin:0 0.12em;vertical-align:middle">${escapeHtml(text)}</span>`,
+        `<span style="display:inline-block;color:${color};opacity:${opacity};transform:${transform};transform-origin:center;margin:0 0.42em;padding:0 0.08em;vertical-align:middle;white-space:nowrap">${escapeHtml(text)}</span>`,
       );
     });
 
@@ -260,19 +260,19 @@ export async function renderKineticPng(
       font-family:${family};
       font-weight:900;
       font-size:${size}px;
-      line-height:1.35;
+      line-height:1.45;
       text-align:center;
       color:#fff;
       text-shadow:
         0 0 2px #000,
         1px 0 #000,-1px 0 #000,0 1px #000,0 -1px #000,
         2px 0 #000,-2px 0 #000,0 2px #000,0 -2px #000,
-        1px 1px #000,-1px 1px #000,1px -1px #000,-1px -1px #000,
-        2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000;
-      word-spacing:0.02em;
-      overflow-wrap:anywhere;
+        1px 1px #000,-1px -1px #000;
+      word-spacing:0.35em;
+      letter-spacing:0;
+      overflow-wrap:normal;
       max-width:100%;
-    ">${parts.join("")}</div>`;
+    ">${parts.join(" ")}</div>`;
   };
 
   document.body.appendChild(host);
@@ -293,11 +293,11 @@ export async function renderKineticPng(
     const html2canvas = (await import("html2canvas")).default;
     const canvas = await html2canvas(host, {
       backgroundColor: null,
-      scale: 2,
+      scale: 1,
       logging: false,
       useCORS: true,
-      width: Math.min(maxW, host.scrollWidth + 8),
-      height: Math.min(maxH, host.scrollHeight + 8),
+      width: Math.min(maxW, Math.ceil(host.scrollWidth + 16)),
+      height: Math.min(maxH, Math.ceil(host.scrollHeight + 12)),
       windowWidth: maxW,
       windowHeight: maxH,
     });
@@ -345,12 +345,14 @@ function expandLinesToFrames(
       const end = next ? next.start : line.end;
       const dur = Math.max(0.05, end - start);
 
+      // تأثيرات متعددة الإطارات تبطّئ التنزيل — نبقيها خفيفة
       if (effect === "typewriter") {
         const chars = Array.from(w.word);
-        const n = Math.max(1, chars.length);
-        for (let c = 1; c <= n; c++) {
-          const t0 = start + ((c - 1) / n) * dur;
-          const t1 = start + (c / n) * dur;
+        const steps = Math.min(3, Math.max(1, chars.length));
+        for (let s = 1; s <= steps; s++) {
+          const c = Math.ceil((s / steps) * chars.length);
+          const t0 = start + ((s - 1) / steps) * dur;
+          const t1 = start + (s / steps) * dur;
           frames.push({
             line,
             activeIndex: i,
@@ -363,21 +365,20 @@ function expandLinesToFrames(
       }
 
       if (effect === "slide") {
-        const steps = 4;
-        for (let s = 1; s <= steps; s++) {
-          const t0 = start + ((s - 1) / steps) * Math.min(0.28, dur * 0.45);
-          const t1 =
-            s === steps
-              ? end
-              : start + (s / steps) * Math.min(0.28, dur * 0.45);
-          frames.push({
-            line,
-            activeIndex: i,
-            start: t0,
-            end: Math.max(t0 + 0.04, t1),
-            slideProgress: s / steps,
-          });
-        }
+        frames.push({
+          line,
+          activeIndex: i,
+          start,
+          end: start + Math.min(0.18, dur * 0.35),
+          slideProgress: 0.55,
+        });
+        frames.push({
+          line,
+          activeIndex: i,
+          start: start + Math.min(0.18, dur * 0.35),
+          end,
+          slideProgress: 1,
+        });
         return;
       }
 
@@ -386,15 +387,8 @@ function expandLinesToFrames(
           line,
           activeIndex: i,
           start,
-          end: start + dur * 0.35,
-          zoomScale: 1.28,
-        });
-        frames.push({
-          line,
-          activeIndex: i,
-          start: start + dur * 0.35,
           end,
-          zoomScale: 1.08,
+          zoomScale: 1.16,
         });
         return;
       }
@@ -426,7 +420,7 @@ async function probeVideoSize(
   }
 }
 
-const BURN_BATCH = 10;
+const BURN_BATCH = 28;
 
 /**
  * يحرق الترجمة الحركية كلمة بكلمة داخل الفيديو.
@@ -458,8 +452,8 @@ export async function downloadKineticBurnedVideo(
     const slice = frames.slice(b * BURN_BATCH, (b + 1) * BURN_BATCH);
     onStatus?.(
       batches > 1
-        ? `حرق الترجمة الحركية ${b + 1}/${batches}…`
-        : "حرق الترجمة الحركية في الفيديو…",
+        ? `جاري تنزيل الفيديو ${b + 1}/${batches}…`
+        : "جاري تنزيل الفيديو مع الترجمة…",
     );
     const ffmpeg = await getFFmpeg((r) =>
       onProgress?.((b + Math.min(1, Math.max(0, r))) / batches),
@@ -517,7 +511,7 @@ export async function downloadKineticBurnedVideo(
 
     const code = await ffmpeg.exec(args);
     if (typeof code === "number" && code !== 0) {
-      throw new Error("فشل حرق الترجمة الحركية");
+      throw new Error("فشل تجهيز الفيديو للتنزيل");
     }
     const data = await ffmpeg.readFile(output);
     current = new File([toBlob(data, "video/mp4")], `kinetic-partial-${b}.mp4`, {
@@ -533,22 +527,17 @@ export async function downloadKineticBurnedVideo(
     }
   }
 
-  onStatus?.("تنزيل الفيديو مع الترجمة الحركية…");
+  onStatus?.("بدء حفظ الملف…");
   await downloadBlob(current, `${basename(video.name)}-kinetic-captions.mp4`);
   onProgress?.(1);
 }
 
-export function buildWordsJson(words: TranscriptWord[]): string {
-  return JSON.stringify(
-    {
-      format: "word-level-timed-subtitles",
-      words: words.map((w) => ({
-        word: w.word,
-        start: Number(w.start.toFixed(3)),
-        end: Number(w.end.toFixed(3)),
-      })),
-    },
-    null,
-    2,
-  );
+export function buildWordsText(words: TranscriptWord[]): string {
+  return words
+    .map((w, i) => {
+      const a = w.start.toFixed(2);
+      const b = w.end.toFixed(2);
+      return `${i + 1}. [${a}s - ${b}s] ${w.word}`;
+    })
+    .join("\n");
 }
