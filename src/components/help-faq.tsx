@@ -392,8 +392,14 @@ const sections: FaqSection[] = [
             >
               محرر الفيديو
             </Link>{" "}
-            عبر أداة النص. الترجمة المتزامنة / Closed Captions غير مدعومة بعد — ونعمل على
-            إضافتها لاحقاً.
+            عبر أداة النص، أو استخدم{" "}
+            <Link
+              href="/tools/video-subtitles"
+              className="font-semibold text-[#2563eb] underline"
+            >
+              توليد ترجمة الفيديو
+            </Link>{" "}
+            لإنشاء ملفات SRT/VTT بالعربية أو الإنجليزية مع اختيار حجم ولون الخط.
           </p>
         ),
       },
