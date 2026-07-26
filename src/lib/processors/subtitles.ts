@@ -293,3 +293,220 @@ export async function proofreadCues(
     return local;
   }
 }
+
+function probeVideoSize(file: File): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.onloadedmetadata = () => {
+      const w = video.videoWidth || 0;
+      const h = video.videoHeight || 0;
+      URL.revokeObjectURL(url);
+      if (!w || !h) reject(new Error("أبعاد الفيديو غير صالحة"));
+      else resolve({ w, h });
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر قراءة الفيديو"));
+    };
+    video.src = url;
+  });
+}
+
+function wrapCanvasLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.replace(/\s+/gu, " ").trim().split(" ");
+  if (!words.length) return [];
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const trial = line ? `${line} ${word}` : word;
+    if (ctx.measureText(trial).width <= maxWidth) {
+      line = trial;
+    } else {
+      if (line) lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 4);
+}
+
+async function renderCuePng(
+  text: string,
+  videoWidth: number,
+  opts: { color: string; fontSizePx: number; rtl: boolean },
+): Promise<Blob> {
+  const width = Math.max(320, Math.min(1920, videoWidth));
+  const fontSize = Math.max(
+    22,
+    Math.min(64, Math.round(opts.fontSizePx * (width / 720))),
+  );
+  const padX = Math.round(width * 0.04);
+  const lineH = Math.round(fontSize * 1.35);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("تعذر رسم الترجمة");
+  ctx.font = `bold ${fontSize}px "Segoe UI", "Noto Sans Arabic", "Tahoma", sans-serif`;
+  ctx.direction = opts.rtl ? "rtl" : "ltr";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const lines = wrapCanvasLines(ctx, text, width - padX * 2);
+  const boxH = Math.max(lineH + 24, lines.length * lineH + 28);
+  canvas.height = boxH;
+  // redraw after resize
+  ctx.font = `bold ${fontSize}px "Segoe UI", "Noto Sans Arabic", "Tahoma", sans-serif`;
+  ctx.direction = opts.rtl ? "rtl" : "ltr";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.clearRect(0, 0, width, boxH);
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  const bx = Math.round(padX * 0.4);
+  const bw = width - bx * 2;
+  ctx.fillRect(bx, 4, bw, boxH - 8);
+  ctx.fillStyle = opts.color || "#FFFFFF";
+  ctx.shadowColor = "rgba(0,0,0,0.85)";
+  ctx.shadowBlur = 4;
+  const startY = boxH / 2 - ((lines.length - 1) * lineH) / 2;
+  lines.forEach((ln, i) => {
+    ctx.fillText(ln, width / 2, startY + i * lineH);
+  });
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء صورة الترجمة"))),
+      "image/png",
+    );
+  });
+}
+
+const BURN_BATCH = 10;
+
+/**
+ * يدمج الترجمة داخل الفيديو (حرق) ثم ينزّل MP4 — يمر عبر بوابة التقييم.
+ */
+export async function downloadVideoWithBurnedSubtitles(
+  video: File,
+  cues: TranscriptCue[],
+  opts: { color: string; fontSizePx: number; rtl: boolean },
+  onProgress?: (ratio: number) => void,
+  onStatus?: (msg: string) => void,
+) {
+  const isVideo =
+    video.type.startsWith("video/") ||
+    /\.(mp4|webm|mov|mkv|m4v)$/i.test(video.name);
+  if (!isVideo) {
+    throw new Error("الملف ليس فيديو — استخدم تنزيل SRT أو VTT");
+  }
+  const usable = cues
+    .map((c) => ({
+      start: Math.max(0, c.start),
+      end: Math.max(c.start + 0.2, c.end),
+      text: c.text.trim(),
+    }))
+    .filter((c) => c.text);
+  if (!usable.length) throw new Error("لا توجد مقاطع للدمج");
+
+  const { fetchFile } = await import("@ffmpeg/util");
+  const {
+    basename,
+    downloadBlob,
+    getFFmpeg,
+    inputFileName,
+    toBlob,
+  } = await import("./ffmpeg-client");
+
+  const { w } = await probeVideoSize(video);
+  onStatus?.("تحضير طبقات الترجمة…");
+
+  let current: File = video;
+  const batches = Math.ceil(usable.length / BURN_BATCH);
+
+  for (let b = 0; b < batches; b++) {
+    const slice = usable.slice(b * BURN_BATCH, (b + 1) * BURN_BATCH);
+    onStatus?.(
+      batches > 1
+        ? `دمج الترجمة في الفيديو ${b + 1}/${batches}…`
+        : "دمج الترجمة في الفيديو…",
+    );
+    const ffmpeg = await getFFmpeg((r) =>
+      onProgress?.((b + Math.min(1, Math.max(0, r))) / batches),
+    );
+    const input = inputFileName(current, "mp4");
+    const output = "burned.mp4";
+    await ffmpeg.writeFile(input, await fetchFile(current));
+
+    const pngNames: string[] = [];
+    for (let i = 0; i < slice.length; i++) {
+      const png = await renderCuePng(slice[i]!.text, w, opts);
+      const name = `cue${b}_${i}.png`;
+      await ffmpeg.writeFile(name, await fetchFile(png));
+      pngNames.push(name);
+    }
+
+    const parts: string[] = [];
+    let lastLabel = "[0:v]";
+    for (let i = 0; i < slice.length; i++) {
+      const c = slice[i]!;
+      const outLabel = i === slice.length - 1 ? "[vout]" : `[vb${b}_${i}]`;
+      const start = c.start.toFixed(3);
+      const end = c.end.toFixed(3);
+      parts.push(
+        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:H-h-48:enable='between(t\\,${start}\\,${end})'${outLabel}`,
+      );
+      lastLabel = outLabel;
+    }
+
+    const args = ["-i", input];
+    for (const name of pngNames) {
+      args.push("-i", name);
+    }
+    args.push(
+      "-filter_complex",
+      parts.join(";"),
+      "-map",
+      "[vout]",
+      "-map",
+      "0:a?",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "22",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      output,
+    );
+
+    const code = await ffmpeg.exec(args);
+    if (typeof code === "number" && code !== 0) {
+      throw new Error("فشل دمج الترجمة في الفيديو");
+    }
+    const data = await ffmpeg.readFile(output);
+    const blob = toBlob(data, "video/mp4");
+    current = new File([blob], `partial-${b}.mp4`, { type: "video/mp4" });
+
+    try {
+      await ffmpeg.deleteFile(input);
+      await ffmpeg.deleteFile(output);
+      for (const name of pngNames) await ffmpeg.deleteFile(name);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  onStatus?.("تنزيل الفيديو مع الترجمة…");
+  await downloadBlob(
+    current,
+    `${basename(video.name)}-subtitles.mp4`,
+  );
+  onProgress?.(1);
+}

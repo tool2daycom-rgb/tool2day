@@ -15,6 +15,7 @@ import {
   buildSrt,
   buildVtt,
   cuesToEditable,
+  downloadVideoWithBurnedSubtitles,
   proofreadCues,
   syncCuesToDuration,
   translateCues,
@@ -62,6 +63,13 @@ export function VideoSubtitlesWorkspace({
   const [cues, setCues] = useState<EditableCue[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [highAccuracy, setHighAccuracy] = useState<boolean | null>(null);
+  const [exportingVideo, setExportingVideo] = useState(false);
+
+  const isVideoFile = Boolean(
+    file &&
+      (file.type.startsWith("video/") ||
+        /\.(mp4|webm|mov|mkv|m4v)$/i.test(file.name)),
+  );
 
   useEffect(() => {
     setDownloadRatingContext(slug);
@@ -218,6 +226,31 @@ export function VideoSubtitlesWorkspace({
       );
     }
     setStatus(format === "srt" ? "تم تنزيل ملف SRT" : "تم تنزيل ملف VTT");
+  }
+
+  async function downloadBurnedVideo() {
+    if (!file || !cues.length) return;
+    setExportingVideo(true);
+    setError(null);
+    try {
+      await downloadVideoWithBurnedSubtitles(
+        file,
+        cues,
+        {
+          color: fontColor,
+          fontSizePx: fontSize,
+          rtl: outputLang === "ar",
+        },
+        (r) => setProgress(Math.round(r * 100)),
+        (msg) => setStatus(msg),
+      );
+      setStatus("تم تنزيل الفيديو مع الترجمة — شكراً لتقييمك");
+      setProgress(100);
+    } catch (e) {
+      setError(formatProcessError(e));
+    } finally {
+      setExportingVideo(false);
+    }
   }
 
   const isRtl = outputLang === "ar";
@@ -431,23 +464,6 @@ export function VideoSubtitlesWorkspace({
             </fieldset>
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void download("srt")}
-              className="rounded-lg border border-[#ddd] bg-white px-4 py-2 text-sm font-semibold text-[#222] hover:border-[#bbb]"
-            >
-              تنزيل SRT
-            </button>
-            <button
-              type="button"
-              onClick={() => void download("vtt")}
-              className="rounded-lg border border-[#ddd] bg-white px-4 py-2 text-sm font-semibold text-[#222] hover:border-[#bbb]"
-            >
-              تنزيل VTT (مع اللون والحجم)
-            </button>
-          </div>
-
           <div className="mt-6 space-y-3">
             <h3 className="text-sm font-bold text-[#111]">
               المقاطع ({cues.length}) — عدّل النص للوصول لأقصى دقة
@@ -504,6 +520,54 @@ export function VideoSubtitlesWorkspace({
                 />
               </div>
             ))}
+          </div>
+
+          <div className="mt-8 rounded-2xl border border-[#dbeafe] bg-[#f8fbff] p-5">
+            <h3 className="text-base font-bold text-[#111]">التنزيلات</h3>
+            <p className="mt-1 text-xs leading-6 text-[#666]">
+              بعد التقييم يُفتح التنزيل تلقائياً. يُفضّل مراجعة المقاطع ثم تنزيل
+              الفيديو مع الترجمة المدمجة.
+            </p>
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {isVideoFile && (
+                <button
+                  type="button"
+                  disabled={exportingVideo || busy}
+                  onClick={() => void downloadBurnedVideo()}
+                  className="rounded-lg bg-[#111] px-5 py-3 text-sm font-semibold text-white disabled:opacity-40"
+                >
+                  {exportingVideo
+                    ? "جاري دمج الترجمة في الفيديو…"
+                    : "تنزيل الفيديو مع الترجمة"}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={exportingVideo || busy}
+                onClick={() => void download("srt")}
+                className="rounded-lg border border-[#ddd] bg-white px-4 py-3 text-sm font-semibold text-[#222] hover:border-[#bbb] disabled:opacity-40"
+              >
+                تنزيل SRT
+              </button>
+              <button
+                type="button"
+                disabled={exportingVideo || busy}
+                onClick={() => void download("vtt")}
+                className="rounded-lg border border-[#ddd] bg-white px-4 py-3 text-sm font-semibold text-[#222] hover:border-[#bbb] disabled:opacity-40"
+              >
+                تنزيل VTT (مع اللون والحجم)
+              </button>
+            </div>
+            {exportingVideo && (
+              <div className="mt-3">
+                <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
+                  <div
+                    className="h-full rounded-full bg-[#2563eb] transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
