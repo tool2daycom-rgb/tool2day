@@ -12,6 +12,7 @@ import {
   PNG_ZIP_MAX,
   buildPngZip,
   formatBytes,
+  imageHasTransparency,
   readPngDimensions,
   type PngLibraryItem,
 } from "@/lib/processors/png-library";
@@ -59,7 +60,8 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   const [uploading, setUploading] = useState(false);
   const [cutting, setCutting] = useState(false);
   const [cutProgress, setCutProgress] = useState(0);
-  const [autoCut, setAutoCut] = useState(true);
+  // افتراضياً مقفول: قص AI يخرّب الشعارات والـ PNG الشفافة الجاهزة
+  const [autoCut, setAutoCut] = useState(false);
 
   const visibleItems = useMemo(
     () => items.filter((item) => !broken[item.id]),
@@ -199,15 +201,22 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
     if (preview) URL.revokeObjectURL(preview);
 
     if (!caption) {
-      setCaption(
-        f.name.replace(/\.(png|jpe?g|webp)$/i, "").slice(0, 80),
-      );
+      setCaption(f.name.replace(/\.(png|jpe?g|webp)$/i, "").slice(0, 80));
     }
 
-    // بدون قص تلقائي: عرض الملف كما هو
+    // PNG شفاف جاهز: لا نقصّه أبداً (القص يفسد الجودة)
+    const alreadyClear = await imageHasTransparency(f);
+    if (alreadyClear) {
+      setFile(f);
+      setPreview(URL.createObjectURL(f));
+      setStatus("الصورة شفافة مسبقاً — عُرضت كما هي بدون قص");
+      return;
+    }
+
     if (!autoCut) {
       setFile(f);
       setPreview(URL.createObjectURL(f));
+      setStatus("جاهز للرفع — فعّل إزالة الخلفية فقط إن كانت الصورة بخلفية غير شفافة");
       return;
     }
 
@@ -218,7 +227,6 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       const { removeImageBackground } = await import(
         "@/lib/processors/ai-micro-tools"
       );
-      // personOnly: false حتى تبقى الشعارات والنصوص وليس الأشخاص فقط
       const blob = await removeImageBackground(f, (p) => setCutProgress(p), {
         personOnly: false,
       });
@@ -229,14 +237,13 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       );
       setFile(cutFile);
       setPreview(URL.createObjectURL(blob));
-      setStatus("تم قص الخلفية — راجع المعاينة ثم ارفع للمكتبة");
+      setStatus("تم قص الخلفية — راجع المعاينة جيداً قبل الرفع");
     } catch (e) {
-      // إن فشل القص نعرض الأصل ونسمح بالرفع
       setFile(f);
       setPreview(URL.createObjectURL(f));
       setError(
         e instanceof Error
-          ? `تعذّر قص الخلفية تلقائياً: ${e.message} — يمكنك الرفع كما هي`
+          ? `تعذّر قص الخلفية: ${e.message} — يمكنك الرفع كما هي`
           : "تعذّر قص الخلفية — يمكنك الرفع كما هي",
       );
       setStatus(null);
@@ -525,14 +532,20 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
         </>
       ) : (
         <div className="mt-5 space-y-4">
-          <label className="flex items-center gap-2 text-sm font-semibold text-[#333]">
+          <label className="flex items-start gap-2 text-sm font-semibold text-[#333]">
             <input
               type="checkbox"
               checked={autoCut}
               onChange={(e) => setAutoCut(e.target.checked)}
-              className="h-4 w-4"
+              className="mt-0.5 h-4 w-4"
             />
-            إزالة الخلفية تلقائياً (إظهار الشعار/الكتابة فقط على الشفافية)
+            <span>
+              إزالة الخلفية بالذكاء الاصطناعي
+              <span className="mt-0.5 block text-xs font-normal text-[#777]">
+                اتركه مقفولاً لصور PNG الشفافة الجاهزة (أفضل جودة). فعّله فقط
+                للصور ذات خلفية بيضاء/ملونة.
+              </span>
+            </span>
           </label>
 
           <div
@@ -545,7 +558,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
             }}
           >
             <p className="text-sm font-bold text-[#0f766e]">
-              ارفع شعاراً أو صورة — تُزال الخلفية وتبقى الكتابة/الشعار فقط
+              ارفع PNG شفاف جاهز (موصى به) أو صورة بخلفية لإزالتها
             </p>
             <p className="mt-1 text-xs text-[#666]">
               PNG · JPG · WEBP · حتى 10MB · الحد الأدنى 128×128px

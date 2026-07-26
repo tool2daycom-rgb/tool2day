@@ -55,6 +55,54 @@ export async function readPngDimensions(
   });
 }
 
+/** هل للصورة شفافية حقيقية؟ (PNG شفاف جاهز — لا حاجة لقص AI) */
+export async function imageHasTransparency(file: File): Promise<boolean> {
+  const type = file.type || "";
+  const name = file.name.toLowerCase();
+  if (!type.includes("png") && !name.endsWith(".png")) return false;
+
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = Math.min(img.naturalWidth || 0, 256);
+        const h = Math.min(img.naturalHeight || 0, 256);
+        if (!w || !h) {
+          resolve(false);
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          resolve(false);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let transparent = 0;
+        const step = 16; // عيّنة سريعة
+        for (let i = 3; i < data.length; i += 4 * step) {
+          if ((data[i] ?? 255) < 250) transparent += 1;
+        }
+        // نسبة كافية من البكسلات الشفافة = PNG جاهز
+        resolve(transparent > 8);
+      } catch {
+        resolve(false);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
+
 export const PNG_ZIP_MAX = 50;
 
 function safeFileName(title: string, index: number, ext = "png") {
