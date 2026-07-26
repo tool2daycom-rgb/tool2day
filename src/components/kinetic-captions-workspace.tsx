@@ -21,6 +21,7 @@ import {
   downloadKineticBurnedVideo,
   ensureKineticFont,
   groupWordsIntoLines,
+  kineticPreviewFontPx,
   kineticPreviewPositionClass,
   resolveKineticFontStack,
   type KineticEffect,
@@ -85,8 +86,8 @@ export function KineticCaptionsWorkspace({
   const [language, setLanguage] = useState("ar");
   const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
-  const [fontSize, setFontSize] = useState(32);
-  const fontFamily = KINETIC_FONTS[0]!.stack;
+  const [fontSize, setFontSize] = useState(44);
+  const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[0]!.stack);
   const [position, setPosition] = useState<KineticPosition>("bottom");
   const [effect, setEffect] = useState<KineticEffect>("none");
   const [busy, setBusy] = useState(false);
@@ -99,9 +100,16 @@ export function KineticCaptionsWorkspace({
   const [lines, setLines] = useState<KineticLine[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [videoNaturalW, setVideoNaturalW] = useState(0);
+  const [previewClientW, setPreviewClientW] = useState(0);
 
   const rtl = language === "ar" || language === "fa" || language === "he";
   const resolvedFont = resolveKineticFontStack(fontFamily);
+  const previewFontPx = kineticPreviewFontPx(
+    fontSize,
+    videoNaturalW,
+    previewClientW,
+  );
 
   const active = useMemo(
     () => activeKineticAt(lines, currentTime),
@@ -139,6 +147,8 @@ export function KineticCaptionsWorkspace({
     setError(null);
     setStatus(null);
     setDuration(0);
+    setVideoNaturalW(0);
+    setPreviewClientW(0);
   }
 
   async function run() {
@@ -387,12 +397,19 @@ export function KineticCaptionsWorkspace({
         </label>
         <label className="text-xs font-semibold text-[#444]">
           نوع الخط
-          <div
-            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm font-extrabold text-[#111]"
-            style={{ fontFamily: resolvedFont, fontWeight: 900 }}
+          <select
+            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
+            value={fontFamily}
+            onChange={(e) => setFontFamily(e.target.value)}
+            disabled={busy}
+            style={{ fontFamily: resolvedFont, fontWeight: 800 }}
           >
-            Cairo — نفس خط الموقع
-          </div>
+            {KINETIC_FONTS.map((f) => (
+              <option key={f.id} value={f.stack}>
+                {f.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="text-xs font-semibold text-[#444]">
           لون الخط
@@ -432,7 +449,7 @@ export function KineticCaptionsWorkspace({
             onChange={(e) => setFontSize(Number(e.target.value))}
             disabled={busy}
           >
-            {[28, 32, 36, 44, 52, 60].map((n) => (
+            {[28, 32, 36, 44, 52, 60, 72, 84].map((n) => (
               <option key={n} value={n}>
                 {n}px
               </option>
@@ -472,8 +489,11 @@ export function KineticCaptionsWorkspace({
               className="block max-h-[75vh] w-auto max-w-full rounded-xl bg-black object-contain"
               onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
               onLoadedMetadata={(e) => {
-                const d = e.currentTarget.duration;
+                const v = e.currentTarget;
+                const d = v.duration;
                 if (Number.isFinite(d)) setDuration(d);
+                if (v.videoWidth) setVideoNaturalW(v.videoWidth);
+                setPreviewClientW(v.clientWidth || 0);
               }}
             />
             {active && (
@@ -486,10 +506,10 @@ export function KineticCaptionsWorkspace({
                   style={{
                     fontFamily: resolvedFont,
                     fontWeight: 900,
-                    fontSize: `clamp(0.95rem, ${Math.round(fontSize * 0.48)}px, ${Math.min(fontSize, 40)}px)`,
+                    fontSize: `${previewFontPx || Math.round(fontSize * 0.55)}px`,
                     textShadow:
                       "0 0 2px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
-                    wordBreak: "break-word",
+                    wordBreak: "normal",
                   }}
                 >
                   {active.line.words.map((w, i) => {

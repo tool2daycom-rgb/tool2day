@@ -58,11 +58,63 @@ export const KINETIC_FONTS: {
 }[] = [
   {
     id: "cairo-site",
-    label: "Cairo",
+    label: "Cairo (موقع Tool2Day)",
     stack: "__SITE_CAIRO__",
     google: "Cairo:wght@700;800;900",
   },
+  {
+    id: "cairo",
+    label: "Cairo",
+    stack: '"Cairo", sans-serif',
+    google: "Cairo:wght@700;800;900",
+  },
+  {
+    id: "tajawal",
+    label: "Tajawal",
+    stack: '"Tajawal", sans-serif',
+    google: "Tajawal:wght@700;800",
+  },
+  {
+    id: "almarai",
+    label: "Almarai (المرسى)",
+    stack: '"Almarai", sans-serif',
+    google: "Almarai:wght@700;800",
+  },
+  {
+    id: "lemonada",
+    label: "Lemonada",
+    stack: '"Lemonada", sans-serif',
+    google: "Lemonada:wght@700;800",
+  },
+  {
+    id: "changa",
+    label: "Changa",
+    stack: '"Changa", sans-serif',
+    google: "Changa:wght@700;800",
+  },
 ];
+
+/** حجم الخط في إحداثيات الفيديو — الرقم المختار ≈ الحجم على فيديو عرض 720 */
+export function kineticBurnFontPx(
+  selectedPx: number,
+  videoW: number,
+): number {
+  const scaled = Math.round(selectedPx * (videoW / 720));
+  return Math.max(20, scaled);
+}
+
+/** حجم الخط في المعاينة ليطابق التنزيل بصرياً على إطار الفيديو */
+export function kineticPreviewFontPx(
+  selectedPx: number,
+  videoNaturalW: number,
+  previewClientW: number,
+): number {
+  if (!videoNaturalW || !previewClientW) {
+    return Math.round(selectedPx * (previewClientW ? previewClientW / 720 : 0.55));
+  }
+  const burn = kineticBurnFontPx(selectedPx, videoNaturalW);
+  return Math.max(14, Math.round(burn * (previewClientW / videoNaturalW)));
+}
 
 export function getSiteCairoFamily(): string {
   if (typeof document === "undefined") return '"Cairo", sans-serif';
@@ -203,13 +255,12 @@ export async function renderKineticPng(
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
   const family = resolveKineticFontStack(style.fontFamily);
-  const maxW = Math.max(120, Math.floor(videoW * 0.84));
-  const maxH = Math.max(80, Math.floor(videoH * 0.32));
+  const maxW = Math.max(120, Math.floor(videoW * 0.9));
+  const maxH = Math.max(100, Math.floor(videoH * 0.42));
 
-  let fontSize = Math.max(
-    22,
-    Math.min(style.fontSizePx, Math.round(videoW * 0.065)),
-  );
+  // نفس الحجم المختار في الموقع (نسبة لعرض 1080) — بدون قصّ عشوائي
+  let fontSize = kineticBurnFontPx(style.fontSizePx, videoW);
+  const minFont = Math.max(16, Math.round(fontSize * 0.82));
 
   const host = document.createElement("div");
   host.setAttribute("dir", style.rtl ? "rtl" : "ltr");
@@ -218,7 +269,7 @@ export async function renderKineticPng(
     "left:-12000px",
     "top:0",
     `width:${maxW}px`,
-    "padding:12px 16px",
+    "padding:10px 14px",
     "box-sizing:border-box",
     "background:transparent",
     "pointer-events:none",
@@ -252,7 +303,7 @@ export async function renderKineticPng(
         transform = `translateX(${x}px)`;
       }
       parts.push(
-        `<span style="display:inline-block;color:${color};opacity:${opacity};transform:${transform};transform-origin:center;margin:0 0.42em;padding:0 0.08em;vertical-align:middle;white-space:nowrap">${escapeHtml(text)}</span>`,
+        `<span style="display:inline-block;color:${color};opacity:${opacity};transform:${transform};transform-origin:center;margin:0 0.38em;padding:0 0.06em;vertical-align:middle;white-space:nowrap">${escapeHtml(text)}</span>`,
       );
     });
 
@@ -260,15 +311,16 @@ export async function renderKineticPng(
       font-family:${family};
       font-weight:900;
       font-size:${size}px;
-      line-height:1.45;
+      line-height:1.4;
       text-align:center;
       color:#fff;
       text-shadow:
         0 0 2px #000,
         1px 0 #000,-1px 0 #000,0 1px #000,0 -1px #000,
         2px 0 #000,-2px 0 #000,0 2px #000,0 -2px #000,
-        1px 1px #000,-1px -1px #000;
-      word-spacing:0.35em;
+        1px 1px #000,-1px -1px #000,
+        2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000;
+      word-spacing:0.28em;
       letter-spacing:0;
       overflow-wrap:normal;
       max-width:100%;
@@ -278,14 +330,14 @@ export async function renderKineticPng(
   document.body.appendChild(host);
   try {
     paint(fontSize);
-    // صغّر الخط حتى يبقى داخل عرض الفيديو
+    // صغّر بحذر فقط إذا لزم — لا ننزل تحت ~82% من الحجم المختار
     let guard = 0;
     while (
-      guard < 24 &&
-      fontSize > 18 &&
-      (host.scrollWidth > maxW + 2 || host.scrollHeight > maxH)
+      guard < 16 &&
+      fontSize > minFont &&
+      (host.scrollWidth > maxW + 4 || host.scrollHeight > maxH)
     ) {
-      fontSize -= 2;
+      fontSize -= 1;
       paint(fontSize);
       guard += 1;
     }
@@ -293,7 +345,7 @@ export async function renderKineticPng(
     const html2canvas = (await import("html2canvas")).default;
     const canvas = await html2canvas(host, {
       backgroundColor: null,
-      scale: 1,
+      scale: 2,
       logging: false,
       useCORS: true,
       width: Math.min(maxW, Math.ceil(host.scrollWidth + 16)),
@@ -302,15 +354,15 @@ export async function renderKineticPng(
       windowHeight: maxH,
     });
 
-    // قصّ لأي فائض
+    // scale:2 للحدة — نرجع للحجم الحقيقي على الفيديو
     const out = document.createElement("canvas");
-    const tw = Math.min(canvas.width, maxW * 2);
-    const th = Math.min(canvas.height, maxH * 2);
-    out.width = tw;
-    out.height = th;
+    out.width = Math.max(1, Math.round(canvas.width / 2));
+    out.height = Math.max(1, Math.round(canvas.height / 2));
     const ctx = out.getContext("2d");
     if (!ctx) throw new Error("Canvas غير متاح");
-    ctx.drawImage(canvas, 0, 0, tw, th, 0, 0, tw, th);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(canvas, 0, 0, out.width, out.height);
 
     return await new Promise((resolve, reject) => {
       out.toBlob(
