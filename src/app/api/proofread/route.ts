@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
 
     const system =
       lang === "ar"
-        ? "أنت مدقق لغوي عربي. صحّح الإملاء والأسماء فقط دون تغيير المعنى أو اللهجة قدر الإمكان. أعد كل سطر بنفس الرقم والمعرّف بالصيغة: N|id|النص. لا تضف شرحاً."
-        : "You are a careful proofreader. Fix spelling only; keep meaning. Reply each line as N|id|text. No commentary.";
+        ? "أنت مدقق لغوي عربي. صحّح الإملاء وأسماء الدول والمدن فقط دون تغيير المعنى أو اللهجة قدر الإمكان. أمثلة تصحيح: أكراكيا/أكرانيا→أوكرانيا، النمسة→النمسا، اوروبا→أوروبا، الماني→الألماني، عب→عم، نتنطل→ننتقل. أعد كل سطر بنفس الرقم والمعرّف: N|id|النص. لا تضف شرحاً."
+        : "You are a careful proofreader. Fix spelling and proper nouns only; keep meaning. Reply each line as N|id|text. No commentary.";
 
     const user = lines.join("\n");
     const corrected = groqKey

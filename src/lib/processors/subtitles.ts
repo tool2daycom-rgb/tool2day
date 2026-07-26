@@ -124,9 +124,11 @@ export function polishArabicText(input: string): string {
 
   const replacements: Array<[RegExp, string]> = [
     // أسماء دول/مدن شائعة يخطئ فيها Whisper
-    [/أكرانيا|إكرانيا|اكرانيا|أوكراينا|إوكراينا/gu, "أوكرانيا"],
-    [/النمسة|النمسه|انمسا/gu, "النمسا"],
-    [/أوربا(?![اوي])|اوروبا|أوروبه/gu, "أوروبا"],
+    [/أكرانيا|إكرانيا|اكرانيا|أوكراينا|إوكراينا|أكراكيا|اكراكيا|كراكيا|أوكراكيا|اوكراكيا|أوكرانياا/gu, "أوكرانيا"],
+    [/النمسة|النمسه|انمسا|النمسى/gu, "النمسا"],
+    [/أوربا(?![اوي])|اوروبا|أوروبه|أوروبى/gu, "أوروبا"],
+    [/للماني|الالماني|الألمانى|للالماني/gu, "للألماني"],
+    [/(^|[^\u0600-\u06FF])الماني(?=[^\u0600-\u06FF]|$)/gu, "$1الألماني"],
     [/أمريكا|امريكا/gu, "أمريكا"],
     [/روسيا/gu, "روسيا"],
     [/تركي[اة]/gu, "تركيا"],
@@ -139,6 +141,10 @@ export function polishArabicText(input: string): string {
     [/كندا/gu, "كندا"],
     [/الصين/gu, "الصين"],
     [/اليابان/gu, "اليابان"],
+    [/بالنسبة\s+للألماني/gu, "بالنسبة للألماني"],
+    [/فرق كبير بالأسفل/gu, "فرق كبير بالأسعار"],
+    [/فرق كبير بالاسفل/gu, "فرق كبير بالأسعار"],
+    [/فرق\s+كبير\s+بالاسعار/gu, "فرق كبير بالأسعار"],
     // أدوات لهجة شامية يسمعها Whisper خطأ
     [/وعب\s+/gu, "وعم "],
     [/وعن?\s*عب\s+/gu, "وعن عم "],
@@ -183,6 +189,66 @@ export function polishCues(
     ...c,
     text: polishCueText(c.text, lang),
   }));
+}
+
+/**
+ * مزامنة أزمنة المقاطع مع مدة الفيديو وإزالة الفجوات/التداخل.
+ */
+export function syncCuesToDuration(
+  cues: TranscriptCue[],
+  durationSec: number,
+): TranscriptCue[] {
+  if (!cues.length || durationSec <= 0) return cues;
+  const sorted = [...cues]
+    .map((c) => ({
+      start: Math.max(0, c.start),
+      end: Math.max(c.start + 0.35, c.end),
+      text: c.text.trim(),
+    }))
+    .filter((c) => c.text)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  if (!sorted.length) return [];
+
+  // إزالة التداخل وتوصيل الفجوات الصغيرة
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]!;
+    const cur = sorted[i]!;
+    if (cur.start < prev.end) {
+      const mid = (prev.end + cur.start) / 2;
+      prev.end = mid;
+      cur.start = mid;
+    } else if (cur.start - prev.end < 0.35) {
+      prev.end = cur.start;
+    }
+    if (cur.end <= cur.start + 0.3) {
+      cur.end = cur.start + 0.8;
+    }
+  }
+
+  const last = sorted[sorted.length - 1]!;
+  const span = Math.max(0.5, last.end - sorted[0]!.start);
+  const targetSpan = Math.max(0.5, durationSec - sorted[0]!.start - 0.05);
+  // إن انحرف التوقيت عن مدة الفيديو بشكل واضح، أعد التناسب
+  if (Math.abs(last.end - durationSec) > 1.25 || last.end > durationSec + 0.4) {
+    const origin = sorted[0]!.start;
+    const scale = targetSpan / span;
+    for (const c of sorted) {
+      c.start = origin + (c.start - origin) * scale;
+      c.end = origin + (c.end - origin) * scale;
+    }
+  }
+
+  for (const c of sorted) {
+    c.start = Math.max(0, Math.min(durationSec - 0.2, c.start));
+    c.end = Math.max(c.start + 0.35, Math.min(durationSec, c.end));
+  }
+  sorted[sorted.length - 1]!.end = Math.max(
+    sorted[sorted.length - 1]!.start + 0.35,
+    Math.min(durationSec, Math.max(sorted[sorted.length - 1]!.end, durationSec - 0.05)),
+  );
+
+  return sorted;
 }
 
 /** تصحيح إضافي عبر الخادم إن وُجد مفتاح، وإلا يبقى التصحيح المحلي */

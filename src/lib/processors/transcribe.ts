@@ -38,8 +38,10 @@ const ACCURATE_OVERLAP_SECONDS = 2.5;
 export const MAX_TRANSCRIBE_DURATION_SEC = 30 * 60;
 /** حجم ملف معقول لفيديو ~30 دقيقة */
 export const MAX_VIDEO_TO_TEXT_MB = 800;
-/** لا نرفع للصوت الطويل للخادم (حد Vercel) */
+/** لا نرفع للصوت الطويل للخادم (حد Vercel) — نقطع محلياً ثم نرفع */
 const MAX_SERVER_AUDIO_BYTES = 20 * 1024 * 1024;
+const SERVER_CHUNK_SECONDS = 55;
+const SERVER_CHUNK_OVERLAP = 1.2;
 
 export type TranscribeQuality = "fast" | "accurate";
 
@@ -121,6 +123,122 @@ export async function transcribeViaServer(
     provider: data.provider || "server",
     cues: Array.isArray(data.cues) ? data.cues : undefined,
   };
+}
+
+/** يقطع WAV ويرسله لمحرك الخادم (Groq large-v3) بمزامنة أزمنة دقيقة */
+export async function transcribeViaServerChunked(
+  audio: File,
+  languageCode: string,
+  durationSec: number,
+  onStatus?: (msg: string) => void,
+  onProgress?: (ratio: number) => void,
+): Promise<{
+  text: string;
+  provider: string;
+  cues: TranscriptCue[];
+} | null> {
+  // فحص سريع: هل المفتاح متاح؟
+  const caps = await fetch("/api/transcribe/capabilities")
+    .then((r) => r.json())
+    .catch(() => null) as { highAccuracy?: boolean } | null;
+  if (!caps?.highAccuracy) return null;
+
+  const samples = await decodeWavToFloat32(audio);
+  const chunkLen = Math.floor(SERVER_CHUNK_SECONDS * SAMPLE_RATE);
+  const hop = Math.floor((SERVER_CHUNK_SECONDS - SERVER_CHUNK_OVERLAP) * SAMPLE_RATE);
+  const slices: Array<{ startSec: number; file: File; index: number }> = [];
+
+  if (samples.length <= chunkLen) {
+    slices.push({ startSec: 0, file: audio, index: 0 });
+  } else {
+    let index = 0;
+    for (let start = 0; start < samples.length; start += hop) {
+      const end = Math.min(samples.length, start + chunkLen);
+      const view = samples.subarray(start, end);
+      if (view.length < SAMPLE_RATE * 0.5 && index > 0) break;
+      const wav = float32ToWavFile(view, SAMPLE_RATE, `part-${index}.wav`);
+      slices.push({
+        startSec: start / SAMPLE_RATE,
+        file: wav,
+        index,
+      });
+      index += 1;
+      if (end >= samples.length) break;
+    }
+  }
+
+  const allCues: TranscriptCue[] = [];
+  const texts: string[] = [];
+  let provider = "server";
+
+  for (let i = 0; i < slices.length; i++) {
+    const slice = slices[i]!;
+    onStatus?.(
+      `تفريغ سحابي عالي الدقة ${i + 1}/${slices.length} (Whisper Large)…`,
+    );
+    onProgress?.(0.1 + (0.8 * i) / Math.max(1, slices.length));
+    const part = await transcribeViaServer(slice.file, languageCode, true);
+    if (!part) return null;
+    provider = part.provider;
+    if (part.text) texts.push(part.text);
+    const cues = (part.cues?.length
+      ? part.cues
+      : splitTextToCues(part.text, SERVER_CHUNK_SECONDS)
+    ).map((c) => ({
+      start: c.start + slice.startSec,
+      end: c.end + slice.startSec,
+      text: c.text,
+    }));
+    // تجاهل تداخل البداية مع المقطع السابق
+    const filtered =
+      i === 0
+        ? cues
+        : cues.filter((c) => c.start >= slice.startSec + SERVER_CHUNK_OVERLAP * 0.6);
+    allCues.push(...filtered);
+    await yieldUi();
+  }
+
+  const merged = mergeTimedCues(allCues);
+  const text = mergeChunkTexts(texts) || merged.map((c) => c.text).join(" ");
+  if (!text) return null;
+  return {
+    text,
+    provider: `${provider}-large · ${slices.length} جزء`,
+    cues: merged.length ? merged : splitTextToCues(text, durationSec),
+  };
+}
+
+function float32ToWavFile(
+  samples: Float32Array,
+  sampleRate: number,
+  name: string,
+): File {
+  const dataLength = samples.length * 2;
+  const buffer = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(buffer);
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + dataLength, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, dataLength, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]!));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    offset += 2;
+  }
+  return new File([buffer], name, { type: "audio/wav" });
 }
 
 type WhisperResult = {
@@ -571,7 +689,27 @@ export async function transcribeMediaFile(
     `استُخرج ${formatClock(durationSec)} من الصوت — بدء التفريغ الكامل…`,
   );
 
-  // مقاطع قصيرة: جرّب الخادم مع طوابع زمنية إن أمكن
+  // المسار الأدق: Whisper Large على الخادم (مقطّع) إن وُجد مفتاح Groq/OpenAI
+  if (quality === "accurate") {
+    onStatus?.("البحث عن محرك سحابي عالي الدقة (Whisper Large)…");
+    try {
+      const cloud = await transcribeViaServerChunked(
+        audio,
+        languageCode,
+        durationSec,
+        onStatus,
+        onProgress,
+      );
+      if (cloud) {
+        onProgress?.(1);
+        return { ...cloud, durationSec };
+      }
+    } catch {
+      // سقوط للمحلي
+    }
+  }
+
+  // مقاطع قصيرة: جرّب الخادم دفعة واحدة
   const serverMaxMin = quality === "accurate" ? 12 : 8;
   if (audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= serverMaxMin * 60) {
     onStatus?.("محاولة التفريغ عالي الدقة على الخادم…");
@@ -592,7 +730,7 @@ export async function transcribeMediaFile(
 
   onStatus?.(
     quality === "accurate"
-      ? "التفريغ الأدق داخل المتصفح (نموذج متوسط · أبطأ وأوضح إملاءً)…"
+      ? "لا يتوفر مفتاح سحابي — التفريغ المحلي الأدق المتاح (قد تقل دقة الإملاء)…"
       : "التفريغ الكامل داخل المتصفح (جودة عالية · حتى 30 دقيقة)…",
   );
   return transcribeLocally(

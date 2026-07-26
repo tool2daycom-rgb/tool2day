@@ -16,6 +16,7 @@ import {
   buildVtt,
   cuesToEditable,
   proofreadCues,
+  syncCuesToDuration,
   translateCues,
   type EditableCue,
   type SubtitleLang,
@@ -60,11 +61,21 @@ export function VideoSubtitlesWorkspace({
   const [provider, setProvider] = useState<string | null>(null);
   const [cues, setCues] = useState<EditableCue[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
+  const [highAccuracy, setHighAccuracy] = useState<boolean | null>(null);
 
   useEffect(() => {
     setDownloadRatingContext(slug);
     return () => setDownloadRatingContext(null);
   }, [slug]);
+
+  useEffect(() => {
+    fetch("/api/transcribe/capabilities")
+      .then((r) => r.json())
+      .then((d: { highAccuracy?: boolean }) =>
+        setHighAccuracy(Boolean(d.highAccuracy)),
+      )
+      .catch(() => setHighAccuracy(false));
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -113,7 +124,12 @@ export function VideoSubtitlesWorkspace({
         (msg) => setStatus(msg),
         "accurate",
       );
-      let next = cuesToEditable(result.cues || []);
+      let next = cuesToEditable(
+        syncCuesToDuration(
+          result.cues || [],
+          result.durationSec || videoRef.current?.duration || 0,
+        ),
+      );
       if (!next.length && result.text) {
         next = cuesToEditable([
           {
@@ -211,12 +227,36 @@ export function VideoSubtitlesWorkspace({
       <h2 className="text-lg font-bold text-[#111] sm:text-xl">{title}</h2>
       <p className="mt-2 text-sm leading-7 text-[#555]">{description}</p>
       <p className="mt-2 text-xs leading-6 text-[#777]">
-        يعتمد على نموذج Whisper الأدق (متوسط) مع تصحيح إملائي للأسماء والأخطاء
-        الشائعة، ثم ترجمة عربي↔إنجليزي. راجع المقاطع وعدّلها يدوياً قبل التنزيل —
-        اللهجات والضوضاء قد تبقى بحاجة لمراجعة. الحد الأقصى{" "}
-        {MAX_TRANSCRIBE_DURATION_SEC / 60} دقيقة. أول تشغيل قد يكون أبطأ لتحميل
-        النموذج.
+        للدقة القصوى في الإملاء والمزامنة يُستخدم Whisper Large عبر Groq ثم تصحيح
+        إملائي. بدون مفتاح سحابي يعمل التفريغ محلياً بدقة أقل. راجع المقاطع دائماً
+        قبل التنزيل. الحد الأقصى {MAX_TRANSCRIBE_DURATION_SEC / 60} دقيقة.
       </p>
+
+      {highAccuracy === false && (
+        <div className="mt-3 rounded-xl border border-[#f0d78c] bg-[#fff8e8] px-4 py-3 text-sm leading-7 text-[#6b4e00]">
+          <p className="font-bold">لتفعيل الدقة العالية (موصى به جداً)</p>
+          <p className="mt-1">
+            أنشئ مفتاحاً مجانياً من{" "}
+            <a
+              className="font-semibold underline"
+              href="https://console.groq.com/keys"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Groq Console
+            </a>{" "}
+            ثم أضفه في Vercel باسم <code className="rounded bg-white px-1">GROQ_API_KEY</code>{" "}
+            وأعد النشر. يستخدم النموذج{" "}
+            <strong>whisper-large-v3</strong> وهو أفضل بكثير للعربية من النموذج
+            المحلي.
+          </p>
+        </div>
+      )}
+      {highAccuracy === true && (
+        <div className="mt-3 rounded-xl border border-[#b7e4c7] bg-[#f0fdf4] px-4 py-2 text-sm text-[#166534]">
+          محرك سحابي عالي الدقة مفعّل (Whisper Large + تصحيح).
+        </div>
+      )}
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <label className="block text-sm font-semibold text-[#333]">

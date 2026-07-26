@@ -100,6 +100,13 @@ async function callWhisperCompatible(opts: {
   if (opts.language && opts.language !== "auto") {
     body.append("language", opts.language);
   }
+  // توجيه إملائي لأسماء شائعة يخطئ فيها Whisper (عربي/إنجليزي)
+  if (opts.language === "ar" || opts.language === "auto") {
+    body.append(
+      "prompt",
+      "ترجمة عربية صحيحة. أسماء: أوكرانيا، أوروبا، النمسا، ألمانيا، تركيا، بولندا. لهجة شامية: عم نعيش، عم ننتقل.",
+    );
+  }
 
   const res = await fetch(opts.endpoint, {
     method: "POST",
