@@ -256,6 +256,15 @@ export const tools: Tool[] = [
     accept: "video/*,audio/*",
     icon: Captions,
   },
+  {
+    slug: "kinetic-captions",
+    title: "ترجمة حركية ملونة للفيديوهات الطويلة",
+    description:
+      "مولّد Kinetic Typography وWord-level Timed Subtitles: ترجمة متحركة ملونة كلمة بكلمة بأسلوب ريلز وتيك توك، مع حرق داخل الفيديو — مخصص للفيديوهات الطويلة.",
+    category: "video",
+    accept: "video/*",
+    icon: Captions,
+  },
 
   // Calculators hub
   {

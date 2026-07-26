@@ -95,16 +95,19 @@ export async function transcribeViaServer(
   audio: File,
   languageCode: string,
   withTimestamps = false,
+  withWords = false,
 ): Promise<{
   text: string;
   provider: string;
   cues?: TranscriptCue[];
+  words?: TranscriptWord[];
 } | null> {
   if (audio.size > MAX_SERVER_AUDIO_BYTES) return null;
   const form = new FormData();
   form.append("file", audio, audio.name);
   form.append("language", languageCode);
-  if (withTimestamps) form.append("timestamps", "1");
+  if (withTimestamps || withWords) form.append("timestamps", "1");
+  if (withWords) form.append("word_timestamps", "1");
   const res = await fetch("/api/transcribe", { method: "POST", body: form });
   if (res.status === 501) return null;
   const data = (await res.json().catch(() => ({}))) as {
@@ -113,6 +116,7 @@ export async function transcribeViaServer(
     error?: string;
     message?: string;
     cues?: TranscriptCue[];
+    words?: TranscriptWord[];
   };
   if (!res.ok) {
     throw new Error(data.error || data.message || "فشل التفريغ على الخادم");
@@ -122,6 +126,7 @@ export async function transcribeViaServer(
     text: data.text,
     provider: data.provider || "server",
     cues: Array.isArray(data.cues) ? data.cues : undefined,
+    words: Array.isArray(data.words) ? data.words : undefined,
   };
 }
 
@@ -132,10 +137,12 @@ export async function transcribeViaServerChunked(
   durationSec: number,
   onStatus?: (msg: string) => void,
   onProgress?: (ratio: number) => void,
+  withWords = false,
 ): Promise<{
   text: string;
   provider: string;
   cues: TranscriptCue[];
+  words?: TranscriptWord[];
 } | null> {
   // فحص سريع: هل المفتاح متاح؟
   const caps = await fetch("/api/transcribe/capabilities")
@@ -168,6 +175,7 @@ export async function transcribeViaServerChunked(
   }
 
   const allCues: TranscriptCue[] = [];
+  const allWords: TranscriptWord[] = [];
   const texts: string[] = [];
   let provider = "server";
 
@@ -187,7 +195,12 @@ export async function transcribeViaServerChunked(
       `تفريغ سحابي عالي الدقة ${i + 1}/${slices.length} (Whisper Large)…`,
     );
     onProgress?.(0.1 + (0.8 * i) / Math.max(1, slices.length));
-    const part = await transcribeViaServer(slice.file, languageCode, true);
+    const part = await transcribeViaServer(
+      slice.file,
+      languageCode,
+      true,
+      withWords,
+    );
     if (!part) return null;
     provider = part.provider;
     if (part.text) texts.push(part.text);
@@ -204,6 +217,27 @@ export async function transcribeViaServerChunked(
       return mid >= keepFrom - 0.01 && mid < keepUntil + 0.01;
     });
     allCues.push(...filtered);
+
+    if (withWords) {
+      const words = (
+        part.words?.length
+          ? part.words
+          : wordsFromCues(filtered.map((c) => ({
+              start: c.start - slice.startSec,
+              end: c.end - slice.startSec,
+              text: c.text,
+            })))
+      ).map((w) => ({
+        start: w.start + slice.startSec,
+        end: w.end + slice.startSec,
+        word: w.word,
+      }));
+      const filteredWords = words.filter((w) => {
+        const mid = (w.start + w.end) / 2;
+        return mid >= keepFrom - 0.01 && mid < keepUntil + 0.01;
+      });
+      allWords.push(...filteredWords);
+    }
     await yieldUi();
   }
 
@@ -214,6 +248,11 @@ export async function transcribeViaServerChunked(
     text,
     provider: `${provider}-large · ${slices.length} جزء`,
     cues: merged.length ? merged : splitTextToCues(text, durationSec),
+    words: withWords
+      ? allWords.length
+        ? allWords
+        : wordsFromCues(merged.length ? merged : splitTextToCues(text, durationSec))
+      : undefined,
   };
 }
 
@@ -263,6 +302,12 @@ export type TranscriptCue = {
   start: number;
   end: number;
   text: string;
+};
+
+export type TranscriptWord = {
+  start: number;
+  end: number;
+  word: string;
 };
 
 type WhisperPipeline = (
@@ -668,6 +713,121 @@ function splitTextToCues(text: string, durationSec: number): TranscriptCue[] {
     t = end;
     return { start, end, text: s };
   });
+}
+
+/** توزيع كلمات المقطع على زمنه عندما لا يوفّر Whisper أزمنة كلمة */
+export function wordsFromCues(cues: TranscriptCue[]): TranscriptWord[] {
+  const out: TranscriptWord[] = [];
+  for (const cue of cues) {
+    const parts = cue.text.split(/\s+/).filter(Boolean);
+    if (!parts.length) continue;
+    const dur = Math.max(0.2, cue.end - cue.start);
+    const step = dur / parts.length;
+    parts.forEach((word, i) => {
+      const start = cue.start + i * step;
+      out.push({
+        word,
+        start,
+        end: Math.min(cue.end, start + Math.max(0.05, step)),
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * تفريغ للفيديوهات الطويلة مع أزمنة كلمة بكلمة (ترجمة حركية).
+ */
+export async function transcribeForKineticCaptions(
+  file: File,
+  languageCode: string,
+  onProgress?: (ratio: number) => void,
+  onStatus?: (msg: string) => void,
+): Promise<{
+  text: string;
+  provider: string;
+  durationSec: number;
+  cues: TranscriptCue[];
+  words: TranscriptWord[];
+}> {
+  if (file.size > MAX_VIDEO_TO_TEXT_MB * 1024 * 1024) {
+    throw new Error(`الحد الأقصى لحجم الملف ${MAX_VIDEO_TO_TEXT_MB}MB`);
+  }
+
+  onStatus?.("استخراج الصوت للفيديو الطويل…");
+  onProgress?.(0.04);
+  const { audio, durationSec } = await extractTranscriptionAudio(file, (r) =>
+    onProgress?.(0.04 + r * 0.08),
+  );
+
+  const fitsSingleUpload =
+    audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= 12 * 60;
+
+  if (fitsSingleUpload) {
+    onStatus?.("تفريغ سحابي مع توقيت كلمة بكلمة…");
+    try {
+      const server = await transcribeViaServer(audio, languageCode, true, true);
+      if (server?.text) {
+        const cues =
+          server.cues?.length
+            ? server.cues
+            : splitTextToCues(server.text, durationSec);
+        const words =
+          server.words?.length ? server.words : wordsFromCues(cues);
+        onProgress?.(1);
+        return {
+          text: server.text,
+          provider: `${server.provider}-kinetic`,
+          durationSec,
+          cues,
+          words,
+        };
+      }
+    } catch {
+      /* chunked */
+    }
+  }
+
+  onStatus?.("تفريغ مقطّع عالي الدقة مع توقيت الكلمات…");
+  const cloud = await transcribeViaServerChunked(
+    audio,
+    languageCode,
+    durationSec,
+    onStatus,
+    onProgress,
+    true,
+  );
+  if (cloud) {
+    onProgress?.(1);
+    return {
+      text: cloud.text,
+      provider: cloud.provider,
+      durationSec,
+      cues: cloud.cues,
+      words: cloud.words?.length ? cloud.words : wordsFromCues(cloud.cues),
+    };
+  }
+
+  // محلي: مقاطع ثم توزيع الكلمات
+  onStatus?.("تفريغ محلي ثم بناء توقيت الكلمات…");
+  const local = await transcribeMediaFile(
+    file,
+    languageCode,
+    onProgress,
+    onStatus,
+    "accurate",
+  );
+  const cues =
+    local.cues?.length
+      ? local.cues
+      : splitTextToCues(local.text, local.durationSec || durationSec);
+  return {
+    text: local.text,
+    provider: `${local.provider}-words-est`,
+    durationSec: local.durationSec || durationSec,
+    cues,
+    words: wordsFromCues(cues),
+  };
 }
 
 export async function transcribeMediaFile(

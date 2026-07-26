@@ -74,6 +74,7 @@ export type ActiveToolKind =
   | "code-formatter"
   | "video-content-ideas"
   | "video-subtitles"
+  | "kinetic-captions"
   | "archive-extract"
   | "archive-convert"
   | "ebook-convert"
@@ -129,6 +130,7 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "code-formatter": "code-formatter",
   "video-content-ideas": "video-content-ideas",
   "video-subtitles": "video-subtitles",
+  "kinetic-captions": "kinetic-captions",
   "audio-converter": "audio-convert",
   "trim-audio": "audio-trim",
   "change-audio-volume": "audio-volume",

@@ -14,6 +14,7 @@ import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
 import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import { VideoSubtitlesWorkspace } from "@/components/video-subtitles-workspace";
+import { KineticCaptionsWorkspace } from "@/components/kinetic-captions-workspace";
 import { PngLibraryWorkspace } from "@/components/png-library-workspace";
 import { DEFAULT_LOCALE, isLocaleCode } from "@/lib/i18n/locales";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
@@ -163,6 +164,7 @@ export default async function ToolPage({ params }: Props) {
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
   const isVideoSubtitles = kind === "video-subtitles";
+  const isKineticCaptions = kind === "kinetic-captions";
   const isPngLibrary = kind === "png-library";
   const isImageConverter = slug === "image-converter";
   const isWide =
@@ -172,6 +174,7 @@ export default async function ToolPage({ params }: Props) {
     kind === "ai-erase" ||
     isImageConverter ||
     isVideoSubtitles ||
+    isKineticCaptions ||
     isPngLibrary ||
     kind === "video-content-ideas";
 
@@ -282,6 +285,12 @@ export default async function ToolPage({ params }: Props) {
           />
         ) : isVideoSubtitles ? (
           <VideoSubtitlesWorkspace
+            slug={tool.slug}
+            arTitle={tool.title}
+            arDescription={tool.description}
+          />
+        ) : isKineticCaptions ? (
+          <KineticCaptionsWorkspace
             slug={tool.slug}
             arTitle={tool.title}
             arDescription={tool.description}
