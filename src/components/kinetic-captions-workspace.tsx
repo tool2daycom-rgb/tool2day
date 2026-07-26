@@ -52,8 +52,22 @@ function effectClass(effect: KineticEffect, active: boolean): string {
   if (effect === "pulse") return "animate-kinetic-pulse";
   if (effect === "pop") return "animate-kinetic-pop";
   if (effect === "bounce") return "animate-kinetic-bounce";
+  if (effect === "slide") return "animate-kinetic-slide";
+  if (effect === "zoom") return "animate-kinetic-zoom";
   if (effect === "fade") return "opacity-100";
   return "";
+}
+
+function visibleWordText(
+  word: string,
+  effect: KineticEffect,
+  active: boolean,
+  progress: number,
+): string {
+  if (!active || effect !== "typewriter") return word;
+  const chars = Array.from(word);
+  const n = Math.max(1, Math.ceil(progress * chars.length));
+  return chars.slice(0, n).join("") || "\u00A0";
 }
 
 export function KineticCaptionsWorkspace({
@@ -71,10 +85,10 @@ export function KineticCaptionsWorkspace({
   const [language, setLanguage] = useState("ar");
   const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
-  const [fontSize, setFontSize] = useState(36);
+  const [fontSize, setFontSize] = useState(32);
   const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[0]!.stack);
   const [position, setPosition] = useState<KineticPosition>("bottom");
-  const [effect, setEffect] = useState<KineticEffect>("pulse");
+  const [effect, setEffect] = useState<KineticEffect>("slide");
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -251,20 +265,36 @@ export function KineticCaptionsWorkspace({
       <style>{`
         @keyframes kinetic-pulse {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.18); }
+          50% { transform: scale(1.14); }
         }
         @keyframes kinetic-pop {
-          0% { transform: scale(0.7); opacity: 0.5; }
-          100% { transform: scale(1.2); opacity: 1; }
+          0% { transform: scale(0.75); opacity: 0.5; }
+          100% { transform: scale(1.18); opacity: 1; }
         }
         @keyframes kinetic-bounce {
           0%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-10px); }
-          70% { transform: translateY(-3px); }
+          40% { transform: translateY(-8px); }
+        }
+        @keyframes kinetic-slide {
+          0% { transform: translateX(1.2em); opacity: 0.2; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes kinetic-zoom {
+          0% { transform: scale(0.7); }
+          100% { transform: scale(1.2); }
         }
         .animate-kinetic-pulse { display: inline-block; animation: kinetic-pulse 0.55s ease-in-out infinite; }
         .animate-kinetic-pop { display: inline-block; animation: kinetic-pop 0.28s ease-out; }
         .animate-kinetic-bounce { display: inline-block; animation: kinetic-bounce 0.45s ease; }
+        .animate-kinetic-slide { display: inline-block; animation: kinetic-slide 0.35s ease-out; }
+        .animate-kinetic-zoom { display: inline-block; animation: kinetic-zoom 0.35s ease-out; }
+        [dir="rtl"] .animate-kinetic-slide {
+          animation-name: kinetic-slide-rtl;
+        }
+        @keyframes kinetic-slide-rtl {
+          0% { transform: translateX(-1.2em); opacity: 0.2; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
       `}</style>
 
       <h2 className="text-lg font-bold text-[#111] sm:text-xl">{title}</h2>
@@ -462,17 +492,18 @@ export function KineticCaptionsWorkspace({
             />
             {active && (
               <div
-                className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center px-3 ${kineticPreviewPositionClass(position)}`}
+                className={`pointer-events-none absolute inset-x-0 z-10 flex justify-center px-[8%] ${kineticPreviewPositionClass(position)}`}
                 dir={rtl ? "rtl" : "ltr"}
               >
                 <p
-                  className="max-w-[94%] text-center font-bold leading-snug"
+                  className="max-w-full overflow-hidden text-center font-extrabold leading-snug"
                   style={{
                     fontFamily: resolvedFont,
                     fontWeight: 800,
-                    fontSize: `clamp(1rem, ${Math.round(fontSize * 0.55)}px, ${fontSize}px)`,
+                    fontSize: `clamp(0.95rem, ${Math.round(fontSize * 0.48)}px, ${Math.min(fontSize, 40)}px)`,
                     textShadow:
-                      "0 0 3px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
+                      "0 0 2px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
+                    wordBreak: "break-word",
                   }}
                 >
                   {active.line.words.map((w, i) => {
@@ -483,10 +514,15 @@ export function KineticCaptionsWorkspace({
                         className={effectClass(effect, isActive)}
                         style={{
                           color: isActive ? highlight : baseColor,
-                          marginInline: "0.15em",
+                          marginInline: "0.12em",
                         }}
                       >
-                        {w.word}
+                        {visibleWordText(
+                          w.word,
+                          effect,
+                          isActive,
+                          active.progress,
+                        )}
                       </span>
                     );
                   })}

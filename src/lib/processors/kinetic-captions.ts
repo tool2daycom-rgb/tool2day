@@ -3,7 +3,8 @@ import type { TranscriptWord } from "@/lib/processors/transcribe";
 /** مدة مدعومة: من 5 ثوانٍ حتى 3 دقائق */
 export const KINETIC_MIN_DURATION_SEC = 5;
 export const KINETIC_MAX_DURATION_SEC = 3 * 60;
-export const KINETIC_WORDS_PER_LINE = 5;
+/** أسطر أقصر حتى لا يخرج النص من الفيديو العمودي */
+export const KINETIC_WORDS_PER_LINE = 3;
 
 export type KineticLine = {
   start: number;
@@ -12,7 +13,15 @@ export type KineticLine = {
 };
 
 export type KineticPosition = "top" | "center" | "bottom";
-export type KineticEffect = "none" | "fade" | "pulse" | "pop" | "bounce";
+export type KineticEffect =
+  | "none"
+  | "fade"
+  | "pulse"
+  | "pop"
+  | "bounce"
+  | "slide"
+  | "typewriter"
+  | "zoom";
 
 export type KineticStyle = {
   baseColor: string;
@@ -36,21 +45,22 @@ export const KINETIC_EFFECTS: { id: KineticEffect; label: string }[] = [
   { id: "pulse", label: "نبض" },
   { id: "pop", label: "ظهور مفاجئ" },
   { id: "bounce", label: "ارتداد" },
+  { id: "slide", label: "انزلاق" },
+  { id: "typewriter", label: "آلة كاتبة" },
+  { id: "zoom", label: "تكبير / تصغير" },
 ];
 
-export const KINETIC_FONTS: { id: string; label: string; stack: string; google?: string }[] = [
+export const KINETIC_FONTS: {
+  id: string;
+  label: string;
+  stack: string;
+  google?: string;
+}[] = [
   {
-    id: "cairo-site",
-    label: "Cairo (مثل الموقع)",
-    // يُستبدل وقت التشغيل بخط الموقع الفعلي من next/font
-    stack: "__SITE_CAIRO__",
-    google: "Cairo:wght@700;800",
-  },
-  {
-    id: "cairo",
-    label: "Cairo",
-    stack: '"Cairo", sans-serif',
-    google: "Cairo:wght@700;800",
+    id: "almarai",
+    label: "Almarai (المرسى)",
+    stack: '"Almarai", sans-serif',
+    google: "Almarai:wght@700;800",
   },
   {
     id: "tajawal",
@@ -59,50 +69,45 @@ export const KINETIC_FONTS: { id: string; label: string; stack: string; google?:
     google: "Tajawal:wght@700;800",
   },
   {
+    id: "lemonada",
+    label: "Lemonada",
+    stack: '"Lemonada", sans-serif',
+    google: "Lemonada:wght@700;800",
+  },
+  {
+    id: "changa",
+    label: "Changa",
+    stack: '"Changa", sans-serif',
+    google: "Changa:wght@700;800",
+  },
+  {
+    id: "cairo",
+    label: "Cairo",
+    stack: '"Cairo", sans-serif',
+    google: "Cairo:wght@700;800",
+  },
+  {
+    id: "cairo-site",
+    label: "Cairo (موقع Tool2Day)",
+    stack: "__SITE_CAIRO__",
+    google: "Cairo:wght@700;800",
+  },
+  {
     id: "noto",
     label: "Noto Sans Arabic",
     stack: '"Noto Sans Arabic", sans-serif',
     google: "Noto+Sans+Arabic:wght@700;800",
   },
-  {
-    id: "amiri",
-    label: "Amiri",
-    stack: '"Amiri", serif',
-    google: "Amiri:wght@700",
-  },
 ];
 
-/** خط Cairo المستخدم في صفحات Tool2Day */
 export function getSiteCairoFamily(): string {
   if (typeof document === "undefined") return '"Cairo", sans-serif';
-  const fromBody = getComputedStyle(document.body).fontFamily;
-  return fromBody?.trim() || '"Cairo", sans-serif';
+  return getComputedStyle(document.body).fontFamily?.trim() || '"Cairo", sans-serif';
 }
 
 export function resolveKineticFontStack(stack: string): string {
   if (stack === "__SITE_CAIRO__") return getSiteCairoFamily();
   return stack;
-}
-
-/** حدود سوداء حول الحرف بدون strokeText (يحافظ على اتصال الحروف العربية) */
-function fillTextWithOutline(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  fill: string,
-  fontSize: number,
-) {
-  const r = Math.max(3, Math.round(fontSize * 0.1));
-  ctx.fillStyle = "#000000";
-  for (let ox = -r; ox <= r; ox += 1) {
-    for (let oy = -r; oy <= r; oy += 1) {
-      if (ox * ox + oy * oy > r * r) continue;
-      ctx.fillText(text, x + ox, y + oy);
-    }
-  }
-  ctx.fillStyle = fill;
-  ctx.fillText(text, x, y);
 }
 
 export async function ensureKineticFont(stack: string): Promise<void> {
@@ -119,21 +124,19 @@ export async function ensureKineticFont(stack: string): Promise<void> {
     }
   }
   if (typeof document === "undefined" || !document.fonts) return;
-  const primary = resolved.split(",")[0]!.trim().replace(/"/g, "");
+  const name = resolved.split(",")[0]!.trim().replace(/"/g, "");
   try {
     await document.fonts.ready;
     await Promise.all([
-      document.fonts.load(`700 48px ${resolved}`),
-      document.fonts.load(`800 48px ${resolved}`),
-      document.fonts.load(`800 72px "${primary}"`),
-      document.fonts.load(`700 72px "Cairo"`),
-      document.fonts.load(`800 72px "Cairo"`),
+      document.fonts.load(`700 48px "${name}"`),
+      document.fonts.load(`800 48px "${name}"`),
+      document.fonts.load(`800 64px ${resolved}`),
     ]);
     let tries = 0;
     while (
-      !document.fonts.check(`800 48px "Cairo"`) &&
-      !document.fonts.check(`800 48px ${resolved}`) &&
-      tries < 25
+      !document.fonts.check(`800 48px "${name}"`) &&
+      !document.fonts.check(`700 48px "${name}"`) &&
+      tries < 30
     ) {
       await new Promise((r) => setTimeout(r, 80));
       tries += 1;
@@ -147,22 +150,18 @@ export function kineticOverlayY(
   position: KineticPosition,
   videoH: number,
 ): string {
-  const pad = Math.max(28, Math.round(videoH * 0.1));
+  const pad = Math.max(36, Math.round(videoH * 0.08));
   if (position === "top") return String(pad);
   if (position === "center") return "(H-h)/2";
   return `H-h-${pad}`;
 }
 
 export function kineticPreviewPositionClass(position: KineticPosition): string {
-  if (position === "top") return "top-[10%]";
+  if (position === "top") return "top-[8%]";
   if (position === "center") return "top-1/2 -translate-y-1/2";
-  return "bottom-[12%]";
+  return "bottom-[10%]";
 }
 
-
-/**
- * يجمع الكلمات في أسطر قصيرة بأسلوب ريلز/تيك توك.
- */
 export function groupWordsIntoLines(
   words: TranscriptWord[],
   wordsPerLine = KINETIC_WORDS_PER_LINE,
@@ -192,39 +191,40 @@ export function groupWordsIntoLines(
 export function activeKineticAt(
   lines: KineticLine[],
   time: number,
-): { line: KineticLine; activeIndex: number } | null {
+): { line: KineticLine; activeIndex: number; progress: number } | null {
   for (const line of lines) {
     if (time >= line.start - 0.05 && time <= line.end + 0.08) {
       let activeIndex = 0;
       for (let i = 0; i < line.words.length; i++) {
         if (time >= line.words[i]!.start - 0.02) activeIndex = i;
       }
-      return { line, activeIndex };
+      const w = line.words[activeIndex]!;
+      const next = line.words[activeIndex + 1];
+      const end = next ? next.start : line.end;
+      const dur = Math.max(0.05, end - w.start);
+      const progress = Math.min(1, Math.max(0, (time - w.start) / dur));
+      return { line, activeIndex, progress };
     }
   }
   return null;
 }
 
-function wrapKineticWords(
-  ctx: CanvasRenderingContext2D,
-  words: string[],
-  maxWidth: number,
-): string[][] {
-  const rows: string[][] = [[]];
-  for (const w of words) {
-    const trial = [...rows[rows.length - 1]!, w];
-    const width = ctx.measureText(trial.join(" ")).width;
-    if (width > maxWidth && rows[rows.length - 1]!.length) {
-      rows.push([w]);
-    } else {
-      rows[rows.length - 1] = trial;
-    }
-  }
-  return rows.filter((r) => r.length);
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
+type RenderOpts = {
+  charCount?: number;
+  slideProgress?: number;
+  zoomScale?: number;
+};
+
 /**
- * يرسم سطراً مع تمييز كلمة واحدة بلون مميز (Kinetic Typography).
+ * يرسم عبر HTML + html2canvas حتى تبقى الحروف العربية متصلة بشكل صحيح.
  */
 export async function renderKineticPng(
   line: KineticLine,
@@ -232,98 +232,128 @@ export async function renderKineticPng(
   videoW: number,
   videoH: number,
   style: KineticStyle,
+  opts: RenderOpts = {},
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
-  const resolvedFamily = resolveKineticFontStack(style.fontFamily);
-  // حجم مناسب للفيديو العمودي (ارتفاع أكبر) بدون مبالغة تقطع الحروف
-  const scale = Math.min(1.35, Math.max(0.85, videoH / 1080));
-  const fontSize = Math.max(26, Math.round(style.fontSizePx * scale));
-  const padX = Math.round(fontSize * 0.7);
-  const padY = Math.round(fontSize * 0.65);
-  const lineH = Math.round(fontSize * 1.45);
-  const maxTextW = Math.min(videoW * 0.92, videoW - 32);
+  const family = resolveKineticFontStack(style.fontFamily);
+  const maxW = Math.max(120, Math.floor(videoW * 0.84));
+  const maxH = Math.max(80, Math.floor(videoH * 0.32));
 
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas غير متاح");
-
-  // وزن 800 مثل عناوين الموقع (Cairo ExtraBold)
-  const fontCss = `800 ${fontSize}px ${resolvedFamily}`;
-  ctx.font = fontCss;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.direction = style.rtl ? "rtl" : "ltr";
-
-  const wordTexts = line.words.map((w) => w.word);
-  const rows = wrapKineticWords(ctx, wordTexts, maxTextW - padX * 2);
-  const measured = Math.max(
-    ...rows.map((r) => ctx.measureText(r.join(" ")).width),
-    40,
+  let fontSize = Math.max(
+    22,
+    Math.min(style.fontSizePx, Math.round(videoW * 0.065)),
   );
-  const boxW = Math.min(
-    videoW,
-    Math.ceil(measured + padX * 2 + fontSize * 0.6),
-  );
-  const boxH = rows.length * lineH + padY * 2 + Math.round(fontSize * 0.4);
-  canvas.width = boxW;
-  canvas.height = boxH;
 
-  ctx.clearRect(0, 0, boxW, boxH);
-  ctx.font = fontCss;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.direction = style.rtl ? "rtl" : "ltr";
+  const host = document.createElement("div");
+  host.setAttribute("dir", style.rtl ? "rtl" : "ltr");
+  host.style.cssText = [
+    "position:fixed",
+    "left:-12000px",
+    "top:0",
+    `width:${maxW}px`,
+    "padding:12px 16px",
+    "box-sizing:border-box",
+    "background:transparent",
+    "pointer-events:none",
+    "z-index:-1",
+  ].join(";");
 
-  let flat = 0;
-  rows.forEach((row, rowIdx) => {
-    const yBase = padY + lineH / 2 + rowIdx * lineH;
-    const full = row.join(" ");
-    const totalW = ctx.measureText(full).width;
-    let x = boxW / 2 - totalW / 2;
-    if (style.rtl) {
-      x = boxW / 2 + totalW / 2;
-    }
-    for (let i = 0; i < row.length; i++) {
-      const word = row[i]!;
-      const wWidth = ctx.measureText(word).width;
-      const space = i < row.length - 1 ? ctx.measureText(" ").width : 0;
-      const centerX = style.rtl ? x - wWidth / 2 : x + wWidth / 2;
-      const isActive = flat === activeIndex;
-      const color = isActive ? style.highlightColor : style.baseColor;
-
-      let y = yBase;
-      let scaleWord = 1;
-      let alpha = 1;
-      if (style.effect === "fade") {
-        alpha = isActive ? 1 : 0.45;
-      } else if (style.effect === "pulse" && isActive) {
-        scaleWord = 1.14;
-      } else if (style.effect === "pop" && isActive) {
-        scaleWord = 1.22;
-      } else if (style.effect === "bounce" && isActive) {
-        scaleWord = 1.1;
-        y = yBase - fontSize * 0.1;
+  const paint = (size: number) => {
+    const parts: string[] = [];
+    line.words.forEach((w, i) => {
+      const isActive = i === activeIndex;
+      let text = w.word;
+      if (isActive && typeof opts.charCount === "number") {
+        text = Array.from(w.word).slice(0, opts.charCount).join("");
+        if (!text) text = "\u00A0";
       }
+      const color = isActive ? style.highlightColor : style.baseColor;
+      let opacity = "1";
+      let transform = "none";
+      if (style.effect === "fade" && !isActive) opacity = "0.45";
+      if (isActive && style.effect === "pulse") transform = "scale(1.12)";
+      if (isActive && style.effect === "pop") transform = "scale(1.2)";
+      if (isActive && style.effect === "bounce") transform = "translateY(-6px) scale(1.08)";
+      if (isActive && style.effect === "zoom") {
+        const z = opts.zoomScale ?? 1.18;
+        transform = `scale(${z})`;
+      }
+      if (isActive && style.effect === "slide") {
+        const p = opts.slideProgress ?? 1;
+        const from = style.rtl ? 28 : -28;
+        const x = from * (1 - p);
+        transform = `translateX(${x}px)`;
+      }
+      parts.push(
+        `<span style="display:inline-block;color:${color};opacity:${opacity};transform:${transform};transform-origin:center;margin:0 0.12em;vertical-align:middle">${escapeHtml(text)}</span>`,
+      );
+    });
 
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(centerX, y);
-      ctx.scale(scaleWord, scaleWord);
-      fillTextWithOutline(ctx, word, 0, 0, color, fontSize);
-      ctx.restore();
+    host.innerHTML = `<div style="
+      font-family:${family};
+      font-weight:800;
+      font-size:${size}px;
+      line-height:1.35;
+      text-align:center;
+      color:#fff;
+      text-shadow:
+        0 0 2px #000,
+        1px 0 #000,-1px 0 #000,0 1px #000,0 -1px #000,
+        2px 0 #000,-2px 0 #000,0 2px #000,0 -2px #000,
+        1px 1px #000,-1px 1px #000,1px -1px #000,-1px -1px #000,
+        2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000;
+      word-spacing:0.02em;
+      overflow-wrap:anywhere;
+      max-width:100%;
+    ">${parts.join("")}</div>`;
+  };
 
-      if (style.rtl) x -= wWidth + space;
-      else x += wWidth + space;
-      flat += 1;
+  document.body.appendChild(host);
+  try {
+    paint(fontSize);
+    // صغّر الخط حتى يبقى داخل عرض الفيديو
+    let guard = 0;
+    while (
+      guard < 24 &&
+      fontSize > 18 &&
+      (host.scrollWidth > maxW + 2 || host.scrollHeight > maxH)
+    ) {
+      fontSize -= 2;
+      paint(fontSize);
+      guard += 1;
     }
-  });
 
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("فشل رسم الترجمة الحركية"))),
-      "image/png",
-    );
-  });
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(host, {
+      backgroundColor: null,
+      scale: 2,
+      logging: false,
+      useCORS: true,
+      width: Math.min(maxW, host.scrollWidth + 8),
+      height: Math.min(maxH, host.scrollHeight + 8),
+      windowWidth: maxW,
+      windowHeight: maxH,
+    });
+
+    // قصّ لأي فائض
+    const out = document.createElement("canvas");
+    const tw = Math.min(canvas.width, maxW * 2);
+    const th = Math.min(canvas.height, maxH * 2);
+    out.width = tw;
+    out.height = th;
+    const ctx = out.getContext("2d");
+    if (!ctx) throw new Error("Canvas غير متاح");
+    ctx.drawImage(canvas, 0, 0, tw, th, 0, 0, tw, th);
+
+    return await new Promise((resolve, reject) => {
+      out.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("فشل رسم الترجمة الحركية"))),
+        "image/png",
+      );
+    });
+  } finally {
+    host.remove();
+  }
 }
 
 type BurnFrame = {
@@ -331,19 +361,78 @@ type BurnFrame = {
   end: number;
   line: KineticLine;
   activeIndex: number;
+  charCount?: number;
+  slideProgress?: number;
+  zoomScale?: number;
 };
 
-function expandLinesToFrames(lines: KineticLine[]): BurnFrame[] {
+function expandLinesToFrames(
+  lines: KineticLine[],
+  effect: KineticEffect,
+): BurnFrame[] {
   const frames: BurnFrame[] = [];
   for (const line of lines) {
     line.words.forEach((w, i) => {
       const next = line.words[i + 1];
-      frames.push({
-        line,
-        activeIndex: i,
-        start: w.start,
-        end: next ? next.start : line.end,
-      });
+      const start = w.start;
+      const end = next ? next.start : line.end;
+      const dur = Math.max(0.05, end - start);
+
+      if (effect === "typewriter") {
+        const chars = Array.from(w.word);
+        const n = Math.max(1, chars.length);
+        for (let c = 1; c <= n; c++) {
+          const t0 = start + ((c - 1) / n) * dur;
+          const t1 = start + (c / n) * dur;
+          frames.push({
+            line,
+            activeIndex: i,
+            start: t0,
+            end: Math.max(t0 + 0.04, t1),
+            charCount: c,
+          });
+        }
+        return;
+      }
+
+      if (effect === "slide") {
+        const steps = 4;
+        for (let s = 1; s <= steps; s++) {
+          const t0 = start + ((s - 1) / steps) * Math.min(0.28, dur * 0.45);
+          const t1 =
+            s === steps
+              ? end
+              : start + (s / steps) * Math.min(0.28, dur * 0.45);
+          frames.push({
+            line,
+            activeIndex: i,
+            start: t0,
+            end: Math.max(t0 + 0.04, t1),
+            slideProgress: s / steps,
+          });
+        }
+        return;
+      }
+
+      if (effect === "zoom") {
+        frames.push({
+          line,
+          activeIndex: i,
+          start,
+          end: start + dur * 0.35,
+          zoomScale: 1.28,
+        });
+        frames.push({
+          line,
+          activeIndex: i,
+          start: start + dur * 0.35,
+          end,
+          zoomScale: 1.08,
+        });
+        return;
+      }
+
+      frames.push({ line, activeIndex: i, start, end });
     });
   }
   return frames.filter((f) => f.end > f.start + 0.03);
@@ -370,10 +459,10 @@ async function probeVideoSize(
   }
 }
 
-const BURN_BATCH = 12;
+const BURN_BATCH = 10;
 
 /**
- * يحرق الترجمة الحركية كلمة بكلمة داخل الفيديو الطويل.
+ * يحرق الترجمة الحركية كلمة بكلمة داخل الفيديو.
  */
 export async function downloadKineticBurnedVideo(
   video: File,
@@ -382,7 +471,7 @@ export async function downloadKineticBurnedVideo(
   onProgress?: (ratio: number) => void,
   onStatus?: (msg: string) => void,
 ) {
-  const frames = expandLinesToFrames(lines);
+  const frames = expandLinesToFrames(lines, style.effect);
   if (!frames.length) throw new Error("لا توجد كلمات لحرق الترجمة");
 
   const { fetchFile } = await import("@ffmpeg/util");
@@ -415,7 +504,11 @@ export async function downloadKineticBurnedVideo(
     const pngNames: string[] = [];
     for (let i = 0; i < slice.length; i++) {
       const f = slice[i]!;
-      const png = await renderKineticPng(f.line, f.activeIndex, w, h, style);
+      const png = await renderKineticPng(f.line, f.activeIndex, w, h, style, {
+        charCount: f.charCount,
+        slideProgress: f.slideProgress,
+        zoomScale: f.zoomScale,
+      });
       const name = `k${b}_${i}.png`;
       await ffmpeg.writeFile(name, await fetchFile(png));
       pngNames.push(name);
