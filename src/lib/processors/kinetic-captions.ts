@@ -1,8 +1,8 @@
 import type { TranscriptWord } from "@/lib/processors/transcribe";
 
-/** فيديوهات طويلة فقط: من دقيقتين حتى 30 دقيقة */
-export const KINETIC_MIN_DURATION_SEC = 120;
-export const KINETIC_MAX_DURATION_SEC = 30 * 60;
+/** مدة مدعومة: من 5 ثوانٍ حتى 3 دقائق */
+export const KINETIC_MIN_DURATION_SEC = 5;
+export const KINETIC_MAX_DURATION_SEC = 3 * 60;
 export const KINETIC_WORDS_PER_LINE = 5;
 
 export type KineticLine = {

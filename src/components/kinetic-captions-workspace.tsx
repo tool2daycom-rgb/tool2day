@@ -105,12 +105,14 @@ export function KineticCaptionsWorkspace({
     const dur = el?.duration && Number.isFinite(el.duration) ? el.duration : 0;
     if (dur > 0 && dur < KINETIC_MIN_DURATION_SEC) {
       setError(
-        `هذه الأداة للفيديوهات الطويلة فقط (من ${Math.round(KINETIC_MIN_DURATION_SEC / 60)} دقائق حتى 30 دقيقة). للفيديوهات القصيرة استخدم «توليد ترجمة الفيديو».`,
+        `المدة قصيرة جداً — الحد الأدنى ${KINETIC_MIN_DURATION_SEC} ثوانٍ.`,
       );
       return;
     }
     if (dur > KINETIC_MAX_DURATION_SEC) {
-      setError("الحد الأقصى 30 دقيقة — قصّ الفيديو أولاً");
+      setError(
+        `الحد الأقصى ${KINETIC_MAX_DURATION_SEC / 60} دقائق — قصّ الفيديو أولاً`,
+      );
       return;
     }
 
@@ -128,7 +130,12 @@ export function KineticCaptionsWorkspace({
       );
       if (result.durationSec < KINETIC_MIN_DURATION_SEC) {
         throw new Error(
-          `المدة ${Math.round(result.durationSec)} ثانية — المطلوب فيديو طويل (≥ ${KINETIC_MIN_DURATION_SEC} ثانية)`,
+          `المدة ${Math.round(result.durationSec)} ثانية — الحد الأدنى ${KINETIC_MIN_DURATION_SEC} ثوانٍ`,
+        );
+      }
+      if (result.durationSec > KINETIC_MAX_DURATION_SEC) {
+        throw new Error(
+          `المدة ${Math.round(result.durationSec)} ثانية — الحد الأقصى ${KINETIC_MAX_DURATION_SEC / 60} دقائق`,
         );
       }
       const grouped = groupWordsIntoLines(result.words);
@@ -192,9 +199,10 @@ export function KineticCaptionsWorkspace({
       <h2 className="text-lg font-bold text-[#111] sm:text-xl">{title}</h2>
       <p className="mt-2 text-sm leading-7 text-[#555]">{description}</p>
       <p className="mt-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-2 text-xs leading-6 text-[#92400e]">
-        للفيديوهات الطويلة فقط ({Math.round(KINETIC_MIN_DURATION_SEC / 60)}–
-        30 دقيقة): ترجمة حركية ملونة كلمة بكلمة (Kinetic Typography / Word-level
-        Timed Subtitles) بأسلوب ريلز وتيك توك، مع حرق داخل الفيديو.
+        المدة المدعومة: من {KINETIC_MIN_DURATION_SEC} ثوانٍ حتى{" "}
+        {KINETIC_MAX_DURATION_SEC / 60} دقائق — ترجمة حركية ملونة كلمة بكلمة
+        (Kinetic Typography / Word-level Timed Subtitles) بأسلوب ريلز وتيك توك،
+        مع حرق داخل الفيديو.
       </p>
 
       <div
@@ -211,7 +219,8 @@ export function KineticCaptionsWorkspace({
         </p>
         <p className="mt-1 text-xs text-[#777]">
           MP4 · MOV · WEBM · حتى {MAX_VIDEO_TO_TEXT_MB}MB · من{" "}
-          {Math.round(KINETIC_MIN_DURATION_SEC / 60)} دقائق
+          {KINETIC_MIN_DURATION_SEC} ثوانٍ حتى {KINETIC_MAX_DURATION_SEC / 60}{" "}
+          دقائق
         </p>
         <input
           ref={inputRef}

@@ -258,9 +258,9 @@ export const tools: Tool[] = [
   },
   {
     slug: "kinetic-captions",
-    title: "ترجمة حركية ملونة للفيديوهات الطويلة",
+    title: "ترجمة حركية ملونة للفيديو",
     description:
-      "مولّد Kinetic Typography وWord-level Timed Subtitles: ترجمة متحركة ملونة كلمة بكلمة بأسلوب ريلز وتيك توك، مع حرق داخل الفيديو — مخصص للفيديوهات الطويلة.",
+      "مولّد Kinetic Typography وWord-level Timed Subtitles: ترجمة متحركة ملونة كلمة بكلمة بأسلوب ريلز وتيك توك، مع حرق داخل الفيديو — من 5 ثوانٍ حتى 3 دقائق.",
     category: "video",
     accept: "video/*",
     icon: Captions,
