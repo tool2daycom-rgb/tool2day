@@ -22,6 +22,7 @@ import {
   ensureKineticFont,
   groupWordsIntoLines,
   kineticPreviewPositionClass,
+  resolveKineticFontStack,
   type KineticEffect,
   type KineticLine,
   type KineticPosition,
@@ -86,6 +87,7 @@ export function KineticCaptionsWorkspace({
   const [duration, setDuration] = useState(0);
 
   const rtl = language === "ar" || language === "fa" || language === "he";
+  const resolvedFont = resolveKineticFontStack(fontFamily);
 
   const active = useMemo(
     () => activeKineticAt(lines, currentTime),
@@ -184,21 +186,17 @@ export function KineticCaptionsWorkspace({
   }
 
   function updateWord(index: number, nextText: string) {
-    setWords((prev) => {
-      const next = prev.map((w, i) =>
-        i === index ? { ...w, word: nextText } : w,
-      );
-      setLines(groupWordsIntoLines(next.filter((w) => w.word.trim())));
-      return next;
-    });
+    const next = words.map((w, i) =>
+      i === index ? { ...w, word: nextText } : w,
+    );
+    setWords(next);
+    setLines(groupWordsIntoLines(next.filter((w) => w.word.trim())));
   }
 
   function removeWord(index: number) {
-    setWords((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      setLines(groupWordsIntoLines(next));
-      return next;
-    });
+    const next = words.filter((_, i) => i !== index);
+    setWords(next);
+    setLines(groupWordsIntoLines(next));
   }
 
   async function downloadJson() {
@@ -362,10 +360,19 @@ export function KineticCaptionsWorkspace({
             value={fontFamily}
             onChange={(e) => setFontFamily(e.target.value)}
             disabled={busy}
-            style={{ fontFamily }}
+            style={{ fontFamily: resolveKineticFontStack(fontFamily) }}
           >
             {KINETIC_FONTS.map((f) => (
-              <option key={f.id} value={f.stack} style={{ fontFamily: f.stack }}>
+              <option
+                key={f.id}
+                value={f.stack}
+                style={{
+                  fontFamily:
+                    f.stack === "__SITE_CAIRO__"
+                      ? "var(--font-cairo), Cairo, sans-serif"
+                      : f.stack,
+                }}
+              >
                 {f.label}
               </option>
             ))}
@@ -461,7 +468,8 @@ export function KineticCaptionsWorkspace({
                 <p
                   className="max-w-[94%] text-center font-bold leading-snug"
                   style={{
-                    fontFamily,
+                    fontFamily: resolvedFont,
+                    fontWeight: 800,
                     fontSize: `clamp(1rem, ${Math.round(fontSize * 0.55)}px, ${fontSize}px)`,
                     textShadow:
                       "0 0 3px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",

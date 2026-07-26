@@ -40,40 +40,49 @@ export const KINETIC_EFFECTS: { id: KineticEffect; label: string }[] = [
 
 export const KINETIC_FONTS: { id: string; label: string; stack: string; google?: string }[] = [
   {
+    id: "cairo-site",
+    label: "Cairo (مثل الموقع)",
+    // يُستبدل وقت التشغيل بخط الموقع الفعلي من next/font
+    stack: "__SITE_CAIRO__",
+    google: "Cairo:wght@700;800",
+  },
+  {
     id: "cairo",
     label: "Cairo",
-    stack: '"Cairo", Tahoma, sans-serif',
+    stack: '"Cairo", sans-serif',
     google: "Cairo:wght@700;800",
   },
   {
     id: "tajawal",
     label: "Tajawal",
-    stack: '"Tajawal", Tahoma, sans-serif',
+    stack: '"Tajawal", sans-serif',
     google: "Tajawal:wght@700;800",
   },
   {
     id: "noto",
     label: "Noto Sans Arabic",
-    stack: '"Noto Sans Arabic", Tahoma, sans-serif',
+    stack: '"Noto Sans Arabic", sans-serif',
     google: "Noto+Sans+Arabic:wght@700;800",
   },
   {
     id: "amiri",
     label: "Amiri",
-    stack: '"Amiri", "Times New Roman", serif',
+    stack: '"Amiri", serif',
     google: "Amiri:wght@700",
   },
-  {
-    id: "tahoma",
-    label: "Tahoma",
-    stack: 'Tahoma, "Segoe UI", sans-serif',
-  },
-  {
-    id: "arial",
-    label: "Arial",
-    stack: "Arial, Helvetica, sans-serif",
-  },
 ];
+
+/** خط Cairo المستخدم في صفحات Tool2Day */
+export function getSiteCairoFamily(): string {
+  if (typeof document === "undefined") return '"Cairo", sans-serif';
+  const fromBody = getComputedStyle(document.body).fontFamily;
+  return fromBody?.trim() || '"Cairo", sans-serif';
+}
+
+export function resolveKineticFontStack(stack: string): string {
+  if (stack === "__SITE_CAIRO__") return getSiteCairoFamily();
+  return stack;
+}
 
 /** حدود سوداء حول الحرف بدون strokeText (يحافظ على اتصال الحروف العربية) */
 function fillTextWithOutline(
@@ -97,6 +106,7 @@ function fillTextWithOutline(
 }
 
 export async function ensureKineticFont(stack: string): Promise<void> {
+  const resolved = resolveKineticFontStack(stack);
   const font = KINETIC_FONTS.find((f) => f.stack === stack);
   if (font?.google && typeof document !== "undefined") {
     const id = `kinetic-font-${font.id}`;
@@ -109,21 +119,23 @@ export async function ensureKineticFont(stack: string): Promise<void> {
     }
   }
   if (typeof document === "undefined" || !document.fonts) return;
-  const family = stack.split(",")[0]!.trim().replace(/"/g, "");
+  const primary = resolved.split(",")[0]!.trim().replace(/"/g, "");
   try {
     await document.fonts.ready;
     await Promise.all([
-      document.fonts.load(`700 48px "${family}"`),
-      document.fonts.load(`800 48px "${family}"`),
-      document.fonts.load(`700 72px "${family}"`),
+      document.fonts.load(`700 48px ${resolved}`),
+      document.fonts.load(`800 48px ${resolved}`),
+      document.fonts.load(`800 72px "${primary}"`),
+      document.fonts.load(`700 72px "Cairo"`),
+      document.fonts.load(`800 72px "Cairo"`),
     ]);
-    // انتظر اكتمال تحميل الملف حتى لا يظهر الخط متقطعاً في الحرق
     let tries = 0;
     while (
-      !document.fonts.check(`800 48px "${family}"`) &&
-      tries < 20
+      !document.fonts.check(`800 48px "Cairo"`) &&
+      !document.fonts.check(`800 48px ${resolved}`) &&
+      tries < 25
     ) {
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 80));
       tries += 1;
     }
   } catch {
@@ -222,6 +234,7 @@ export async function renderKineticPng(
   style: KineticStyle,
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
+  const resolvedFamily = resolveKineticFontStack(style.fontFamily);
   // حجم مناسب للفيديو العمودي (ارتفاع أكبر) بدون مبالغة تقطع الحروف
   const scale = Math.min(1.35, Math.max(0.85, videoH / 1080));
   const fontSize = Math.max(26, Math.round(style.fontSizePx * scale));
@@ -234,8 +247,8 @@ export async function renderKineticPng(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas غير متاح");
 
-  const family = style.fontFamily.split(",")[0]!.trim();
-  const fontCss = `700 ${fontSize}px ${family}, ${style.fontFamily}`;
+  // وزن 800 مثل عناوين الموقع (Cairo ExtraBold)
+  const fontCss = `800 ${fontSize}px ${resolvedFamily}`;
   ctx.font = fontCss;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
