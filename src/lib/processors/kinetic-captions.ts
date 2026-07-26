@@ -95,18 +95,18 @@ export const KINETIC_FONTS: {
 ];
 
 /**
- * حجم الخط في إحداثيات الفيديو.
- * الرقم المختار في الواجهة ≈ الحجم الظاهر على شاشة جوال (~390px عرض)،
- * فيُكبَّر بنسبة عرض الفيديو الحقيقي حتى يبقى كبيراً بعد التنزيل.
+ * حجم الخط في إحداثيات الفيديو (بكسل حقيقي).
+ * اختيار 52 على فيديو 720 → ~120px (~17% من العرض) ليظهر كبيراً مثل ريلز.
  */
 export function kineticBurnFontPx(
   selectedPx: number,
   videoW: number,
 ): number {
-  const REF_VIEW_W = 390;
-  const scaled = Math.round(selectedPx * (videoW / REF_VIEW_W));
-  // حد أدنى واضح لريلز/تيك توك (~7% من العرض)
-  const floor = Math.round(videoW * 0.07);
+  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 52;
+  const REF_VIEW_W = 310;
+  const scaled = Math.round(safe * (videoW / REF_VIEW_W));
+  // حد أدنى قوي — لا يقل عن ~14% من عرض الفيديو
+  const floor = Math.round(videoW * 0.14);
   return Math.max(floor, scaled);
 }
 
@@ -120,7 +120,7 @@ export function kineticPreviewFontPx(
     return Math.max(18, Math.round(selectedPx * 0.9));
   }
   if (!videoNaturalW) {
-    return Math.max(18, Math.round(selectedPx * (previewClientW / 390)));
+    return Math.max(18, Math.round(selectedPx * (previewClientW / 310)));
   }
   const burn = kineticBurnFontPx(selectedPx, videoNaturalW);
   return Math.max(16, Math.round(burn * (previewClientW / videoNaturalW)));
@@ -238,14 +238,6 @@ export function activeKineticAt(
   return null;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 type RenderOpts = {
   charCount?: number;
   slideProgress?: number;
@@ -253,136 +245,151 @@ type RenderOpts = {
 };
 
 /**
- * يرسم عبر HTML + html2canvas حتى تبقى الحروف العربية متصلة بشكل صحيح.
+ * يرسم الترجمة مباشرة على Canvas ببكسلات الفيديو (بدون html2canvas)
+ * حتى يبقى الحجم كبيراً ومطابقاً للاختيار، مع إبقاء الكلمة كاملة متصلة.
  */
 export async function renderKineticPng(
   line: KineticLine,
   activeIndex: number,
   videoW: number,
-  videoH: number,
+  _videoH: number,
   style: KineticStyle,
   opts: RenderOpts = {},
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
   const family = resolveKineticFontStack(style.fontFamily);
   const maxW = Math.max(120, Math.floor(videoW * 0.94));
-  const maxH = Math.max(120, Math.floor(videoH * 0.5));
 
-  // نفس الحجم المختار في الموقع — تصغير طفيف فقط عند الاضطرار
   let fontSize = kineticBurnFontPx(style.fontSizePx, videoW);
-  const minFont = Math.max(24, Math.round(fontSize * 0.92));
+  const minFont = Math.max(Math.round(videoW * 0.12), Math.round(fontSize * 0.88));
+  const gap = () => Math.max(10, Math.round(fontSize * 0.28));
+  const strokeW = () => Math.max(5, Math.round(fontSize * 0.14));
 
-  const host = document.createElement("div");
-  host.setAttribute("dir", style.rtl ? "rtl" : "ltr");
-  host.style.cssText = [
-    "position:fixed",
-    "left:-12000px",
-    "top:0",
-    `width:${maxW}px`,
-    "padding:10px 14px",
-    "box-sizing:border-box",
-    "background:transparent",
-    "pointer-events:none",
-    "z-index:-1",
-  ].join(";");
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas غير متاح");
 
-  const paint = (size: number) => {
-    const parts: string[] = [];
-    line.words.forEach((w, i) => {
+  const fontCss = (size: number) => `900 ${size}px ${family}`;
+
+  type WordDraw = {
+    text: string;
+    color: string;
+    opacity: number;
+    scale: number;
+    dx: number;
+    dy: number;
+    w: number;
+  };
+
+  const buildWords = (size: number): WordDraw[] => {
+    ctx.font = fontCss(size);
+    ctx.direction = style.rtl ? "rtl" : "ltr";
+    return line.words.map((w, i) => {
       const isActive = i === activeIndex;
       let text = w.word;
       if (isActive && typeof opts.charCount === "number") {
         text = Array.from(w.word).slice(0, opts.charCount).join("");
-        if (!text) text = "\u00A0";
+        if (!text) text = " ";
       }
-      const color = isActive ? style.highlightColor : style.baseColor;
-      let opacity = "1";
-      let transform = "none";
-      if (style.effect === "fade" && !isActive) opacity = "0.45";
-      if (isActive && style.effect === "pulse") transform = "scale(1.12)";
-      if (isActive && style.effect === "pop") transform = "scale(1.2)";
-      if (isActive && style.effect === "bounce") transform = "translateY(-6px) scale(1.08)";
-      if (isActive && style.effect === "zoom") {
-        const z = opts.zoomScale ?? 1.18;
-        transform = `scale(${z})`;
+      let opacity = 1;
+      let scale = 1;
+      let dx = 0;
+      let dy = 0;
+      if (style.effect === "fade" && !isActive) opacity = 0.45;
+      if (isActive && style.effect === "pulse") scale = 1.12;
+      if (isActive && style.effect === "pop") scale = 1.2;
+      if (isActive && style.effect === "bounce") {
+        scale = 1.08;
+        dy = -Math.round(size * 0.08);
       }
+      if (isActive && style.effect === "zoom") scale = opts.zoomScale ?? 1.18;
       if (isActive && style.effect === "slide") {
         const p = opts.slideProgress ?? 1;
-        const from = style.rtl ? 28 : -28;
-        const x = from * (1 - p);
-        transform = `translateX(${x}px)`;
+        const from = style.rtl ? size * 0.35 : -size * 0.35;
+        dx = from * (1 - p);
       }
-      parts.push(
-        `<span style="display:inline-block;color:${color};opacity:${opacity};transform:${transform};transform-origin:center;margin:0 0.38em;padding:0 0.06em;vertical-align:middle;white-space:nowrap">${escapeHtml(text)}</span>`,
-      );
+      const baseW = Math.ceil(ctx.measureText(text).width);
+      return {
+        text,
+        color: isActive ? style.highlightColor : style.baseColor,
+        opacity,
+        scale,
+        dx,
+        dy,
+        w: Math.ceil(baseW * scale),
+      };
     });
-
-    host.innerHTML = `<div style="
-      font-family:${family};
-      font-weight:900;
-      font-size:${size}px;
-      line-height:1.4;
-      text-align:center;
-      color:#fff;
-      text-shadow:
-        0 0 2px #000,
-        1px 0 #000,-1px 0 #000,0 1px #000,0 -1px #000,
-        2px 0 #000,-2px 0 #000,0 2px #000,0 -2px #000,
-        1px 1px #000,-1px -1px #000,
-        2px 2px 0 #000,-2px 2px 0 #000,2px -2px 0 #000,-2px -2px 0 #000;
-      word-spacing:0.28em;
-      letter-spacing:0;
-      overflow-wrap:normal;
-      max-width:100%;
-    ">${parts.join(" ")}</div>`;
   };
 
-  document.body.appendChild(host);
-  try {
-    paint(fontSize);
-    // صغّر بحذر فقط إذا لزم — لا ننزل تحت ~82% من الحجم المختار
-    let guard = 0;
-    while (
-      guard < 16 &&
-      fontSize > minFont &&
-      (host.scrollWidth > maxW + 4 || host.scrollHeight > maxH)
-    ) {
-      fontSize -= 1;
-      paint(fontSize);
-      guard += 1;
-    }
-
-    const html2canvas = (await import("html2canvas")).default;
-    const canvas = await html2canvas(host, {
-      backgroundColor: null,
-      scale: 2,
-      logging: false,
-      useCORS: true,
-      width: Math.min(maxW, Math.ceil(host.scrollWidth + 16)),
-      height: Math.min(maxH, Math.ceil(host.scrollHeight + 12)),
-      windowWidth: maxW,
-      windowHeight: maxH,
-    });
-
-    // scale:2 للحدة — نرجع للحجم الحقيقي على الفيديو
-    const out = document.createElement("canvas");
-    out.width = Math.max(1, Math.round(canvas.width / 2));
-    out.height = Math.max(1, Math.round(canvas.height / 2));
-    const ctx = out.getContext("2d");
-    if (!ctx) throw new Error("Canvas غير متاح");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(canvas, 0, 0, out.width, out.height);
-
-    return await new Promise((resolve, reject) => {
-      out.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("فشل رسم الترجمة الحركية"))),
-        "image/png",
-      );
-    });
-  } finally {
-    host.remove();
+  let words = buildWords(fontSize);
+  let totalW =
+    words.reduce((s, w) => s + w.w, 0) + gap() * Math.max(0, words.length - 1);
+  let guard = 0;
+  while (guard < 24 && fontSize > minFont && totalW > maxW) {
+    fontSize -= 2;
+    words = buildWords(fontSize);
+    totalW =
+      words.reduce((s, w) => s + w.w, 0) + gap() * Math.max(0, words.length - 1);
+    guard += 1;
   }
+
+  const padX = Math.max(12, Math.round(fontSize * 0.2));
+  const padY = Math.max(10, Math.round(fontSize * 0.22));
+  const boxW = Math.min(maxW, Math.max(2, totalW + padX * 2 + strokeW() * 2));
+  const boxH = Math.max(2, Math.ceil(fontSize * 1.55) + padY * 2 + strokeW() * 2);
+  canvas.width = boxW;
+  canvas.height = boxH;
+
+  ctx.clearRect(0, 0, boxW, boxH);
+  ctx.font = fontCss(fontSize);
+  ctx.direction = style.rtl ? "rtl" : "ltr";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.lineWidth = strokeW();
+
+  // من اليمين لليسار بصرياً عند RTL: نرسم بترتيب الشاشة من اليسار
+  const ordered = style.rtl ? [...words].reverse() : words;
+  let x = (boxW - totalW) / 2;
+  const midY = boxH / 2;
+
+  for (const w of ordered) {
+    const cx = x + w.w / 2 + w.dx;
+    const cy = midY + w.dy;
+    ctx.save();
+    ctx.globalAlpha = w.opacity;
+    ctx.translate(cx, cy);
+    ctx.scale(w.scale, w.scale);
+    ctx.strokeStyle = "#000000";
+    ctx.fillStyle = w.color;
+    ctx.strokeText(w.text, 0, 0);
+    ctx.fillText(w.text, 0, 0);
+    ctx.restore();
+    x += w.w + gap();
+  }
+
+  // تأكد أن الطبقة ليست فارغة (وإلا يبقى كابشن الإنستغرام الأصلي ظاهراً فقط)
+  const sample = ctx.getImageData(
+    0,
+    0,
+    Math.min(boxW, 64),
+    Math.min(boxH, 64),
+  ).data;
+  let solid = 0;
+  for (let i = 3; i < sample.length; i += 4) {
+    if (sample[i]! > 8) solid += 1;
+  }
+  if (solid < 20) {
+    throw new Error("فشل رسم الترجمة الحركية — أعد المحاولة");
+  }
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("فشل رسم الترجمة الحركية"))),
+      "image/png",
+    );
+  });
 }
 
 type BurnFrame = {
@@ -543,8 +550,9 @@ export async function downloadKineticBurnedVideo(
     for (let i = 0; i < slice.length; i++) {
       const f = slice[i]!;
       const outLabel = i === slice.length - 1 ? "[vout]" : `[kb${b}_${i}]`;
+      // format=auto يحافظ على الشفافية؛ الوسط أفقياً بحجم الطبقة الحقيقي
       parts.push(
-        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
+        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:format=auto:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
       );
       lastLabel = outLabel;
     }
