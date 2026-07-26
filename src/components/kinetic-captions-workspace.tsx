@@ -86,7 +86,7 @@ export function KineticCaptionsWorkspace({
   const [language, setLanguage] = useState("ar");
   const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
-  const [fontSize, setFontSize] = useState(44);
+  const [fontSize, setFontSize] = useState(52);
   const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[0]!.stack);
   const [position, setPosition] = useState<KineticPosition>("bottom");
   const [effect, setEffect] = useState<KineticEffect>("none");
@@ -506,7 +506,7 @@ export function KineticCaptionsWorkspace({
                   style={{
                     fontFamily: resolvedFont,
                     fontWeight: 900,
-                    fontSize: `${previewFontPx || Math.round(fontSize * 0.55)}px`,
+                    fontSize: `${previewFontPx || fontSize}px`,
                     textShadow:
                       "0 0 2px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
                     wordBreak: "normal",

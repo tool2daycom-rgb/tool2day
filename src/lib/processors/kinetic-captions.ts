@@ -94,13 +94,20 @@ export const KINETIC_FONTS: {
   },
 ];
 
-/** حجم الخط في إحداثيات الفيديو — الرقم المختار ≈ الحجم على فيديو عرض 720 */
+/**
+ * حجم الخط في إحداثيات الفيديو.
+ * الرقم المختار في الواجهة ≈ الحجم الظاهر على شاشة جوال (~390px عرض)،
+ * فيُكبَّر بنسبة عرض الفيديو الحقيقي حتى يبقى كبيراً بعد التنزيل.
+ */
 export function kineticBurnFontPx(
   selectedPx: number,
   videoW: number,
 ): number {
-  const scaled = Math.round(selectedPx * (videoW / 720));
-  return Math.max(20, scaled);
+  const REF_VIEW_W = 390;
+  const scaled = Math.round(selectedPx * (videoW / REF_VIEW_W));
+  // حد أدنى واضح لريلز/تيك توك (~7% من العرض)
+  const floor = Math.round(videoW * 0.07);
+  return Math.max(floor, scaled);
 }
 
 /** حجم الخط في المعاينة ليطابق التنزيل بصرياً على إطار الفيديو */
@@ -109,11 +116,14 @@ export function kineticPreviewFontPx(
   videoNaturalW: number,
   previewClientW: number,
 ): number {
-  if (!videoNaturalW || !previewClientW) {
-    return Math.round(selectedPx * (previewClientW ? previewClientW / 720 : 0.55));
+  if (!previewClientW) {
+    return Math.max(18, Math.round(selectedPx * 0.9));
+  }
+  if (!videoNaturalW) {
+    return Math.max(18, Math.round(selectedPx * (previewClientW / 390)));
   }
   const burn = kineticBurnFontPx(selectedPx, videoNaturalW);
-  return Math.max(14, Math.round(burn * (previewClientW / videoNaturalW)));
+  return Math.max(16, Math.round(burn * (previewClientW / videoNaturalW)));
 }
 
 export function getSiteCairoFamily(): string {
@@ -255,12 +265,12 @@ export async function renderKineticPng(
 ): Promise<Blob> {
   await ensureKineticFont(style.fontFamily);
   const family = resolveKineticFontStack(style.fontFamily);
-  const maxW = Math.max(120, Math.floor(videoW * 0.9));
-  const maxH = Math.max(100, Math.floor(videoH * 0.42));
+  const maxW = Math.max(120, Math.floor(videoW * 0.94));
+  const maxH = Math.max(120, Math.floor(videoH * 0.5));
 
-  // نفس الحجم المختار في الموقع (نسبة لعرض 1080) — بدون قصّ عشوائي
+  // نفس الحجم المختار في الموقع — تصغير طفيف فقط عند الاضطرار
   let fontSize = kineticBurnFontPx(style.fontSizePx, videoW);
-  const minFont = Math.max(16, Math.round(fontSize * 0.82));
+  const minFont = Math.max(24, Math.round(fontSize * 0.92));
 
   const host = document.createElement("div");
   host.setAttribute("dir", style.rtl ? "rtl" : "ltr");
