@@ -57,46 +57,10 @@ export const KINETIC_FONTS: {
   google?: string;
 }[] = [
   {
-    id: "almarai",
-    label: "Almarai (المرسى)",
-    stack: '"Almarai", sans-serif',
-    google: "Almarai:wght@700;800",
-  },
-  {
-    id: "tajawal",
-    label: "Tajawal",
-    stack: '"Tajawal", sans-serif',
-    google: "Tajawal:wght@700;800",
-  },
-  {
-    id: "lemonada",
-    label: "Lemonada",
-    stack: '"Lemonada", sans-serif',
-    google: "Lemonada:wght@700;800",
-  },
-  {
-    id: "changa",
-    label: "Changa",
-    stack: '"Changa", sans-serif',
-    google: "Changa:wght@700;800",
-  },
-  {
-    id: "cairo",
-    label: "Cairo",
-    stack: '"Cairo", sans-serif',
-    google: "Cairo:wght@700;800",
-  },
-  {
     id: "cairo-site",
-    label: "Cairo (موقع Tool2Day)",
+    label: "Cairo",
     stack: "__SITE_CAIRO__",
-    google: "Cairo:wght@700;800",
-  },
-  {
-    id: "noto",
-    label: "Noto Sans Arabic",
-    stack: '"Noto Sans Arabic", sans-serif',
-    google: "Noto+Sans+Arabic:wght@700;800",
+    google: "Cairo:wght@700;800;900",
   },
 ];
 
@@ -106,7 +70,7 @@ export function getSiteCairoFamily(): string {
 }
 
 export function resolveKineticFontStack(stack: string): string {
-  if (stack === "__SITE_CAIRO__") return getSiteCairoFamily();
+  if (stack === "__SITE_CAIRO__" || !stack) return getSiteCairoFamily();
   return stack;
 }
 
@@ -130,11 +94,14 @@ export async function ensureKineticFont(stack: string): Promise<void> {
     await Promise.all([
       document.fonts.load(`700 48px "${name}"`),
       document.fonts.load(`800 48px "${name}"`),
+      document.fonts.load(`900 48px "${name}"`),
       document.fonts.load(`800 64px ${resolved}`),
+      document.fonts.load(`900 64px ${resolved}`),
     ]);
     let tries = 0;
     while (
       !document.fonts.check(`800 48px "${name}"`) &&
+      !document.fonts.check(`900 48px "${name}"`) &&
       !document.fonts.check(`700 48px "${name}"`) &&
       tries < 30
     ) {
@@ -291,7 +258,7 @@ export async function renderKineticPng(
 
     host.innerHTML = `<div style="
       font-family:${family};
-      font-weight:800;
+      font-weight:900;
       font-size:${size}px;
       line-height:1.35;
       text-align:center;

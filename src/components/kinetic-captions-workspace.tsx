@@ -86,7 +86,7 @@ export function KineticCaptionsWorkspace({
   const [baseColor, setBaseColor] = useState("#FFFFFF");
   const [highlight, setHighlight] = useState("#F5C518");
   const [fontSize, setFontSize] = useState(32);
-  const [fontFamily, setFontFamily] = useState(KINETIC_FONTS[0]!.stack);
+  const fontFamily = KINETIC_FONTS[0]!.stack;
   const [position, setPosition] = useState<KineticPosition>("bottom");
   const [effect, setEffect] = useState<KineticEffect>("slide");
   const [busy, setBusy] = useState(false);
@@ -385,28 +385,12 @@ export function KineticCaptionsWorkspace({
         </label>
         <label className="text-xs font-semibold text-[#444]">
           نوع الخط
-          <select
-            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm"
-            value={fontFamily}
-            onChange={(e) => setFontFamily(e.target.value)}
-            disabled={busy}
-            style={{ fontFamily: resolveKineticFontStack(fontFamily) }}
+          <div
+            className="mt-1 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2 text-sm font-extrabold text-[#111]"
+            style={{ fontFamily: resolvedFont, fontWeight: 900 }}
           >
-            {KINETIC_FONTS.map((f) => (
-              <option
-                key={f.id}
-                value={f.stack}
-                style={{
-                  fontFamily:
-                    f.stack === "__SITE_CAIRO__"
-                      ? "var(--font-cairo), Cairo, sans-serif"
-                      : f.stack,
-                }}
-              >
-                {f.label}
-              </option>
-            ))}
-          </select>
+            Cairo — نفس خط الموقع
+          </div>
         </label>
         <label className="text-xs font-semibold text-[#444]">
           لون الخط
@@ -499,7 +483,7 @@ export function KineticCaptionsWorkspace({
                   className="max-w-full overflow-hidden text-center font-extrabold leading-snug"
                   style={{
                     fontFamily: resolvedFont,
-                    fontWeight: 800,
+                    fontWeight: 900,
                     fontSize: `clamp(0.95rem, ${Math.round(fontSize * 0.48)}px, ${Math.min(fontSize, 40)}px)`,
                     textShadow:
                       "0 0 2px #000, 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000",
