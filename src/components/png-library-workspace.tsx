@@ -9,8 +9,6 @@ import {
   setDownloadRatingContext,
 } from "@/lib/ratings";
 import {
-  PNG_ZIP_MAX,
-  buildPngZip,
   formatBytes,
   imageHasTransparency,
   readPngDimensions,
@@ -44,14 +42,11 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   const [items, setItems] = useState<PngLibraryItem[]>([]);
   const [broken, setBroken] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
-  const [zipping, setZipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [pixabayConfigured, setPixabayConfigured] = useState<boolean | null>(
     null,
   );
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [basket, setBasket] = useState<PngLibraryItem[]>([]);
 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -67,11 +62,6 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   const visibleItems = useMemo(
     () => items.filter((item) => !broken[item.id]),
     [items, broken],
-  );
-
-  const selectedOnPage = useMemo(
-    () => visibleItems.filter((i) => selected[i.id]),
-    [visibleItems, selected],
   );
 
   useEffect(() => {
@@ -110,12 +100,11 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       if (!res.ok) throw new Error(data.error || "فشل البحث");
       setItems(Array.isArray(data.items) ? data.items : []);
       setBroken({});
-      setSelected({});
       setPage(nextPage);
       setPixabayConfigured(Boolean(data.providers?.pixabayConfigured));
       setStatus(
         data.items?.length
-          ? `عُثر على ${data.items.length} صورة — أضف للسلة ثم نزّل ZIP`
+          ? `عُثر على ${data.items.length} صورة`
           : "لا نتائج — جرّب كلمة أخرى أو ارفع PNG",
       );
     } catch (e) {
@@ -124,33 +113,6 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
     } finally {
       setBusy(false);
     }
-  }
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  function selectAllOnPage() {
-    const next: Record<string, boolean> = {};
-    for (const item of visibleItems) next[item.id] = true;
-    setSelected(next);
-  }
-
-  function addToBasket(list: PngLibraryItem[]) {
-    setBasket((prev) => {
-      const map = new Map(prev.map((i) => [i.id, i]));
-      for (const item of list) {
-        if (map.size >= PNG_ZIP_MAX) break;
-        map.set(item.id, item);
-      }
-      const out = [...map.values()];
-      if (out.length >= PNG_ZIP_MAX) {
-        setStatus(`السلة ممتلئة (حد ${PNG_ZIP_MAX} صورة لكل ZIP)`);
-      } else {
-        setStatus(`السلة: ${out.length}/${PNG_ZIP_MAX} صورة`);
-      }
-      return out;
-    });
   }
 
   async function downloadItem(item: PngLibraryItem) {
@@ -168,30 +130,6 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       setStatus("تم التنزيل");
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل التنزيل");
-    }
-  }
-
-  async function downloadZip(list: PngLibraryItem[], label: string) {
-    if (!list.length) {
-      setError("لا صور محددة للتنزيل");
-      return;
-    }
-    beginToolUse(slug);
-    setZipping(true);
-    setError(null);
-    try {
-      const blob = await buildPngZip(list, (done, total) => {
-        setStatus(`تحضير ZIP ${done}/${total}…`);
-      });
-      const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
-      const name = `tool2day-png-${label}-${Date.now()}.zip`;
-      await downloadBlob(blob, name);
-      setStatus(`تم تنزيل ${Math.min(list.length, PNG_ZIP_MAX)} صورة في ZIP`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "فشل إنشاء ZIP");
-      setStatus(null);
-    } finally {
-      setZipping(false);
     }
   }
 
@@ -481,85 +419,12 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
             </p>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#d1fae5] bg-[#ecfdf5] p-3">
-            <button
-              type="button"
-              disabled={busy || !visibleItems.length}
-              onClick={selectAllOnPage}
-              className="rounded-lg border border-[#a7f3d0] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40"
-            >
-              تحديد الصفحة
-            </button>
-            <button
-              type="button"
-              disabled={!selectedOnPage.length}
-              onClick={() => addToBasket(selectedOnPage)}
-              className="rounded-lg border border-[#a7f3d0] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40"
-            >
-              أضف المحدد للسلة ({selectedOnPage.length})
-            </button>
-            <button
-              type="button"
-              disabled={busy || !visibleItems.length}
-              onClick={() => addToBasket(visibleItems)}
-              className="rounded-lg border border-[#a7f3d0] bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40"
-            >
-              أضف الصفحة للسلة
-            </button>
-            <button
-              type="button"
-              disabled={zipping || !basket.length}
-              onClick={() => void downloadZip(basket, "basket")}
-              className="rounded-lg bg-[#0d9488] px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
-            >
-              {zipping
-                ? "جاري ZIP…"
-                : `تنزيل السلة ZIP (${basket.length}/${PNG_ZIP_MAX})`}
-            </button>
-            <button
-              type="button"
-              disabled={zipping || !visibleItems.length}
-              onClick={() => void downloadZip(visibleItems, `page-${page}`)}
-              className="rounded-lg border border-[#0d9488] bg-white px-3 py-2 text-xs font-bold text-[#0f766e] disabled:opacity-40"
-            >
-              ZIP هذه الصفحة
-            </button>
-            {basket.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setBasket([]);
-                  setStatus("تم تفريغ السلة");
-                }}
-                className="rounded-lg px-3 py-2 text-xs font-semibold text-[#b91c1c]"
-              >
-                تفريغ السلة
-              </button>
-            )}
-            <p className="w-full text-[11px] leading-5 text-[#666]">
-              الحد لكل ملف ZIP: {PNG_ZIP_MAX} صورة. ابحث → أضف صفحات للسلة → نزّل
-              ZIP → كرّر بكلمات أخرى لتعبئة جهازك.
-            </p>
-          </div>
-
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {visibleItems.map((item) => (
               <article
                 key={item.id}
-                className={`overflow-hidden rounded-xl border bg-white ${
-                  selected[item.id] ? "border-[#0d9488] ring-2 ring-[#99f6e4]" : "border-[#eee]"
-                }`}
+                className="overflow-hidden rounded-xl border border-[#eee] bg-white"
               >
-                <div className="flex items-center gap-2 border-b border-[#f3f3f3] px-2 py-1.5">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selected[item.id])}
-                    onChange={() => toggleSelect(item.id)}
-                    className="h-4 w-4"
-                    aria-label="تحديد"
-                  />
-                  <span className="text-[10px] text-[#888]">تحديد</span>
-                </div>
                 <div
                   className="flex aspect-square items-center justify-center p-3"
                   style={{
