@@ -115,3 +115,113 @@ export async function translateText(
 export function activeCueAt(cues: TranscriptCue[], time: number) {
   return cues.find((c) => time >= c.start && time < c.end) || null;
 }
+
+/**
+ * تصحيح إملائي شائع لأخطاء Whisper في العربية (لهجات + أسماء دول).
+ */
+export function polishArabicText(input: string): string {
+  let t = input;
+
+  const replacements: Array<[RegExp, string]> = [
+    // أسماء دول/مدن شائعة يخطئ فيها Whisper
+    [/أكرانيا|إكرانيا|اكرانيا|أوكراينا|إوكراينا/gu, "أوكرانيا"],
+    [/النمسة|النمسه|انمسا/gu, "النمسا"],
+    [/أوربا(?![اوي])|اوروبا|أوروبه/gu, "أوروبا"],
+    [/أمريكا|امريكا/gu, "أمريكا"],
+    [/روسيا/gu, "روسيا"],
+    [/تركي[اة]/gu, "تركيا"],
+    [/بولونيا/gu, "بولندا"],
+    [/المانيا|ألمانيا/gu, "ألمانيا"],
+    [/سويسرا/gu, "سويسرا"],
+    [/ايطاليا|إيطاليا/gu, "إيطاليا"],
+    [/فرنسا/gu, "فرنسا"],
+    [/بريطانيا/gu, "بريطانيا"],
+    [/كندا/gu, "كندا"],
+    [/الصين/gu, "الصين"],
+    [/اليابان/gu, "اليابان"],
+    // أدوات لهجة شامية يسمعها Whisper خطأ
+    [/وعب\s+/gu, "وعم "],
+    [/وعن?\s*عب\s+/gu, "وعن عم "],
+    [/(^|\s)عب\s+/gu, "$1عم "],
+    [/(^|\s)عَب\s+/gu, "$1عم "],
+    [/نتنطل/gu, "ننتقل"],
+    [/بتنطل/gu, "بنتقل"],
+    [/تنطل/gu, "تنتقل"],
+    [/عب\s*تهيس/gu, "عم نعيش"],
+    [/عم\s*تهيس/gu, "عم نعيش"],
+    [/(^|[^\u0600-\u06FF])تهيس(?=[^\u0600-\u06FF]|$)/gu, "$1نعيش"],
+    [/يعني\s+عيش/gu, "يعني نعيش"],
+    [/يعني\s+عيس/gu, "يعني نعيش"],
+    [/بإكرانيا|باكرانيا|بإوكرانيا/gu, "بأوكرانيا"],
+    [/في\s*أكرانيا|في\s*إكرانيا/gu, "في أوكرانيا"],
+    // مسافات وعلامات
+    [/\s{2,}/gu, " "],
+    [/\s+([,.!?؟،])/gu, "$1"],
+  ];
+
+  for (const [re, to] of replacements) {
+    t = t.replace(re, to);
+  }
+
+  return t.trim();
+}
+
+export function polishCueText(text: string, lang: SubtitleLang): string {
+  if (lang === "ar") return polishArabicText(text);
+  // إنجليزي: تصحيحات بسيطة لأخطاء Whisper الشائعة
+  return text
+    .replace(/\bi\b/g, "I")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+export function polishCues(
+  cues: EditableCue[],
+  lang: SubtitleLang,
+): EditableCue[] {
+  return cues.map((c) => ({
+    ...c,
+    text: polishCueText(c.text, lang),
+  }));
+}
+
+/** تصحيح إضافي عبر الخادم إن وُجد مفتاح، وإلا يبقى التصحيح المحلي */
+export async function proofreadCues(
+  cues: EditableCue[],
+  lang: SubtitleLang,
+  onProgress?: (ratio: number) => void,
+): Promise<EditableCue[]> {
+  const local = polishCues(cues, lang);
+  try {
+    const res = await fetch("/api/proofread", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        lang,
+        cues: local.map((c) => ({ id: c.id, text: c.text })),
+      }),
+    });
+    if (res.status === 501) {
+      onProgress?.(1);
+      return local;
+    }
+    const data = (await res.json().catch(() => ({}))) as {
+      cues?: Array<{ id: string; text: string }>;
+      error?: string;
+    };
+    if (!res.ok || !Array.isArray(data.cues)) {
+      onProgress?.(1);
+      return local;
+    }
+    const map = new Map(data.cues.map((c) => [c.id, c.text]));
+    const out = local.map((c) => ({
+      ...c,
+      text: polishCueText(map.get(c.id) || c.text, lang),
+    }));
+    onProgress?.(1);
+    return out;
+  } catch {
+    onProgress?.(1);
+    return local;
+  }
+}

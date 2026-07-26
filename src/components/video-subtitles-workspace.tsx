@@ -15,6 +15,7 @@ import {
   buildSrt,
   buildVtt,
   cuesToEditable,
+  proofreadCues,
   translateCues,
   type EditableCue,
   type SubtitleLang,
@@ -108,8 +109,9 @@ export function VideoSubtitlesWorkspace({
       const result = await transcribeMediaFile(
         file,
         sourceLang,
-        (r) => setProgress(Math.round(r * 80)),
+        (r) => setProgress(Math.round(r * 70)),
         (msg) => setStatus(msg),
+        "accurate",
       );
       let next = cuesToEditable(result.cues || []);
       if (!next.length && result.text) {
@@ -125,6 +127,17 @@ export function VideoSubtitlesWorkspace({
         throw new Error("لم يُستخرج كلام واضح لإنشاء الترجمة");
       }
 
+      setStatus(
+        outputLang === "ar" || sourceLang === "ar"
+          ? "تصحيح الإملاء والأسماء…"
+          : "Proofreading spelling…",
+      );
+      next = await proofreadCues(
+        next,
+        outputLang !== sourceLang ? sourceLang : outputLang,
+        (r) => setProgress(70 + Math.round(r * 10)),
+      );
+
       if (outputLang !== sourceLang) {
         setStatus(
           outputLang === "ar"
@@ -132,8 +145,15 @@ export function VideoSubtitlesWorkspace({
             : "Translating cues to English…",
         );
         next = await translateCues(next, sourceLang, outputLang, (r) =>
-          setProgress(80 + Math.round(r * 20)),
+          setProgress(80 + Math.round(r * 15)),
         );
+        // تصحيح بعد الترجمة للعربية
+        if (outputLang === "ar") {
+          setStatus("مراجعة الإملاء بعد الترجمة…");
+          next = await proofreadCues(next, "ar", (r) =>
+            setProgress(95 + Math.round(r * 5)),
+          );
+        }
       } else {
         setProgress(100);
       }
@@ -145,7 +165,7 @@ export function VideoSubtitlesWorkspace({
           ? ` · ${(result.durationSec / 60).toFixed(1)} دقيقة`
           : "";
       setStatus(
-        `اكتملت الترجمة الفرعية (${next.length} مقطعاً)${dur} — يمكنك التعديل ثم التنزيل`,
+        `اكتملت الترجمة الفرعية (${next.length} مقطعاً)${dur} — راجع النص وعدّل إن لزم ثم نزّل`,
       );
       setProgress(100);
     } catch (e) {
@@ -191,9 +211,11 @@ export function VideoSubtitlesWorkspace({
       <h2 className="text-lg font-bold text-[#111] sm:text-xl">{title}</h2>
       <p className="mt-2 text-sm leading-7 text-[#555]">{description}</p>
       <p className="mt-2 text-xs leading-6 text-[#777]">
-        يعتمد على تفريغ Whisper عالي الدقة ثم ترجمة عربي↔إنجليزي. يمكنك مراجعة
-        كل مقطع وتعديله يدوياً قبل التنزيل — الدقة تعتمد على وضوح الصوت واللهجة.
-        الحد الأقصى {MAX_TRANSCRIBE_DURATION_SEC / 60} دقيقة.
+        يعتمد على نموذج Whisper الأدق (متوسط) مع تصحيح إملائي للأسماء والأخطاء
+        الشائعة، ثم ترجمة عربي↔إنجليزي. راجع المقاطع وعدّلها يدوياً قبل التنزيل —
+        اللهجات والضوضاء قد تبقى بحاجة لمراجعة. الحد الأقصى{" "}
+        {MAX_TRANSCRIBE_DURATION_SEC / 60} دقيقة. أول تشغيل قد يكون أبطأ لتحميل
+        النموذج.
       </p>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">

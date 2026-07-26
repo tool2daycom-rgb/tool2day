@@ -31,12 +31,17 @@ const SAMPLE_RATE = 16000;
 /** مقاطع قصيرة بدقّة أعلى وتغطية كاملة */
 const CHUNK_SECONDS = 20;
 const OVERLAP_SECONDS = 2;
+/** مقاطع أدق لمسار الترجمة الفرعية */
+const ACCURATE_CHUNK_SECONDS = 15;
+const ACCURATE_OVERLAP_SECONDS = 2.5;
 /** الحد الأقصى المدعوم: 30 دقيقة */
 export const MAX_TRANSCRIBE_DURATION_SEC = 30 * 60;
 /** حجم ملف معقول لفيديو ~30 دقيقة */
 export const MAX_VIDEO_TO_TEXT_MB = 800;
 /** لا نرفع للصوت الطويل للخادم (حد Vercel) */
 const MAX_SERVER_AUDIO_BYTES = 20 * 1024 * 1024;
+
+export type TranscribeQuality = "fast" | "accurate";
 
 /**
  * يستخرج صوت الفيديو كـ WAV أحادي 16kHz — يقصّ عند 30 دقيقة كحد أقصى.
@@ -138,78 +143,111 @@ type WhisperPipeline = (
   opts?: Record<string, unknown>,
 ) => Promise<WhisperResult | string>;
 
-let pipelinePromise: Promise<{
-  pipe: WhisperPipeline;
-  label: string;
-}> | null = null;
+const pipelineByQuality: Partial<
+  Record<
+    TranscribeQuality,
+    Promise<{ pipe: WhisperPipeline; label: string }> | null
+  >
+> = {
+  fast: null,
+  accurate: null,
+};
 
 async function getLocalWhisper(
   onStatus?: (msg: string) => void,
+  quality: TranscribeQuality = "fast",
 ): Promise<{ pipe: WhisperPipeline; label: string }> {
-  if (!pipelinePromise) {
-    pipelinePromise = (async () => {
-      const { pipeline, env } = await import("@huggingface/transformers");
-      env.allowLocalModels = false;
-      env.useBrowserCache = true;
+  const cached = pipelineByQuality[quality];
+  if (cached) return cached;
 
-      const attempts: Array<{
-        model: string;
-        device: "wasm";
-        dtype: "fp32";
-        label: string;
-      }> = [
-        {
-          model: "onnx-community/whisper-small",
-          device: "wasm",
-          dtype: "fp32",
-          label: "whisper-small-hq",
-        },
-        {
-          model: "Xenova/whisper-small",
-          device: "wasm",
-          dtype: "fp32",
-          label: "xenova-whisper-small",
-        },
-        {
-          model: "onnx-community/whisper-base",
-          device: "wasm",
-          dtype: "fp32",
-          label: "whisper-base-hq",
-        },
-      ];
+  const promise = (async () => {
+    const { pipeline, env } = await import("@huggingface/transformers");
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
 
-      let lastErr: unknown;
-      for (const attempt of attempts) {
-        try {
-          onStatus?.(
-            `تحميل نموذج عالي الدقة (${attempt.label}) — مرة واحدة ثم يُخزَّن…`,
-          );
-          const pipe = await pipeline(
-            "automatic-speech-recognition",
-            attempt.model,
+    const attempts: Array<{
+      model: string;
+      device: "wasm";
+      dtype: "fp32" | "q8" | "q4";
+      label: string;
+    }> =
+      quality === "accurate"
+        ? [
             {
-              dtype: attempt.dtype,
-              device: attempt.device,
+              model: "onnx-community/whisper-medium_timestamped",
+              device: "wasm",
+              dtype: "q8",
+              label: "whisper-medium-hq",
             },
-          );
-          return {
-            pipe: pipe as unknown as WhisperPipeline,
-            label: attempt.label,
-          };
-        } catch (e) {
-          lastErr = e;
-          await new Promise((r) => setTimeout(r, 80));
-        }
+            {
+              model: "Xenova/whisper-medium",
+              device: "wasm",
+              dtype: "q8",
+              label: "xenova-whisper-medium",
+            },
+            {
+              model: "onnx-community/whisper-small",
+              device: "wasm",
+              dtype: "fp32",
+              label: "whisper-small-hq",
+            },
+          ]
+        : [
+            {
+              model: "onnx-community/whisper-small",
+              device: "wasm",
+              dtype: "fp32",
+              label: "whisper-small-hq",
+            },
+            {
+              model: "Xenova/whisper-small",
+              device: "wasm",
+              dtype: "fp32",
+              label: "xenova-whisper-small",
+            },
+            {
+              model: "onnx-community/whisper-base",
+              device: "wasm",
+              dtype: "fp32",
+              label: "whisper-base-hq",
+            },
+          ];
+
+    let lastErr: unknown;
+    for (const attempt of attempts) {
+      try {
+        onStatus?.(
+          quality === "accurate"
+            ? `تحميل نموذج أدق للترجمة (${attempt.label}) — أول مرة أبطأ ثم يُخزَّن…`
+            : `تحميل نموذج التعرف (${attempt.label}) — مرة واحدة ثم يُخزَّن…`,
+        );
+        const pipe = await pipeline(
+          "automatic-speech-recognition",
+          attempt.model,
+          {
+            dtype: attempt.dtype,
+            device: attempt.device,
+          },
+        );
+        return {
+          pipe: pipe as unknown as WhisperPipeline,
+          label: attempt.label,
+        };
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 80));
       }
-      throw lastErr instanceof Error
-        ? lastErr
-        : new Error("تعذّر تحميل نموذج التعرف على الكلام");
-    })().catch((err) => {
-      pipelinePromise = null;
-      throw err;
-    });
-  }
-  return pipelinePromise;
+    }
+    throw lastErr instanceof Error
+      ? lastErr
+      : new Error("تعذّر تحميل نموذج التعرف على الكلام");
+  })().catch((err) => {
+    pipelineByQuality[quality] = null;
+    throw err;
+  });
+
+  pipelineByQuality[quality] = promise;
+  return promise;
 }
 
 async function decodeWavToFloat32(file: File): Promise<Float32Array> {
@@ -362,11 +400,13 @@ function yieldUi() {
  */
 async function* iterateAudioChunks(
   samples: Float32Array,
+  chunkSeconds = CHUNK_SECONDS,
+  overlapSeconds = OVERLAP_SECONDS,
 ): AsyncGenerator<{ view: Float32Array; index: number; total: number }> {
-  const chunkLen = CHUNK_SECONDS * SAMPLE_RATE;
+  const chunkLen = chunkSeconds * SAMPLE_RATE;
   const hop = Math.max(
     SAMPLE_RATE,
-    (CHUNK_SECONDS - OVERLAP_SECONDS) * SAMPLE_RATE,
+    (chunkSeconds - overlapSeconds) * SAMPLE_RATE,
   );
   const total =
     samples.length <= chunkLen
@@ -395,13 +435,14 @@ export async function transcribeLocally(
   onStatus?: (msg: string) => void,
   onProgress?: (ratio: number) => void,
   knownDurationSec?: number,
+  quality: TranscribeQuality = "fast",
 ): Promise<{
   text: string;
   provider: string;
   durationSec: number;
   cues: TranscriptCue[];
 }> {
-  const { pipe, label } = await getLocalWhisper(onStatus);
+  const { pipe, label } = await getLocalWhisper(onStatus, quality);
   onStatus?.("تحميل الصوت في الذاكرة وتقسيمه لمقاطع…");
   const samples = await decodeWavToFloat32(audio);
   const durationSec = knownDurationSec ?? samples.length / SAMPLE_RATE;
@@ -417,24 +458,41 @@ export async function transcribeLocally(
     `مدة الصوت ${mins} دقيقة (${formatClock(durationSec)}) — تفريغ كل الكلمات…`,
   );
 
+  const chunkSec =
+    quality === "accurate" ? ACCURATE_CHUNK_SECONDS : CHUNK_SECONDS;
+  const overlapSec =
+    quality === "accurate" ? ACCURATE_OVERLAP_SECONDS : OVERLAP_SECONDS;
+  const hopSec = chunkSec - overlapSec;
+
   const lang = TRANSCRIBE_LANGUAGES.find((l) => l.code === languageCode);
   const baseOpts: Record<string, unknown> = {
     task: "transcribe",
     return_timestamps: true,
-    chunk_length_s: 30,
-    stride_length_s: 5,
+    chunk_length_s: quality === "accurate" ? 20 : 30,
+    stride_length_s: quality === "accurate" ? 3 : 5,
   };
   if (lang && lang.code !== "auto") {
     baseOpts.language = lang.whisperName;
+  }
+  // يوجّه النموذج لتهجئة أوضح (أسماء ودول)
+  if (lang?.code === "ar") {
+    baseOpts.initial_prompt =
+      "النص باللغة العربية بتهجئة صحيحة للأسماء والدول والمدن مثل أوروبا والنمسا وأوكرانيا.";
+  } else if (lang?.code === "en") {
+    baseOpts.initial_prompt =
+      "Clear English transcript with correct spelling of place names.";
   }
 
   const parts: string[] = [];
   const timed: TranscriptCue[] = [];
   let processed = 0;
   let totalChunks = 1;
-  const hopSec = CHUNK_SECONDS - OVERLAP_SECONDS;
 
-  for await (const { view, index, total } of iterateAudioChunks(samples)) {
+  for await (const { view, index, total } of iterateAudioChunks(
+    samples,
+    chunkSec,
+    overlapSec,
+  )) {
     totalChunks = total;
     const offsetSec = index * hopSec;
     const at = offsetSec;
@@ -447,9 +505,8 @@ export async function transcribeLocally(
     const text = extractText(result);
     if (text) parts.push(text);
     const cues = extractCuesFromResult(result, offsetSec).filter((c) => {
-      // تجاهل بداية المقطع المتداخلة مع السابق
       if (index === 0) return true;
-      return c.start >= offsetSec + OVERLAP_SECONDS * 0.55;
+      return c.start >= offsetSec + overlapSec * 0.55;
     });
     timed.push(...cues);
     processed += 1;
@@ -461,7 +518,6 @@ export async function transcribeLocally(
   if (!text) throw new Error("لم يُكتشف كلام واضح في الملف");
   let cues = mergeTimedCues(timed);
   if (!cues.length) {
-    // تقسيم تقريبي للنص عند غياب الطوابع الزمنية
     cues = splitTextToCues(text, durationSec);
   }
   return {
@@ -494,6 +550,7 @@ export async function transcribeMediaFile(
   languageCode: string,
   onProgress?: (ratio: number) => void,
   onStatus?: (msg: string) => void,
+  quality: TranscribeQuality = "fast",
 ): Promise<{
   text: string;
   provider: string;
@@ -515,7 +572,8 @@ export async function transcribeMediaFile(
   );
 
   // مقاطع قصيرة: جرّب الخادم مع طوابع زمنية إن أمكن
-  if (audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= 8 * 60) {
+  const serverMaxMin = quality === "accurate" ? 12 : 8;
+  if (audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= serverMaxMin * 60) {
     onStatus?.("محاولة التفريغ عالي الدقة على الخادم…");
     try {
       const server = await transcribeViaServer(audio, languageCode, true);
@@ -532,12 +590,17 @@ export async function transcribeMediaFile(
     }
   }
 
-  onStatus?.("التفريغ الكامل داخل المتصفح (جودة عالية · حتى 30 دقيقة)…");
+  onStatus?.(
+    quality === "accurate"
+      ? "التفريغ الأدق داخل المتصفح (نموذج متوسط · أبطأ وأوضح إملاءً)…"
+      : "التفريغ الكامل داخل المتصفح (جودة عالية · حتى 30 دقيقة)…",
+  );
   return transcribeLocally(
     audio,
     languageCode,
     onStatus,
     onProgress,
     durationSec,
+    quality,
   );
 }
