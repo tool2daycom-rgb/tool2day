@@ -152,6 +152,9 @@ async function callVision(opts: {
         model: opts.model,
         temperature: 0.1,
         max_completion_tokens: 400,
+        // Qwen 3.6 thinking breaks JSON; disable reasoning for captioning
+        reasoning_effort: "none",
+        reasoning_format: "hidden",
         messages: [
           {
             role: "user",
@@ -205,6 +208,7 @@ function parseDescribeJson(raw: string): {
   keywords: string[];
 } | null {
   const cleaned = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
