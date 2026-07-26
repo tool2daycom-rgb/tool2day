@@ -7,7 +7,9 @@ const MAX_BYTES = 4 * 1024 * 1024;
 
 const VISION_MODELS = [
   "meta-llama/llama-4-scout-17b-16e-instruct",
+  "llama-4-scout-17b-16e-instruct",
   "meta-llama/llama-4-maverick-17b-128e-instruct",
+  "llama-4-maverick-17b-128e-instruct",
 ];
 
 /**
