@@ -34,11 +34,12 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<Tab>("browse");
-  const [q, setQ] = useState("icon");
+  const [q, setQ] = useState("clipart");
   const [minW, setMinW] = useState("");
   const [minH, setMinH] = useState("");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<PngLibraryItem[]>([]);
+  const [broken, setBroken] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -87,6 +88,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       };
       if (!res.ok) throw new Error(data.error || "فشل البحث");
       setItems(Array.isArray(data.items) ? data.items : []);
+      setBroken({});
       setPage(nextPage);
       setPixabayConfigured(Boolean(data.providers?.pixabayConfigured));
       setStatus(
@@ -270,7 +272,9 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
           )}
 
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {items.map((item) => (
+            {items
+              .filter((item) => !broken[item.id])
+              .map((item) => (
               <article
                 key={item.id}
                 className="overflow-hidden rounded-xl border border-[#eee] bg-white"
@@ -289,6 +293,9 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
                     alt={item.title}
                     className="max-h-full max-w-full object-contain"
                     loading="lazy"
+                    onError={() =>
+                      setBroken((prev) => ({ ...prev, [item.id]: true }))
+                    }
                   />
                 </div>
                 <div className="space-y-1 p-3">
