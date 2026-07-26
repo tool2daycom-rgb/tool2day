@@ -86,12 +86,13 @@ async function describeWithVision(
   | { ok: false; reason: string }
 > {
   const prompt =
-    "Look at this transparent PNG / clipart / logo / icon / sticker. " +
-    "Reply with ONLY valid JSON (no markdown fences): " +
-    '{"title":"Golden dollar sign","keywords":["dollar","money","gold","3d"]} ' +
-    "Rules: title MUST be short English (max 60 chars). " +
-    "keywords MUST be exactly 4 short English tags. " +
-    "Be specific about what you see. No Arabic in the JSON values.";
+    "You describe stock PNG clipart for an English marketplace. " +
+    "Return ONE JSON object only, no markdown, no explanation, no thinking. " +
+    'Exact shape: {"title":"...","keywords":["a","b","c","d"]} ' +
+    "title: short English phrase, max 60 characters. " +
+    "keywords: exactly 4 lowercase English words or short phrases. " +
+    "Never use Arabic. Example: " +
+    '{"title":"Golden dollar sign","keywords":["dollar","money","gold","3d"]}';
 
   const errors: string[] = [];
 
@@ -150,8 +151,7 @@ async function callVision(opts: {
       body: JSON.stringify({
         model: opts.model,
         temperature: 0.1,
-        max_tokens: 200,
-        response_format: { type: "json_object" },
+        max_completion_tokens: 400,
         messages: [
           {
             role: "user",
@@ -169,9 +169,14 @@ async function callVision(opts: {
       let reason = `HTTP ${res.status}`;
       try {
         const err = JSON.parse(rawText) as {
-          error?: { message?: string; code?: string };
+          error?: { message?: string; code?: string; failed_generation?: string };
         };
         reason = err.error?.message || err.error?.code || reason;
+        // Surface a short snippet of failed JSON mode output for debugging
+        if (err.error?.failed_generation) {
+          const snippet = String(err.error.failed_generation).slice(0, 120);
+          reason = `${reason} (${snippet})`;
+        }
       } catch {
         /* keep */
       }
