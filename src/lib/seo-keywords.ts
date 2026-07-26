@@ -427,6 +427,16 @@ const toolExtraKeywords: Record<string, string[]> = {
     "عناوين جذابة",
     "SEO يوتيوب",
   ],
+  "video-subtitles": [
+    "ترجمة فيديو",
+    "ترجمة فرعية",
+    "توليد ترجمة فيديو",
+    "video subtitles",
+    "srt generator",
+    "vtt captions",
+    "ترجمة عربية انجليزية فيديو",
+    "closed captions",
+  ],
   "merge-videos": [
     "دمج فيديوهات",
     "جمع فيديوهات",

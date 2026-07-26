@@ -72,6 +72,7 @@ export type ActiveToolKind =
   | "hashtag-generator"
   | "code-formatter"
   | "video-content-ideas"
+  | "video-subtitles"
   | "archive-extract"
   | "archive-convert"
   | "ebook-convert"
@@ -125,6 +126,7 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "hashtag-generator": "hashtag-generator",
   "code-formatter": "code-formatter",
   "video-content-ideas": "video-content-ideas",
+  "video-subtitles": "video-subtitles",
   "audio-converter": "audio-convert",
   "trim-audio": "audio-trim",
   "change-audio-volume": "audio-volume",

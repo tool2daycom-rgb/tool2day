@@ -5,15 +5,19 @@ export const maxDuration = 120;
 
 const MAX_BYTES = 24 * 1024 * 1024;
 
+type SegmentCue = { start: number; end: number; text: string };
+
 /**
  * تفريغ صوت/فيديو إلى نص عبر Whisper.
  * يستخدم GROQ_API_KEY أو OPENAI_API_KEY إن وُجدت (دقة أعلى).
+ * timestamps=1 يعيد مقاطع مع أزمنة لملفات SRT/VTT.
  */
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
     const language = String(form.get("language") || "ar").trim();
+    const withTimestamps = String(form.get("timestamps") || "") === "1";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "ملف الصوت مطلوب" }, { status: 400 });
@@ -29,30 +33,34 @@ export async function POST(req: NextRequest) {
     const openaiKey = process.env.OPENAI_API_KEY;
 
     if (groqKey) {
-      const text = await callWhisperCompatible({
+      const result = await callWhisperCompatible({
         endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
         apiKey: groqKey,
         model: "whisper-large-v3",
         file,
         language,
+        withTimestamps,
       });
       return NextResponse.json({
-        text,
+        text: result.text,
+        cues: result.cues,
         provider: "groq",
         model: "whisper-large-v3",
       });
     }
 
     if (openaiKey) {
-      const text = await callWhisperCompatible({
+      const result = await callWhisperCompatible({
         endpoint: "https://api.openai.com/v1/audio/transcriptions",
         apiKey: openaiKey,
         model: "whisper-1",
         file,
         language,
+        withTimestamps,
       });
       return NextResponse.json({
-        text,
+        text: result.text,
+        cues: result.cues,
         provider: "openai",
         model: "whisper-1",
       });
@@ -77,11 +85,18 @@ async function callWhisperCompatible(opts: {
   model: string;
   file: File;
   language: string;
-}) {
+  withTimestamps: boolean;
+}): Promise<{ text: string; cues?: SegmentCue[] }> {
   const body = new FormData();
   body.append("file", opts.file, opts.file.name || "audio.wav");
   body.append("model", opts.model);
-  body.append("response_format", "json");
+  body.append(
+    "response_format",
+    opts.withTimestamps ? "verbose_json" : "json",
+  );
+  if (opts.withTimestamps) {
+    body.append("timestamp_granularities[]", "segment");
+  }
   if (opts.language && opts.language !== "auto") {
     body.append("language", opts.language);
   }
@@ -93,6 +108,7 @@ async function callWhisperCompatible(opts: {
   });
   const data = (await res.json().catch(() => ({}))) as {
     text?: string;
+    segments?: Array<{ start?: number; end?: number; text?: string }>;
     error?: { message?: string };
   };
   if (!res.ok) {
@@ -100,5 +116,16 @@ async function callWhisperCompatible(opts: {
   }
   const text = (data.text || "").trim();
   if (!text) throw new Error("لم يُستخرج نص من الملف");
-  return text;
+
+  const cues: SegmentCue[] | undefined = Array.isArray(data.segments)
+    ? data.segments
+        .map((s) => ({
+          start: Number(s.start) || 0,
+          end: Math.max(Number(s.start) || 0, Number(s.end) || 0) + 0.01,
+          text: (s.text || "").trim(),
+        }))
+        .filter((c) => c.text)
+    : undefined;
+
+  return { text, cues };
 }

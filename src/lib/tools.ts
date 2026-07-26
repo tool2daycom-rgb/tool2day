@@ -58,6 +58,7 @@ import {
   Pipette,
   Palette,
   Blend,
+  Captions,
 } from "lucide-react";
 
 export type ToolCategory =
@@ -245,6 +246,15 @@ export const tools: Tool[] = [
     category: "social-dev",
     accept: "text/plain",
     icon: Lightbulb,
+  },
+  {
+    slug: "video-subtitles",
+    title: "توليد ترجمة الفيديو",
+    description:
+      "حوّل كلام الفيديو إلى ترجمة فرعية SRT/VTT بالعربية أو الإنجليزية، مع اختيار حجم ولون الخط ومعاينة أسفل الفيديو مثل الأفلام.",
+    category: "social-dev",
+    accept: "video/*,audio/*",
+    icon: Captions,
   },
 
   // Calculators hub

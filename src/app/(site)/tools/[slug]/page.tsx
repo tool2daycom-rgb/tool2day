@@ -13,6 +13,7 @@ import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
 import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
+import { VideoSubtitlesWorkspace } from "@/components/video-subtitles-workspace";
 import { DEFAULT_LOCALE, isLocaleCode } from "@/lib/i18n/locales";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
 import { JsonLd } from "@/components/json-ld";
@@ -160,6 +161,7 @@ export default async function ToolPage({ params }: Props) {
     kind === "video-content-ideas";
   const isCurrency = kind === "currency-exchange";
   const isVideoToText = kind === "video-to-text";
+  const isVideoSubtitles = kind === "video-subtitles";
   const isImageConverter = slug === "image-converter";
   const isWide =
     isPdf ||
@@ -167,6 +169,7 @@ export default async function ToolPage({ params }: Props) {
     isCurrency ||
     kind === "ai-erase" ||
     isImageConverter ||
+    isVideoSubtitles ||
     kind === "video-content-ideas";
 
   return (
@@ -270,6 +273,12 @@ export default async function ToolPage({ params }: Props) {
           />
         ) : isVideoToText ? (
           <VideoToTextWorkspace
+            slug={tool.slug}
+            arTitle={tool.title}
+            arDescription={tool.description}
+          />
+        ) : isVideoSubtitles ? (
+          <VideoSubtitlesWorkspace
             slug={tool.slug}
             arTitle={tool.title}
             arDescription={tool.description}

@@ -87,11 +87,17 @@ export async function extractTranscriptionAudio(
 export async function transcribeViaServer(
   audio: File,
   languageCode: string,
-): Promise<{ text: string; provider: string } | null> {
+  withTimestamps = false,
+): Promise<{
+  text: string;
+  provider: string;
+  cues?: TranscriptCue[];
+} | null> {
   if (audio.size > MAX_SERVER_AUDIO_BYTES) return null;
   const form = new FormData();
   form.append("file", audio, audio.name);
   form.append("language", languageCode);
+  if (withTimestamps) form.append("timestamps", "1");
   const res = await fetch("/api/transcribe", { method: "POST", body: form });
   if (res.status === 501) return null;
   const data = (await res.json().catch(() => ({}))) as {
@@ -99,17 +105,32 @@ export async function transcribeViaServer(
     provider?: string;
     error?: string;
     message?: string;
+    cues?: TranscriptCue[];
   };
   if (!res.ok) {
     throw new Error(data.error || data.message || "فشل التفريغ على الخادم");
   }
   if (!data.text) throw new Error("لم يُرجع الخادم نصاً");
-  return { text: data.text, provider: data.provider || "server" };
+  return {
+    text: data.text,
+    provider: data.provider || "server",
+    cues: Array.isArray(data.cues) ? data.cues : undefined,
+  };
 }
 
 type WhisperResult = {
   text?: string;
-  chunks?: Array<{ text?: string }>;
+  chunks?: Array<{
+    text?: string;
+    timestamp?: [number, number] | number[];
+  }>;
+};
+
+/** مقطع ترجمة فرعية بزمن بالثواني */
+export type TranscriptCue = {
+  start: number;
+  end: number;
+  text: string;
 };
 
 type WhisperPipeline = (
@@ -225,6 +246,82 @@ function extractText(result: WhisperResult | string): string {
   return (result.text || "").trim();
 }
 
+function extractCuesFromResult(
+  result: WhisperResult | string,
+  offsetSec: number,
+): TranscriptCue[] {
+  if (typeof result === "string") {
+    const text = result.trim();
+    if (!text) return [];
+    return [{ start: offsetSec, end: offsetSec + 2, text }];
+  }
+  const chunks = result.chunks;
+  if (chunks?.length) {
+    const cues: TranscriptCue[] = [];
+    for (const c of chunks) {
+      const text = (c.text || "").trim();
+      if (!text) continue;
+      const ts = c.timestamp;
+      const start =
+        Array.isArray(ts) && typeof ts[0] === "number"
+          ? offsetSec + Math.max(0, ts[0])
+          : offsetSec;
+      const end =
+        Array.isArray(ts) && typeof ts[1] === "number"
+          ? offsetSec + Math.max(start - offsetSec + 0.4, ts[1])
+          : start + Math.max(1.2, text.split(/\s+/u).length * 0.35);
+      cues.push({ start, end, text });
+    }
+    return cues;
+  }
+  const text = (result.text || "").trim();
+  if (!text) return [];
+  return [{ start: offsetSec, end: offsetSec + 3, text }];
+}
+
+function mergeTimedCues(parts: TranscriptCue[]): TranscriptCue[] {
+  if (!parts.length) return [];
+  const sorted = [...parts].sort((a, b) => a.start - b.start || a.end - b.end);
+  const out: TranscriptCue[] = [];
+  for (const cue of sorted) {
+    const prev = out[out.length - 1];
+    if (!prev) {
+      out.push({ ...cue });
+      continue;
+    }
+    // تجاهل تكرار التداخل بين مقاطع الصوت
+    if (
+      cue.start < prev.end - 0.15 &&
+      normalizeCueText(cue.text) === normalizeCueText(prev.text)
+    ) {
+      prev.end = Math.max(prev.end, cue.end);
+      continue;
+    }
+    if (
+      cue.start <= prev.end + 0.35 &&
+      cue.text.length < 80 &&
+      prev.text.length + cue.text.length < 110
+    ) {
+      // دمج جمل قصيرة متجاورة
+      prev.text = `${prev.text} ${cue.text}`.replace(/\s+/gu, " ").trim();
+      prev.end = Math.max(prev.end, cue.end);
+      continue;
+    }
+    if (cue.start < prev.end) {
+      cue.start = prev.end + 0.04;
+    }
+    if (cue.end <= cue.start + 0.25) {
+      cue.end = cue.start + 0.8;
+    }
+    out.push({ ...cue });
+  }
+  return out;
+}
+
+function normalizeCueText(t: string) {
+  return t.replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
 function mergeChunkTexts(parts: string[]): string {
   if (!parts.length) return "";
   let out = parts[0]!.trim();
@@ -298,7 +395,12 @@ export async function transcribeLocally(
   onStatus?: (msg: string) => void,
   onProgress?: (ratio: number) => void,
   knownDurationSec?: number,
-): Promise<{ text: string; provider: string; durationSec: number }> {
+): Promise<{
+  text: string;
+  provider: string;
+  durationSec: number;
+  cues: TranscriptCue[];
+}> {
   const { pipe, label } = await getLocalWhisper(onStatus);
   onStatus?.("تحميل الصوت في الذاكرة وتقسيمه لمقاطع…");
   const samples = await decodeWavToFloat32(audio);
@@ -327,21 +429,29 @@ export async function transcribeLocally(
   }
 
   const parts: string[] = [];
+  const timed: TranscriptCue[] = [];
   let processed = 0;
   let totalChunks = 1;
+  const hopSec = CHUNK_SECONDS - OVERLAP_SECONDS;
 
   for await (const { view, index, total } of iterateAudioChunks(samples)) {
     totalChunks = total;
-    const at = (index * CHUNK_SECONDS * (1 - OVERLAP_SECONDS / CHUNK_SECONDS));
+    const offsetSec = index * hopSec;
+    const at = offsetSec;
     onStatus?.(
       `تفريغ المقطع ${index + 1} من ~${total} · عند ${formatClock(at)} / ${formatClock(durationSec)}`,
     );
     onProgress?.(0.12 + (0.85 * index) / Math.max(1, total));
-    // نسخ مقطع واحد فقط للنموذج (يتجنب مشاكل الـ views أحياناً)
     const slice = new Float32Array(view);
     const result = await pipe(slice, baseOpts);
     const text = extractText(result);
     if (text) parts.push(text);
+    const cues = extractCuesFromResult(result, offsetSec).filter((c) => {
+      // تجاهل بداية المقطع المتداخلة مع السابق
+      if (index === 0) return true;
+      return c.start >= offsetSec + OVERLAP_SECONDS * 0.55;
+    });
+    timed.push(...cues);
     processed += 1;
     await yieldUi();
   }
@@ -349,11 +459,34 @@ export async function transcribeLocally(
   onProgress?.(0.98);
   const text = mergeChunkTexts(parts);
   if (!text) throw new Error("لم يُكتشف كلام واضح في الملف");
+  let cues = mergeTimedCues(timed);
+  if (!cues.length) {
+    // تقسيم تقريبي للنص عند غياب الطوابع الزمنية
+    cues = splitTextToCues(text, durationSec);
+  }
   return {
     text,
     provider: `${label} · ${processed || totalChunks} مقطع · حتى 30د`,
     durationSec,
+    cues,
   };
+}
+
+function splitTextToCues(text: string, durationSec: number): TranscriptCue[] {
+  const sentences = text
+    .split(/(?<=[.!?؟。！？\n])\s+/u)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!sentences.length) return [{ start: 0, end: durationSec, text }];
+  const totalChars = sentences.reduce((n, s) => n + s.length, 0) || 1;
+  let t = 0;
+  return sentences.map((s) => {
+    const span = Math.max(1.2, (s.length / totalChars) * durationSec);
+    const start = t;
+    const end = Math.min(durationSec, t + span);
+    t = end;
+    return { start, end, text: s };
+  });
 }
 
 export async function transcribeMediaFile(
@@ -361,7 +494,12 @@ export async function transcribeMediaFile(
   languageCode: string,
   onProgress?: (ratio: number) => void,
   onStatus?: (msg: string) => void,
-): Promise<{ text: string; provider: string; durationSec?: number }> {
+): Promise<{
+  text: string;
+  provider: string;
+  durationSec?: number;
+  cues?: TranscriptCue[];
+}> {
   if (file.size > MAX_VIDEO_TO_TEXT_MB * 1024 * 1024) {
     throw new Error(`الحد الأقصى لحجم الملف ${MAX_VIDEO_TO_TEXT_MB}MB`);
   }
@@ -376,14 +514,18 @@ export async function transcribeMediaFile(
     `استُخرج ${formatClock(durationSec)} من الصوت — بدء التفريغ الكامل…`,
   );
 
-  // الملفات القصيرة فقط قد تمر عبر الخادم إن وُجد مفتاح
+  // مقاطع قصيرة: جرّب الخادم مع طوابع زمنية إن أمكن
   if (audio.size <= MAX_SERVER_AUDIO_BYTES && durationSec <= 8 * 60) {
     onStatus?.("محاولة التفريغ عالي الدقة على الخادم…");
     try {
-      const server = await transcribeViaServer(audio, languageCode);
+      const server = await transcribeViaServer(audio, languageCode, true);
       if (server) {
         onProgress?.(1);
-        return { ...server, durationSec };
+        const cues =
+          server.cues?.length
+            ? server.cues
+            : splitTextToCues(server.text, durationSec);
+        return { ...server, durationSec, cues };
       }
     } catch {
       // سقوط محلي
