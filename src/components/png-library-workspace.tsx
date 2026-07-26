@@ -62,6 +62,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   const [cutProgress, setCutProgress] = useState(0);
   // افتراضياً مقفول: قص AI يخرّب الشعارات والـ PNG الشفافة الجاهزة
   const [autoCut, setAutoCut] = useState(false);
+  const [describing, setDescribing] = useState(false);
 
   const visibleItems = useMemo(
     () => items.filter((item) => !broken[item.id]),
@@ -200,56 +201,101 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
     setError(null);
     if (preview) URL.revokeObjectURL(preview);
 
-    if (!caption) {
-      setCaption(f.name.replace(/\.(png|jpe?g|webp)$/i, "").slice(0, 80));
+    // لا نثبت اسم ملف مثل pngegg (13) — الـ AI سيملأ العنوان
+    if (
+      !caption.trim() ||
+      /^pngegg/i.test(caption.trim()) ||
+      /^n_\d/i.test(caption.trim())
+    ) {
+      setCaption("");
     }
 
     // PNG شفاف جاهز: لا نقصّه أبداً (القص يفسد الجودة)
     const alreadyClear = await imageHasTransparency(f);
+    let readyFile = f;
     if (alreadyClear) {
       setFile(f);
       setPreview(URL.createObjectURL(f));
       setStatus("الصورة شفافة مسبقاً — عُرضت كما هي بدون قص");
-      return;
-    }
-
-    if (!autoCut) {
+    } else if (!autoCut) {
       setFile(f);
       setPreview(URL.createObjectURL(f));
-      setStatus("جاهز للرفع — فعّل إزالة الخلفية فقط إن كانت الصورة بخلفية غير شفافة");
-      return;
-    }
-
-    setCutting(true);
-    setCutProgress(0);
-    setStatus("إزالة الخلفية — إبقاء الشعار/الكتابة فقط…");
-    try {
-      const { removeImageBackground } = await import(
-        "@/lib/processors/ai-micro-tools"
+      setStatus(
+        "جاهز للرفع — فعّل إزالة الخلفية فقط إن كانت الصورة بخلفية غير شفافة",
       );
-      const blob = await removeImageBackground(f, (p) => setCutProgress(p), {
-        personOnly: false,
-      });
-      const cutFile = new File(
-        [blob],
-        `${f.name.replace(/\.[^.]+$/, "") || "logo"}-transparent.png`,
-        { type: "image/png" },
-      );
-      setFile(cutFile);
-      setPreview(URL.createObjectURL(blob));
-      setStatus("تم قص الخلفية — راجع المعاينة جيداً قبل الرفع");
-    } catch (e) {
-      setFile(f);
-      setPreview(URL.createObjectURL(f));
-      setError(
-        e instanceof Error
-          ? `تعذّر قص الخلفية: ${e.message} — يمكنك الرفع كما هي`
-          : "تعذّر قص الخلفية — يمكنك الرفع كما هي",
-      );
-      setStatus(null);
-    } finally {
-      setCutting(false);
+    } else {
+      setCutting(true);
       setCutProgress(0);
+      setStatus("إزالة الخلفية — إبقاء الشعار/الكتابة فقط…");
+      try {
+        const { removeImageBackground } = await import(
+          "@/lib/processors/ai-micro-tools"
+        );
+        const blob = await removeImageBackground(f, (p) => setCutProgress(p), {
+          personOnly: false,
+        });
+        readyFile = new File(
+          [blob],
+          `${f.name.replace(/\.[^.]+$/, "") || "logo"}-transparent.png`,
+          { type: "image/png" },
+        );
+        setFile(readyFile);
+        setPreview(URL.createObjectURL(blob));
+        setStatus("تم قص الخلفية — جاري اقتراح العنوان…");
+      } catch (e) {
+        setFile(f);
+        setPreview(URL.createObjectURL(f));
+        setError(
+          e instanceof Error
+            ? `تعذّر قص الخلفية: ${e.message} — يمكنك الرفع كما هي`
+            : "تعذّر قص الخلفية — يمكنك الرفع كما هي",
+        );
+        setStatus(null);
+        setCutting(false);
+        setCutProgress(0);
+        void suggestMeta(f);
+        return;
+      } finally {
+        setCutting(false);
+        setCutProgress(0);
+      }
+    }
+
+    void suggestMeta(readyFile);
+  }
+
+  async function suggestMeta(imageFile: File) {
+    setDescribing(true);
+    try {
+      const form = new FormData();
+      form.append("file", imageFile, imageFile.name || "image.png");
+      const res = await fetch("/api/png-library/describe", {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        title?: string;
+        keywords?: string[];
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        if (res.status !== 501) {
+          setError(data.message || data.error || "تعذّر توليد العنوان");
+        }
+        return;
+      }
+      if (data.title) setCaption(data.title.slice(0, 120));
+      if (Array.isArray(data.keywords) && data.keywords.length) {
+        const padded = [...data.keywords.slice(0, 4)];
+        while (padded.length < 4) padded.push("");
+        setKeywords(padded);
+      }
+      setStatus("تم اقتراح العنوان والكلمات المفتاحية — عدّلها إن لزم ثم ارفع");
+    } catch {
+      // صامت — يبقى الإدخال اليدوي
+    } finally {
+      setDescribing(false);
     }
   }
 
@@ -610,11 +656,24 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
             </div>
           )}
 
+          {preview && file && (
+            <button
+              type="button"
+              disabled={describing || cutting || uploading}
+              onClick={() => void suggestMeta(file)}
+              className="w-full rounded-lg border border-[#0d9488] bg-white px-4 py-2.5 text-sm font-semibold text-[#0f766e] disabled:opacity-40"
+            >
+              {describing
+                ? "جاري قراءة الصورة واقتراح العنوان…"
+                : "توليد العنوان والكلمات المفتاحية من الصورة"}
+            </button>
+          )}
+
           <label className="block text-sm font-semibold text-[#333]">
             العنوان
             <input
               className="mt-1.5 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2.5 text-sm"
-              placeholder="PNG caption"
+              placeholder={describing ? "جاري الاقتراح…" : "عنوان عربي قصير"}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               maxLength={120}
@@ -642,7 +701,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
 
           <button
             type="button"
-            disabled={uploading || cutting || !file}
+            disabled={uploading || cutting || describing || !file}
             onClick={() => void submitPng()}
             className="w-full rounded-lg bg-[#0d9488] px-5 py-3 text-sm font-bold text-white disabled:opacity-40"
           >
