@@ -109,10 +109,9 @@ export function kineticBurnFontPx(
   const viewW =
     previewClientW > 40 ? previewClientW : Math.min(390, Math.max(280, videoW * 0.45));
   const scaled = Math.round(safe * (videoW / viewW));
-  // حدود معقولة: لا أصغر من ~4% ولا أكبر من ~11% من عرض الفيديو
-  const floor = Math.round(videoW * 0.04);
-  const ceiling = Math.round(videoW * 0.11);
-  return Math.min(ceiling, Math.max(floor, scaled));
+  // حد أدنى فقط — بدون تضخيم إضافي حتى يبقى مطابقاً للمعاينة
+  const floor = Math.round(videoW * 0.035);
+  return Math.max(floor, scaled);
 }
 
 /** في المعاينة نعرض الرقم المختار مباشرة — والتنزيل يُقاس ليطابقه */

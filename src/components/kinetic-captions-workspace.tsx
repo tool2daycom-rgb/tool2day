@@ -505,7 +505,6 @@ export function KineticCaptionsWorkspace({
                 const v = e.currentTarget;
                 const d = v.duration;
                 if (Number.isFinite(d)) setDuration(d);
-                if (v.videoWidth) setVideoNaturalW(v.videoWidth);
                 setPreviewClientW(v.clientWidth || 0);
               }}
             />
