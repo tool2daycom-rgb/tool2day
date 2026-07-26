@@ -54,3 +54,43 @@ export async function readPngDimensions(
     img.src = url;
   });
 }
+
+export const PNG_ZIP_MAX = 50;
+
+function safeFileName(title: string, index: number, ext = "png") {
+  const base = (title || `image-${index}`)
+    .replace(/[^\w\u0600-\u06FF\-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  return `${String(index).padStart(2, "0")}-${base || "image"}.${ext}`;
+}
+
+/** يبني ZIP من روابط الصور (حد أقصى PNG_ZIP_MAX) */
+export async function buildPngZip(
+  items: PngLibraryItem[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Blob> {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  const list = items.slice(0, PNG_ZIP_MAX);
+  let done = 0;
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i]!;
+    try {
+      const res = await fetch(item.downloadUrl || item.previewUrl);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      const type = res.headers.get("content-type") || "";
+      const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : "png";
+      zip.file(safeFileName(item.title, i + 1, ext), buf);
+    } catch {
+      // تجاهل الفاشل وأكمل
+    }
+    done += 1;
+    onProgress?.(done, list.length);
+  }
+  const files = Object.keys(zip.files);
+  if (!files.length) throw new Error("لم يُحمَّل أي ملف للضغط");
+  return zip.generateAsync({ type: "blob" });
+}
