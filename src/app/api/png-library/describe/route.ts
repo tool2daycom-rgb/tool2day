@@ -53,11 +53,13 @@ export async function POST(req: NextRequest) {
     }
 
     const described = await describeWithVision(dataUrl, groq, openai);
-    if (!described) {
+    if (!described.ok) {
       return NextResponse.json(
         {
           error: "vision_failed",
-          message: "Could not describe the image — try again or enter title manually",
+          message:
+            described.reason ||
+            "Could not describe the image — try again or enter title manually",
         },
         { status: 502 },
       );
@@ -78,11 +80,10 @@ async function describeWithVision(
   dataUrl: string,
   groq?: string,
   openai?: string,
-): Promise<{
-  title: string;
-  keywords: string[];
-  provider: string;
-} | null> {
+): Promise<
+  | { ok: true; title: string; keywords: string[]; provider: string }
+  | { ok: false; reason: string }
+> {
   const prompt =
     "Look at this transparent PNG / clipart / logo / icon / sticker. " +
     "Reply with ONLY valid JSON (no markdown fences): " +
@@ -90,6 +91,8 @@ async function describeWithVision(
     "Rules: title MUST be short English (max 60 chars). " +
     "keywords MUST be exactly 4 short English tags. " +
     "Be specific about what you see. No Arabic in the JSON values.";
+
+  const errors: string[] = [];
 
   if (groq) {
     for (const model of VISION_MODELS) {
@@ -100,7 +103,8 @@ async function describeWithVision(
         prompt,
         dataUrl,
       });
-      if (out) return { ...out, provider: `groq:${model}` };
+      if (out.ok) return { ...out.value, provider: `groq:${model}`, ok: true };
+      if (out.reason) errors.push(`${model}: ${out.reason}`);
     }
   }
 
@@ -112,10 +116,14 @@ async function describeWithVision(
       prompt,
       dataUrl,
     });
-    if (out) return { ...out, provider: "openai-vision" };
+    if (out.ok) return { ...out.value, provider: "openai-vision", ok: true };
+    if (out.reason) errors.push(`openai: ${out.reason}`);
   }
 
-  return null;
+  return {
+    ok: false,
+    reason: errors[0] || "Vision API failed",
+  };
 }
 
 async function callVision(opts: {
@@ -124,7 +132,10 @@ async function callVision(opts: {
   model: string;
   prompt: string;
   dataUrl: string;
-}): Promise<{ title: string; keywords: string[] } | null> {
+}): Promise<
+  | { ok: true; value: { title: string; keywords: string[] } }
+  | { ok: false; reason: string }
+> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 40000);
@@ -153,20 +164,32 @@ async function callVision(opts: {
     clearTimeout(timer);
     const rawText = await res.text();
     if (!res.ok) {
-      console.error("vision_http", opts.model, res.status, rawText.slice(0, 300));
-      return null;
+      let reason = `HTTP ${res.status}`;
+      try {
+        const err = JSON.parse(rawText) as {
+          error?: { message?: string; code?: string };
+        };
+        reason = err.error?.message || err.error?.code || reason;
+      } catch {
+        /* keep */
+      }
+      return { ok: false, reason };
     }
     let data: { choices?: { message?: { content?: string } }[] };
     try {
       data = JSON.parse(rawText) as typeof data;
     } catch {
-      return null;
+      return { ok: false, reason: "Invalid JSON from model" };
     }
     const raw = data.choices?.[0]?.message?.content?.trim() || "";
-    return parseDescribeJson(raw);
+    const parsed = parseDescribeJson(raw);
+    if (!parsed) return { ok: false, reason: "Could not parse model output" };
+    return { ok: true, value: parsed };
   } catch (e) {
-    console.error("vision_err", opts.model, e instanceof Error ? e.message : e);
-    return null;
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : "Vision request failed",
+    };
   }
 }
 
