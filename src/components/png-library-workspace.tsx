@@ -362,10 +362,10 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
         <button
           type="button"
           onClick={() => setTab("submit")}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+          className={`rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition ${
             tab === "submit"
-              ? "bg-[#0d9488] text-white"
-              : "border border-[#ddd] bg-white text-[#333]"
+              ? "bg-[#c2410c] text-white ring-2 ring-[#fdba74] ring-offset-2"
+              : "bg-[#ea580c] text-white hover:bg-[#c2410c]"
           }`}
         >
           رفع PNG (Submit)
