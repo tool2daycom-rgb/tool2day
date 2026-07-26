@@ -266,13 +266,20 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
 
   async function suggestMeta(imageFile: File) {
     setDescribing(true);
+    setError(null);
     try {
+      // تصغير الصورة قبل الإرسال حتى لا يعلق الطلب
+      const compact = await compactImageForDescribe(imageFile);
       const form = new FormData();
-      form.append("file", imageFile, imageFile.name || "image.png");
+      form.append("file", compact, compact.name || "image.png");
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 45000);
       const res = await fetch("/api/png-library/describe", {
         method: "POST",
         body: form,
+        signal: controller.signal,
       });
+      window.clearTimeout(timer);
       const data = (await res.json().catch(() => ({}))) as {
         title?: string;
         keywords?: string[];
@@ -280,9 +287,12 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
         message?: string;
       };
       if (!res.ok) {
-        if (res.status !== 501) {
-          setError(data.message || data.error || "تعذّر توليد العنوان");
-        }
+        setError(
+          data.message ||
+            data.error ||
+            "Could not generate title — enter English title manually",
+        );
+        setStatus(null);
         return;
       }
       if (data.title) setCaption(data.title.slice(0, 120));
@@ -291,11 +301,46 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
         while (padded.length < 4) padded.push("");
         setKeywords(padded);
       }
-      setStatus("تم اقتراح العنوان والكلمات المفتاحية — عدّلها إن لزم ثم ارفع");
-    } catch {
-      // صامت — يبقى الإدخال اليدوي
+      setStatus("Title & keywords suggested in English — edit if needed, then Submit");
+    } catch (e) {
+      setError(
+        e instanceof Error && e.name === "AbortError"
+          ? "Title suggestion timed out — try again"
+          : "Could not generate title — enter English title manually",
+      );
+      setStatus(null);
     } finally {
       setDescribing(false);
+    }
+  }
+
+  async function compactImageForDescribe(imageFile: File): Promise<File> {
+    try {
+      const url = URL.createObjectURL(imageFile);
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("load failed"));
+        el.src = url;
+      });
+      URL.revokeObjectURL(url);
+      const max = 768;
+      const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return imageFile;
+      ctx.drawImage(img, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/png"),
+      );
+      if (!blob) return imageFile;
+      return new File([blob], "describe.png", { type: "image/png" });
+    } catch {
+      return imageFile;
     }
   }
 
@@ -664,8 +709,8 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
               className="w-full rounded-lg border border-[#0d9488] bg-white px-4 py-2.5 text-sm font-semibold text-[#0f766e] disabled:opacity-40"
             >
               {describing
-                ? "جاري قراءة الصورة واقتراح العنوان…"
-                : "توليد العنوان والكلمات المفتاحية من الصورة"}
+                ? "Reading image & suggesting English title…"
+                : "Generate English title & keywords from image"}
             </button>
           )}
 
@@ -673,7 +718,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
             العنوان
             <input
               className="mt-1.5 w-full rounded-lg border border-[#ddd] bg-[#fafafa] px-3 py-2.5 text-sm"
-              placeholder={describing ? "جاري الاقتراح…" : "عنوان عربي قصير"}
+              placeholder={describing ? "Suggesting…" : "English title"}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               maxLength={120}
@@ -681,7 +726,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
           </label>
 
           <div>
-            <p className="text-sm font-semibold text-[#333]">كلمات مفتاحية</p>
+            <p className="text-sm font-semibold text-[#333]">Keywords (English)</p>
             <div className="mt-1.5 grid gap-2 sm:grid-cols-4">
               {keywords.map((k, i) => (
                 <input

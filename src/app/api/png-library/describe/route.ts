@@ -5,38 +5,61 @@ export const maxDuration = 60;
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
+const VISION_MODELS = [
+  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "meta-llama/llama-4-maverick-17b-128e-instruct",
+];
+
 /**
- * يقرأ الصورة ويولّد عنواناً عربياً قصيراً + كلمات مفتاحية.
+ * يقرأ الصورة ويولّد عنواناً إنجليزياً + كلمات مفتاحية إنجليزية.
  */
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: "الصورة مطلوبة" }, { status: 400 });
+      return NextResponse.json({ error: "Image required" }, { status: 400 });
     }
     if (file.size > MAX_BYTES) {
       return NextResponse.json(
-        { error: "الصورة كبيرة جداً للتحليل (حد 4MB)" },
+        { error: "Image too large for analysis (max 4MB)" },
         { status: 413 },
       );
     }
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const mime = file.type || "image/png";
+    let mime = file.type || "image/png";
     if (!mime.startsWith("image/")) {
-      return NextResponse.json({ error: "ملف غير صالح" }, { status: 400 });
+      // بعض المتصفحات ترسل application/octet-stream
+      if (file.name.toLowerCase().endsWith(".png")) mime = "image/png";
+      else if (/\.jpe?g$/i.test(file.name)) mime = "image/jpeg";
+      else if (file.name.toLowerCase().endsWith(".webp")) mime = "image/webp";
+      else {
+        return NextResponse.json({ error: "Invalid image file" }, { status: 400 });
+      }
     }
     const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
 
-    const described = await describeWithVision(dataUrl);
-    if (!described) {
+    const groq = process.env.GROQ_API_KEY?.trim();
+    const openai = process.env.OPENAI_API_KEY?.trim();
+    if (!groq && !openai) {
       return NextResponse.json(
         {
           error: "no_vision",
-          message: "لا يتوفر محرك رؤية — أدخل العنوان يدوياً",
+          message: "No vision API key configured (GROQ_API_KEY)",
         },
         { status: 501 },
+      );
+    }
+
+    const described = await describeWithVision(dataUrl, groq, openai);
+    if (!described) {
+      return NextResponse.json(
+        {
+          error: "vision_failed",
+          message: "Could not describe the image — try again or enter title manually",
+        },
+        { status: 502 },
       );
     }
 
@@ -46,38 +69,41 @@ export async function POST(req: NextRequest) {
       provider: described.provider,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "فشل تحليل الصورة";
+    const message = e instanceof Error ? e.message : "Describe failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-async function describeWithVision(dataUrl: string): Promise<{
+async function describeWithVision(
+  dataUrl: string,
+  groq?: string,
+  openai?: string,
+): Promise<{
   title: string;
   keywords: string[];
   provider: string;
 } | null> {
   const prompt =
-    "Look at this transparent PNG / clipart / logo / icon. " +
-    "Reply with ONLY valid JSON, no markdown: " +
-    '{"title_ar":"...","title_en":"...","keywords":["k1","k2","k3","k4"]} ' +
-    "title_ar: short Arabic title (max 60 chars) describing the subject. " +
-    "title_en: short English title. " +
-    "keywords: 4 short English search tags (single words or short phrases). " +
-    "Be specific (e.g. golden dollar sign, warning road sign). Do not invent brand claims.";
+    "Look at this transparent PNG / clipart / logo / icon / sticker. " +
+    "Reply with ONLY valid JSON (no markdown fences): " +
+    '{"title":"Golden dollar sign","keywords":["dollar","money","gold","3d"]} ' +
+    "Rules: title MUST be short English (max 60 chars). " +
+    "keywords MUST be exactly 4 short English tags. " +
+    "Be specific about what you see. No Arabic in the JSON values.";
 
-  const groq = process.env.GROQ_API_KEY;
   if (groq) {
-    const out = await callVision({
-      endpoint: "https://api.groq.com/openai/v1/chat/completions",
-      apiKey: groq,
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
-      prompt,
-      dataUrl,
-    });
-    if (out) return { ...out, provider: "groq-vision" };
+    for (const model of VISION_MODELS) {
+      const out = await callVision({
+        endpoint: "https://api.groq.com/openai/v1/chat/completions",
+        apiKey: groq,
+        model,
+        prompt,
+        dataUrl,
+      });
+      if (out) return { ...out, provider: `groq:${model}` };
+    }
   }
 
-  const openai = process.env.OPENAI_API_KEY;
   if (openai) {
     const out = await callVision({
       endpoint: "https://api.openai.com/v1/chat/completions",
@@ -100,15 +126,19 @@ async function callVision(opts: {
   dataUrl: string;
 }): Promise<{ title: string; keywords: string[] } | null> {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 40000);
     const res = await fetch(opts.endpoint, {
       method: "POST",
+      signal: controller.signal,
       headers: {
         Authorization: `Bearer ${opts.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         model: opts.model,
-        temperature: 0.2,
+        temperature: 0.1,
+        max_tokens: 200,
         messages: [
           {
             role: "user",
@@ -120,13 +150,22 @@ async function callVision(opts: {
         ],
       }),
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
+    clearTimeout(timer);
+    const rawText = await res.text();
+    if (!res.ok) {
+      console.error("vision_http", opts.model, res.status, rawText.slice(0, 300));
+      return null;
+    }
+    let data: { choices?: { message?: { content?: string } }[] };
+    try {
+      data = JSON.parse(rawText) as typeof data;
+    } catch {
+      return null;
+    }
     const raw = data.choices?.[0]?.message?.content?.trim() || "";
     return parseDescribeJson(raw);
-  } catch {
+  } catch (e) {
+    console.error("vision_err", opts.model, e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -135,7 +174,12 @@ function parseDescribeJson(raw: string): {
   title: string;
   keywords: string[];
 } | null {
-  const match = raw.match(/\{[\s\S]*\}/);
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[0]) as {
@@ -144,8 +188,9 @@ function parseDescribeJson(raw: string): {
       title?: string;
       keywords?: unknown;
     };
+    // English preferred
     const title = String(
-      parsed.title_ar || parsed.title || parsed.title_en || "",
+      parsed.title_en || parsed.title || parsed.title_ar || "",
     )
       .trim()
       .slice(0, 80);
@@ -153,12 +198,20 @@ function parseDescribeJson(raw: string): {
       ? parsed.keywords
           .map((k) => String(k || "").trim().toLowerCase())
           .filter(Boolean)
-          .slice(0, 8)
+          .slice(0, 4)
       : [];
+    while (keywords.length < 4 && title) {
+      const parts = title.toLowerCase().split(/\s+/).filter(Boolean);
+      for (const p of parts) {
+        if (keywords.length >= 4) break;
+        if (!keywords.includes(p) && p.length > 2) keywords.push(p);
+      }
+      break;
+    }
     if (!title && !keywords.length) return null;
     return {
       title: title || keywords.slice(0, 3).join(" "),
-      keywords: keywords.length ? keywords : title.split(/\s+/).slice(0, 4),
+      keywords: keywords.slice(0, 4),
     };
   } catch {
     return null;
