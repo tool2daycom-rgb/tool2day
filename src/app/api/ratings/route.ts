@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
+import {
+  resolveUserAvatarUrl,
+  sanitizeAvatarUrl,
+} from "@/lib/user-avatar";
 
 export const runtime = "nodejs";
 
@@ -55,13 +59,6 @@ function sanitizeComment(raw: string | undefined | null): string {
   return (raw || "").trim().replace(/\s+/g, " ").slice(0, 400);
 }
 
-function sanitizeAvatarUrl(raw: string | undefined | null): string {
-  const s = (raw || "").trim();
-  if (!s || s.length > 500) return "";
-  if (!/^https:\/\//i.test(s)) return "";
-  return s;
-}
-
 function sanitizeCountryCode(raw: string | undefined | null): string {
   const s = (raw || "").trim().toUpperCase();
   return /^[A-Z]{2}$/.test(s) ? s : "";
@@ -74,21 +71,7 @@ function sanitizeCountryFlag(raw: string | undefined | null): string {
 }
 
 function avatarFromAuthUser(user: User): string {
-  const meta = user.user_metadata || {};
-  const identity = user.identities?.[0]?.identity_data || {};
-  const candidates = [
-    meta.avatar_url,
-    meta.picture,
-    meta.avatar,
-    meta.profile_image_url,
-    identity.avatar_url,
-    identity.picture,
-  ];
-  for (const c of candidates) {
-    const ok = sanitizeAvatarUrl(typeof c === "string" ? c : "");
-    if (ok) return ok;
-  }
-  return "";
+  return resolveUserAvatarUrl(user);
 }
 
 function countryFromAuthUser(user: User): { code: string; flag: string } {
@@ -262,7 +245,7 @@ export async function POST(req: Request) {
         );
       }
       const fromAuth = avatarFromAuthUser(data.user);
-      if (fromAuth) avatarUrl = fromAuth;
+      avatarUrl = fromAuth || avatarUrl;
       const countryAuth = countryFromAuthUser(data.user);
       if (countryAuth.code) countryCode = countryAuth.code;
       if (countryAuth.flag) countryFlag = countryAuth.flag;

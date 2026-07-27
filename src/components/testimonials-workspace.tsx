@@ -12,6 +12,7 @@ import {
   type PublicReview,
 } from "@/lib/ratings";
 import { countryFromAuthMeta, findCountry } from "@/lib/profile-countries";
+import { resolveUserAvatarUrl } from "@/lib/user-avatar";
 import { tools } from "@/lib/tools";
 
 function initials(name: string) {
@@ -91,20 +92,7 @@ function StarsMini({ value }: { value: number }) {
 }
 
 function authAvatarUrl(user: AuthUser): string {
-  const meta = user.user_metadata || {};
-  const identity = user.identities?.[0]?.identity_data || {};
-  const candidates = [
-    meta.avatar_url,
-    meta.picture,
-    meta.avatar,
-    meta.profile_image_url,
-    identity.avatar_url,
-    identity.picture,
-  ];
-  for (const c of candidates) {
-    if (typeof c === "string" && /^https:\/\//i.test(c)) return c;
-  }
-  return "";
+  return resolveUserAvatarUrl(user);
 }
 
 function ReviewAvatar({

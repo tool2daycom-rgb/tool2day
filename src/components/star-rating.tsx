@@ -18,6 +18,7 @@ import {
   type RatingStats,
 } from "@/lib/ratings";
 import { countryFromAuthMeta } from "@/lib/profile-countries";
+import { resolveUserAvatarUrl } from "@/lib/user-avatar";
 
 function StarButton({
   index,
@@ -173,20 +174,7 @@ function authDisplayName(user: AuthUser): string {
 }
 
 function authAvatarUrl(user: AuthUser): string {
-  const meta = user.user_metadata || {};
-  const identity = user.identities?.[0]?.identity_data || {};
-  const candidates = [
-    meta.avatar_url,
-    meta.picture,
-    meta.avatar,
-    meta.profile_image_url,
-    identity.avatar_url,
-    identity.picture,
-  ];
-  for (const c of candidates) {
-    if (typeof c === "string" && /^https:\/\//i.test(c)) return c;
-  }
-  return "";
+  return resolveUserAvatarUrl(user);
 }
 
 export function SiteRatingCard() {

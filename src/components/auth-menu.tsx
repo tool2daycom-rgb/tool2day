@@ -17,22 +17,10 @@ import {
   findCountry,
   PROFILE_COUNTRIES,
 } from "@/lib/profile-countries";
+import { resolveUserAvatarUrl } from "@/lib/user-avatar";
 
 function getAvatarUrl(user: AuthUser): string | null {
-  const meta = user.user_metadata || {};
-  const candidates = [
-    meta.avatar_url,
-    meta.picture,
-    meta.avatar,
-    meta.profile_image_url,
-    user.identities?.[0]?.identity_data?.avatar_url,
-    user.identities?.[0]?.identity_data?.picture,
-  ];
-  for (const c of candidates) {
-    if (typeof c === "string" && /^https?:\/\//i.test(c)) return c;
-    if (typeof c === "string" && c.startsWith("data:image/")) return c;
-  }
-  return null;
+  return resolveUserAvatarUrl(user) || null;
 }
 
 function getDisplayName(user: AuthUser): string {
