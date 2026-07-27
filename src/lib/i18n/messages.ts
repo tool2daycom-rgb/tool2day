@@ -93,7 +93,7 @@ export type UiMessages = {
   loginToComment: string;
   writeYourReview: string;
   writeYourReviewSub: string;
-  editYourReview: string;
+  writeNewReview: string;
   cookieSettings: string;
   footerNav: string;
   cookieTitle: string;
@@ -257,7 +257,7 @@ export const en: UiMessages = {
   loginToComment: "Log in to rate the site and leave a comment",
   writeYourReview: "Write your review",
   writeYourReviewSub: "Choose stars, add your name, and share a short comment.",
-  editYourReview: "Edit your review",
+  writeNewReview: "New review",
   cookieSettings: "Cookie settings",
   footerNav: "Footer links",
   cookieTitle: "Your privacy matters",
@@ -406,7 +406,7 @@ export const ar: UiMessages = {
   loginToComment: "سجّل الدخول لتقييم الموقع وترك تعليق",
   writeYourReview: "اكتب تعليقك هنا",
   writeYourReviewSub: "اختر النجوم، أدخل اسمك، واكتب تعليقاً قصيراً.",
-  editYourReview: "تعديل تعليقك",
+  writeNewReview: "تعليق جديد",
   cookieSettings: "إعدادات الكوكيز",
   footerNav: "روابط التذييل",
   cookieTitle: "خصوصيتك تهمنا",

@@ -297,11 +297,15 @@ export async function submitRating(
     target === SITE_RATING_TARGET
       ? "site"
       : getCurrentUseId(target) || `once-${Date.now()}`;
-  // مفتاح فريد لكل استخدام حتى يُحسب صوتاً جديداً
+  const hasComment = Boolean(extra?.comment?.trim());
+  // تعليق الموقع: صف جديد في كل مرة. تقييم النجوم فقط: مرة واحدة لكل زائر.
   const visitorKey =
     target === SITE_RATING_TARGET
-      ? visitorId
+      ? hasComment
+        ? `${visitorId}:c-${Date.now()}`
+        : visitorId
       : `${visitorId}:${useId}`;
+  const once = target === SITE_RATING_TARGET && !hasComment;
 
   try {
     const res = await fetch("/api/ratings", {
@@ -311,7 +315,7 @@ export async function submitRating(
         target,
         stars: clamped,
         visitorKey,
-        once: target === SITE_RATING_TARGET,
+        once,
         displayName: extra?.displayName,
         comment: extra?.comment,
         avatarUrl: extra?.avatarUrl,

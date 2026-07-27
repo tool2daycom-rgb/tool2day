@@ -7,9 +7,7 @@ import { Check, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import { createClient } from "@/lib/supabase/client";
 import {
-  clearPostedSiteCommentFlag,
   fetchPublicReviews,
-  hasPostedSiteComment,
   submitRating,
   type PublicReview,
 } from "@/lib/ratings";
@@ -212,7 +210,6 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
         setUser(data.user);
         if (data.user) setDisplayName(authDisplayName(data.user));
         setAuthReady(true);
-        if (hasPostedSiteComment()) setDone(true);
       });
       const { data } = supabase.auth.onAuthStateChange((_e, session) => {
         const next = session?.user ?? null;
@@ -246,6 +243,8 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
         comment: text,
         avatarUrl: authAvatarUrl(user) || undefined,
       });
+      setComment("");
+      setStars(5);
       setDone(true);
       onPosted();
     } catch {
@@ -255,8 +254,9 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
     }
   }
 
-  function startEdit() {
-    clearPostedSiteCommentFlag();
+  function startNewReview() {
+    setComment("");
+    setStars(5);
     setDone(false);
     setError(null);
   }
@@ -288,17 +288,17 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
           </Link>
         </div>
       ) : done ? (
-        <div className="mt-6 space-y-3 text-center">
+        <div className="mt-6 space-y-4 text-center">
           <div className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
             <Check className="h-4 w-4" />
             {messages.thankYouRating}
           </div>
           <button
             type="button"
-            onClick={startEdit}
-            className="text-sm font-extrabold text-[#E8874A] underline-offset-4 hover:underline"
+            onClick={startNewReview}
+            className="w-full rounded-xl bg-[#E8874A] px-4 py-3 text-sm font-extrabold text-white"
           >
-            {messages.editYourReview}
+            {messages.writeNewReview}
           </button>
         </div>
       ) : (

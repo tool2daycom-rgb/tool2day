@@ -240,7 +240,7 @@ export async function POST(req: Request) {
   if (avatarUrl) row.avatar_url = avatarUrl;
 
   try {
-    if (once || target === "site") {
+    if (once) {
       const { error } = await supabase
         .from("tool_ratings")
         .upsert(row, { onConflict: "target,visitor_key" });
