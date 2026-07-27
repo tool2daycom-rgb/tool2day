@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { HelpFaq } from "@/components/help-faq";
+import { sitePageAlternates } from "@/lib/seo-multilang";
 
 export const metadata: Metadata = {
   title: "المساعدة",
   description:
     "مركز مساعدة Tool2Day — الفوترة والحساب واستكشاف أخطاء أدوات الفيديو والصوت وPDF.",
+  alternates: sitePageAlternates("/help"),
 };
 
 export default function HelpPage() {

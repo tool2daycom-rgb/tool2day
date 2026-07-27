@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { InfoShell } from "@/components/info-shell";
+import { sitePageAlternates } from "@/lib/seo-multilang";
 
 export const metadata: Metadata = {
   title: "سياسة الاسترداد",
   description: "سياسة الاسترداد في Tool2Day",
+  alternates: sitePageAlternates("/refund"),
 };
 
 export default function RefundPage() {

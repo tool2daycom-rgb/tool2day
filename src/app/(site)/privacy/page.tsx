@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { sitePageAlternates } from "@/lib/seo-multilang";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | الخصوصية",
   description:
     "Privacy Policy for tool2day — how personal information is collected, used, and disclosed.",
+  alternates: sitePageAlternates("/privacy"),
 };
 
 export default function PrivacyPage() {

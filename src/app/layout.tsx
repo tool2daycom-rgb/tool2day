@@ -27,32 +27,8 @@ export const metadata: Metadata = {
   description: siteSeo.description,
   keywords: getAllSiteKeywords(),
   metadataBase: new URL("https://www.tool2day.com"),
-  alternates: {
-    canonical: "https://www.tool2day.com",
-    languages: {
-      en: "https://www.tool2day.com",
-      ar: "https://www.tool2day.com",
-      de: "https://www.tool2day.com",
-      es: "https://www.tool2day.com",
-      pt: "https://www.tool2day.com",
-      it: "https://www.tool2day.com",
-      fr: "https://www.tool2day.com",
-      ru: "https://www.tool2day.com",
-      pl: "https://www.tool2day.com",
-      tr: "https://www.tool2day.com",
-      id: "https://www.tool2day.com",
-      ja: "https://www.tool2day.com",
-      ko: "https://www.tool2day.com",
-      "zh-CN": "https://www.tool2day.com",
-      fa: "https://www.tool2day.com",
-      "zh-TW": "https://www.tool2day.com",
-      vi: "https://www.tool2day.com",
-      he: "https://www.tool2day.com",
-      hi: "https://www.tool2day.com",
-      th: "https://www.tool2day.com",
-      "x-default": "https://www.tool2day.com",
-    },
-  },
+  // Do NOT set a site-wide canonical here — child pages inherit it and
+  // Google treats them as "Alternate page with proper canonical tag".
   openGraph: {
     type: "website",
     locale: "ar_AR",
@@ -69,7 +45,7 @@ export const metadata: Metadata = {
       "zh_CN",
       "zh_TW",
     ],
-    url: "https://www.tool2day.com",
+    // Do not set a site-wide OG url — children inherit it like canonical.
     siteName: "Tool2Day",
     title: siteSeo.title,
     description: siteSeo.description,

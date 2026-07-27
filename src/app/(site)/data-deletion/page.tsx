@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { InfoShell } from "@/components/info-shell";
+import { sitePageAlternates } from "@/lib/seo-multilang";
 
 export const metadata: Metadata = {
   title: "حذف بيانات المستخدم",
   description: "كيفية طلب حذف بياناتك من Tool2Day",
+  alternates: sitePageAlternates("/data-deletion"),
 };
 
 export default function DataDeletionPage() {

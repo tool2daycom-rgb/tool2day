@@ -92,6 +92,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       canonical: `https://www.tool2day.com${path}`,
       languages: buildLanguageAlternateMap(path),
     },
+    robots: { index: true, follow: true },
   };
 }
 

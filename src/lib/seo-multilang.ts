@@ -554,6 +554,21 @@ export function buildLanguageAlternateMap(
   return map;
 }
 
+/** Self-referencing canonical + hreflang for any site path (e.g. `/pricing`). */
+export function sitePageAlternates(path: string) {
+  const normalized =
+    !path || path === "/"
+      ? ""
+      : path.startsWith("/")
+        ? path.replace(/\/$/, "")
+        : `/${path.replace(/\/$/, "")}`;
+  const url = `https://www.tool2day.com${normalized}`;
+  return {
+    canonical: url,
+    languages: buildLanguageAlternateMap(normalized),
+  };
+}
+
 export function buildToolJsonLd(opts: {
   tool: Tool;
   locale: LocaleCode;
