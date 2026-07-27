@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" fill="none" role="img" aria-label="Tool2Day leaf mark">
+  <!-- Transparent background · multi-color leaves · rotate + pulse -->
+  <defs>
+    <style>
+      .leaf-spin {
+        transform-origin: 100px 100px;
+        animation: spinPulse 3.6s ease-in-out infinite;
+      }
+      @keyframes spinPulse {
+        0%   { transform: rotate(0deg) scale(0.84); }
+        50%  { transform: rotate(180deg) scale(1.08); }
+        100% { transform: rotate(360deg) scale(0.84); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .leaf-spin { animation: none; }
+      }
+    </style>
+  </defs>
+  <g class="leaf-spin">
+    <!-- 5 leaves at 72° · distinct colors · not a Y shape -->
+    <g transform="translate(100 100) rotate(0)">
+      <path d="M0 -12 C22 -14 34 -52 0 -78 C-34 -52 -22 -14 0 -12Z" fill="#F5C518"/>
+      <path d="M0 -18 C0 -18 0 -72 0 -72" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+    </g>
+    <g transform="translate(100 100) rotate(72)">
+      <path d="M0 -12 C22 -14 34 -52 0 -78 C-34 -52 -22 -14 0 -12Z" fill="#E8874A"/>
+      <path d="M0 -18 C0 -18 0 -72 0 -72" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+    </g>
+    <g transform="translate(100 100) rotate(144)">
+      <path d="M0 -12 C22 -14 34 -52 0 -78 C-34 -52 -22 -14 0 -12Z" fill="#5B9BF5"/>
+      <path d="M0 -18 C0 -18 0 -72 0 -72" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+    </g>
+    <g transform="translate(100 100) rotate(216)">
+      <path d="M0 -12 C22 -14 34 -52 0 -78 C-34 -52 -22 -14 0 -12Z" fill="#7AC143"/>
+      <path d="M0 -18 C0 -18 0 -72 0 -72" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+    </g>
+    <g transform="translate(100 100) rotate(288)">
+      <path d="M0 -12 C22 -14 34 -52 0 -78 C-34 -52 -22 -14 0 -12Z" fill="#E85A9A"/>
+      <path d="M0 -18 C0 -18 0 -72 0 -72" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+    </g>
+  </g>
+</svg>

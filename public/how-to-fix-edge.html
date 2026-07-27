@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>إصلاح Tool2Day</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; line-height: 1.8; }
+    a.btn { display: block; text-align: center; background: #E8874A; color: #fff; font-weight: 800; text-decoration: none; padding: 14px; border-radius: 12px; margin: 12px 0; }
+    code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+    ol { padding-right: 20px; }
+  </style>
+</head>
+<body>
+  <h1>الموقع يعمل — المطلوب مسح كوكيز المتصفح</h1>
+  <p>خطأ 494 يعني أن متصفح Edge يرسل كوكيز ضخمة جداً لـ tool2day.com (بسبب صورة بروفايل قديمة). لا يمكن إصلاحها من السيرفر وحدها.</p>
+
+  <a class="btn" href="https://www.tool2day.com/" target="_blank" rel="noopener">1) جرّب نافذة InPrivate أولاً</a>
+  <p style="font-size:14px;color:#555">في Edge: ⋯ → نافذة InPrivate جديدة → افتح الموقع. إن فتح فالمشكلة كوكيز النافذة العادية فقط.</p>
+
+  <h2>2) امسح كوكيز tool2day من Edge</h2>
+  <ol>
+    <li>الصق في شريط العنوان: <code>edge://settings/siteData</code> ثم Enter</li>
+    <li>ابحث عن <code>tool2day</code></li>
+    <li>احذف كل النتائج</li>
+    <li>ارجع إلى <a href="https://www.tool2day.com/">www.tool2day.com</a> وسجّل الدخول</li>
+  </ol>
+
+  <a class="btn" href="edge://settings/siteData">فتح إعدادات الكوكيز في Edge</a>
+</body>
+</html>

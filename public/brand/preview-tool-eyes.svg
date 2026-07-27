@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" fill="none" role="img" aria-label="TOOL with eyes in O letters — preview">
+  <title>tool2day — TOOL eyed letters preview</title>
+  <desc>Professional preview: each O in TOOL contains a friendly eye. Not published to the site yet.</desc>
+
+  <!-- Soft stage background for preview -->
+  <rect width="420" height="120" rx="16" fill="#F2F2F4"/>
+
+  <!-- T -->
+  <path fill="#111111" d="M28 28h54v12H55v52H41V40H28V28z"/>
+
+  <!-- O #1 with eye -->
+  <g transform="translate(92 28)">
+    <!-- Outer ring (letter O) -->
+    <circle cx="30" cy="32" r="30" fill="#111111"/>
+    <circle cx="30" cy="32" r="16.5" fill="#FFFFFF"/>
+    <!-- Iris + pupil looking slightly up-right -->
+    <circle cx="33.5" cy="29.5" r="9.2" fill="#1A1A1A"/>
+    <circle cx="33.5" cy="29.5" r="5.4" fill="#0A0A0A"/>
+    <!-- Highlight -->
+    <circle cx="36.2" cy="26.8" r="2.1" fill="#FFFFFF"/>
+    <!-- Soft lower lid shade for depth -->
+    <path d="M18 38c4 6 12 9 20 8" stroke="#111111" stroke-width="2.2" stroke-linecap="round" opacity="0.15"/>
+  </g>
+
+  <!-- O #2 with eye (matching gaze) -->
+  <g transform="translate(162 28)">
+    <circle cx="30" cy="32" r="30" fill="#111111"/>
+    <circle cx="30" cy="32" r="16.5" fill="#FFFFFF"/>
+    <circle cx="33.5" cy="29.5" r="9.2" fill="#1A1A1A"/>
+    <circle cx="33.5" cy="29.5" r="5.4" fill="#0A0A0A"/>
+    <circle cx="36.2" cy="26.8" r="2.1" fill="#FFFFFF"/>
+    <path d="M18 38c4 6 12 9 20 8" stroke="#111111" stroke-width="2.2" stroke-linecap="round" opacity="0.15"/>
+  </g>
+
+  <!-- L -->
+  <path fill="#111111" d="M232 28h14v52h40v12h-54V28z"/>
+
+  <!-- Caption -->
+  <text x="210" y="108" text-anchor="middle" fill="#6B6B70" font-family="system-ui, sans-serif" font-size="11" font-weight="500">
+    Preview only — eyes inside each O · not published
+  </text>
+</svg>

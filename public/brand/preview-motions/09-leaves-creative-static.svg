@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" fill="none" role="img" aria-label="Tool2Day creative leaf mark">
+  <defs>
+    <!-- Two-tone creative depth per leaf -->
+    <linearGradient id="yA" x1="0" y1="-90" x2="28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFE566"/>
+      <stop offset="100%" stop-color="#F0B800"/>
+    </linearGradient>
+    <linearGradient id="yB" x1="0" y1="-90" x2="-28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFD12A"/>
+      <stop offset="100%" stop-color="#C99200"/>
+    </linearGradient>
+    <linearGradient id="oA" x1="0" y1="-90" x2="28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFB06A"/>
+      <stop offset="100%" stop-color="#F07830"/>
+    </linearGradient>
+    <linearGradient id="oB" x1="0" y1="-90" x2="-28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF8A3D"/>
+      <stop offset="100%" stop-color="#D45518"/>
+    </linearGradient>
+    <linearGradient id="bA" x1="0" y1="-90" x2="28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9ACCFF"/>
+      <stop offset="100%" stop-color="#4A8FE8"/>
+    </linearGradient>
+    <linearGradient id="bB" x1="0" y1="-90" x2="-28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6BA8F5"/>
+      <stop offset="100%" stop-color="#2F6BCF"/>
+    </linearGradient>
+    <linearGradient id="gA" x1="0" y1="-90" x2="28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A8E85C"/>
+      <stop offset="100%" stop-color="#6BC92E"/>
+    </linearGradient>
+    <linearGradient id="gB" x1="0" y1="-90" x2="-28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7ED63A"/>
+      <stop offset="100%" stop-color="#4A9E1E"/>
+    </linearGradient>
+    <linearGradient id="pA" x1="0" y1="-90" x2="28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF9AC8"/>
+      <stop offset="100%" stop-color="#E85A9A"/>
+    </linearGradient>
+    <linearGradient id="pB" x1="0" y1="-90" x2="-28" y2="-20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F06AB0"/>
+      <stop offset="100%" stop-color="#C43A7A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Centered mark: five creative leaves, subtle swirl, not a Y -->
+  <g transform="translate(120 120)">
+    <!-- Leaf template: left half + right half + midrib -->
+    <!-- Yellow -->
+    <g transform="rotate(-20)">
+      <path d="M0,-8 C-8,-10 -22,-28 -24,-52 C-26,-72 -14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#yB)"/>
+      <path d="M0,-8 C8,-10 22,-28 24,-52 C26,-72 14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#yA)"/>
+      <path d="M0,-16 C2,-38 1,-62 0,-88" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
+    </g>
+    <!-- Orange -->
+    <g transform="rotate(52)">
+      <path d="M0,-8 C-8,-10 -22,-28 -24,-52 C-26,-72 -14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#oB)"/>
+      <path d="M0,-8 C8,-10 22,-28 24,-52 C26,-72 14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#oA)"/>
+      <path d="M0,-16 C2,-38 1,-62 0,-88" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
+    </g>
+    <!-- Blue -->
+    <g transform="rotate(124)">
+      <path d="M0,-8 C-8,-10 -22,-28 -24,-52 C-26,-72 -14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#bB)"/>
+      <path d="M0,-8 C8,-10 22,-28 24,-52 C26,-72 14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#bA)"/>
+      <path d="M0,-16 C2,-38 1,-62 0,-88" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
+    </g>
+    <!-- Green -->
+    <g transform="rotate(196)">
+      <path d="M0,-8 C-8,-10 -22,-28 -24,-52 C-26,-72 -14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#gB)"/>
+      <path d="M0,-8 C8,-10 22,-28 24,-52 C26,-72 14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#gA)"/>
+      <path d="M0,-16 C2,-38 1,-62 0,-88" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
+    </g>
+    <!-- Pink -->
+    <g transform="rotate(268)">
+      <path d="M0,-8 C-8,-10 -22,-28 -24,-52 C-26,-72 -14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#pB)"/>
+      <path d="M0,-8 C8,-10 22,-28 24,-52 C26,-72 14,-88 0,-96 C0,-70 0,-40 0,-8Z" fill="url(#pA)"/>
+      <path d="M0,-16 C2,-38 1,-62 0,-88" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
+    </g>
+  </g>
+</svg>

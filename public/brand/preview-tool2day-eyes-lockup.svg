@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" fill="none" role="img" aria-label="tool2day eyed O preview lockup">
+  <!-- Transparent / clean lockup for later use — preview only -->
+  <g transform="translate(24 28)">
+    <!-- T -->
+    <path fill="#111111" d="M0 0h58v14H29v58H15V14H0V0z"/>
+
+    <!-- O1 eye -->
+    <g transform="translate(68 0)">
+      <circle cx="36" cy="36" r="36" fill="#111111"/>
+      <circle cx="36" cy="36" r="19" fill="#FFFFFF"/>
+      <circle cx="40" cy="33" r="11" fill="#161616"/>
+      <circle cx="40" cy="33" r="6.5" fill="#050505"/>
+      <circle cx="43.5" cy="29.5" r="2.4" fill="#FFFFFF"/>
+    </g>
+
+    <!-- O2 eye -->
+    <g transform="translate(148 0)">
+      <circle cx="36" cy="36" r="36" fill="#111111"/>
+      <circle cx="36" cy="36" r="19" fill="#FFFFFF"/>
+      <circle cx="40" cy="33" r="11" fill="#161616"/>
+      <circle cx="40" cy="33" r="6.5" fill="#050505"/>
+      <circle cx="43.5" cy="29.5" r="2.4" fill="#FFFFFF"/>
+    </g>
+
+    <!-- L -->
+    <path fill="#111111" d="M228 0h14v58h42v14H228V0z"/>
+
+    <!-- spacer for cartoon 2 (use pngegg in site later) -->
+    <text x="310" y="52" fill="#22A35A" font-family="Arial Black, Helvetica, sans-serif" font-size="64" font-weight="900">2</text>
+
+    <!-- DAY -->
+    <text x="360" y="58" fill="#111111" font-family="Arial Black, Montserrat, Helvetica, sans-serif" font-size="64" font-weight="900" letter-spacing="-2">DAY</text>
+
+    <!-- triangle mark -->
+    <circle cx="548" cy="18" r="11" fill="#F5C84A"/>
+    <circle cx="536" cy="40" r="11" fill="#E8905A"/>
+    <circle cx="560" cy="40" r="11" fill="#6BA3F7"/>
+  </g>
+</svg>
