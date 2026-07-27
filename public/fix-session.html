@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>إصلاح الجلسة — Tool2Day</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: system-ui, sans-serif;
+        background: #0f3d3a;
+        color: #fff;
+        padding: 24px;
+      }
+      .card {
+        max-width: 420px;
+        width: 100%;
+        background: #fff;
+        color: #122033;
+        border-radius: 16px;
+        padding: 28px 24px;
+        text-align: center;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.25);
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 10px;
+      }
+      p {
+        margin: 0 0 18px;
+        line-height: 1.7;
+        color: #555;
+        font-size: 0.95rem;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 12px;
+        background: #e8874a;
+        color: #fff;
+        font-weight: 800;
+        font-size: 1rem;
+        padding: 12px 18px;
+        width: 100%;
+        cursor: pointer;
+      }
+      .ok {
+        color: #047857;
+        font-weight: 700;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>إصلاح فتح الموقع</h1>
+      <p>
+        تم اكتشاف جلسة كبيرة جداً في المتصفح. اضغط الزر لمسحها ثم ستُعاد
+        إلى الصفحة الرئيسية لتسجيل الدخول من جديد.
+      </p>
+      <p class="ok" id="ok">تم المسح… جاري التحويل</p>
+      <button type="button" id="btn">مسح الجلسة وإعادة فتح الموقع</button>
+    </div>
+    <script>
+      function clearAllCookies() {
+        var cookies = document.cookie ? document.cookie.split(";") : [];
+        var host = location.hostname;
+        var parts = host.split(".");
+        var domains = ["", host];
+        if (parts.length >= 2) {
+          domains.push("." + parts.slice(-2).join("."));
+        }
+        if (parts.length >= 3) {
+          domains.push("." + parts.slice(-3).join("."));
+        }
+        var paths = ["/", "/login", "/auth", "/testimonials"];
+        cookies.forEach(function (raw) {
+          var name = raw.split("=")[0].trim();
+          if (!name) return;
+          domains.forEach(function (domain) {
+            paths.forEach(function (path) {
+              var base =
+                name +
+                "=; Max-Age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=" +
+                path;
+              document.cookie = base;
+              if (domain) {
+                document.cookie = base + "; domain=" + domain;
+              }
+            });
+          });
+        });
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch (e) {}
+      }
+
+      document.getElementById("btn").onclick = function () {
+        clearAllCookies();
+        document.getElementById("ok").style.display = "block";
+        setTimeout(function () {
+          location.replace("/?session=cleared");
+        }, 400);
+      };
+
+      // Auto-clear if opened with ?auto=1
+      if (/[?&]auto=1/.test(location.search)) {
+        document.getElementById("btn").click();
+      }
+    </script>
+  </body>
+</html>

@@ -92,7 +92,11 @@ export async function shrinkUserAvatarMetadata(userId: string): Promise<{
   const { data, error } = await supabase.auth.admin.getUserById(userId);
   if (error || !data.user) return { fixed: false, publicUrl: "" };
 
-  const meta = data.user.user_metadata || {};
+  const meta = { ...(data.user.user_metadata || {}) } as Record<
+    string,
+    unknown
+  >;
+  const metaSize = JSON.stringify(meta).length;
   const candidates = [meta.avatar_url, meta.picture, meta.avatar];
   let dataUrl = "";
   for (const c of candidates) {
@@ -128,29 +132,36 @@ export async function shrinkUserAvatarMetadata(userId: string): Promise<{
 
   const needsFix =
     Boolean(dataUrl) ||
-    (typeof meta.avatar_url === "string" &&
-      meta.avatar_url.startsWith("data:")) ||
-    (typeof meta.picture === "string" && meta.picture.startsWith("data:"));
+    metaSize > 2500 ||
+    Object.values(meta).some(
+      (v) => typeof v === "string" && (v.startsWith("data:") || v.length > 2000),
+    );
 
-  if (!needsFix && publicUrl && !String(meta.avatar_url || "").startsWith("data:")) {
+  if (!needsFix) {
     return { fixed: false, publicUrl };
   }
 
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(meta)) {
+    if (typeof v === "string" && (v.startsWith("data:") || v.length > 2000)) {
+      continue;
+    }
+    cleaned[k] = v;
+  }
+  cleaned.avatar_url = publicUrl || null;
+  cleaned.picture = publicUrl || null;
+  delete cleaned.avatar;
+
   const { error: upErr } = await supabase.auth.admin.updateUserById(userId, {
-    user_metadata: {
-      ...meta,
-      avatar_url: publicUrl || null,
-      picture: publicUrl || null,
-      avatar: undefined,
-    },
+    user_metadata: cleaned,
   });
   if (upErr) return { fixed: false, publicUrl };
 
   return { fixed: true, publicUrl };
 }
 
-/** Scan recent users and shrink any data-URL avatars (best-effort). */
-export async function shrinkAllDataUrlAvatars(maxPages = 5) {
+/** Scan users and shrink bloated metadata (best-effort). */
+export async function shrinkAllDataUrlAvatars(maxPages = 8) {
   const supabase = createServiceClient();
   let fixed = 0;
   for (let page = 1; page <= maxPages; page++) {
@@ -161,11 +172,14 @@ export async function shrinkAllDataUrlAvatars(maxPages = 5) {
     if (error || !data.users.length) break;
     for (const u of data.users) {
       const meta = u.user_metadata || {};
+      const metaSize = JSON.stringify(meta).length;
       const bloated =
-        (typeof meta.avatar_url === "string" &&
-          meta.avatar_url.startsWith("data:image/")) ||
-        (typeof meta.picture === "string" &&
-          meta.picture.startsWith("data:image/"));
+        metaSize > 2500 ||
+        Object.values(meta).some(
+          (v) =>
+            typeof v === "string" &&
+            (v.startsWith("data:") || v.length > 2000),
+        );
       if (!bloated) continue;
       const r = await shrinkUserAvatarMetadata(u.id);
       if (r.fixed) fixed += 1;
