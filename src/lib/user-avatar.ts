@@ -1,18 +1,12 @@
-/** Resolve profile photo: custom upload first, then Google / Facebook / GitHub. */
+/** Resolve profile photo: custom upload (HTTPS) first, then Google / Facebook / GitHub. */
 
 const MAX_HTTPS = 2000;
-const MAX_DATA = 120_000;
 
 export function sanitizeAvatarUrl(raw: string | undefined | null): string {
   const s = (raw || "").trim();
-  if (!s) return "";
-  if (/^https:\/\//i.test(s) && s.length <= MAX_HTTPS) return s;
-  if (
-    /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(s) &&
-    s.length <= MAX_DATA
-  ) {
-    return s;
-  }
+  if (!s || s.length > MAX_HTTPS) return "";
+  // Never accept data-URLs here — they blow JWT/cookie size (Vercel 494).
+  if (/^https:\/\//i.test(s)) return s;
   return "";
 }
 
@@ -25,7 +19,7 @@ type AvatarUser = {
 };
 
 /**
- * Prefer the user’s own avatar_url / picture (incl. uploaded data URLs),
+ * Prefer the user’s own avatar_url / picture (short HTTPS only),
  * then fall back to OAuth identity photos (Google, Facebook, GitHub, …).
  */
 export function resolveUserAvatarUrl(user: AvatarUser | null | undefined): string {

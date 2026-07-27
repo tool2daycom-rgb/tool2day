@@ -27,6 +27,17 @@ export async function createClient() {
           // Called from a Server Component — middleware will refresh sessions.
         }
       },
+      encode: "tokens-only",
+    } as {
+      getAll: () => { name: string; value: string }[];
+      setAll: (
+        cookies: {
+          name: string;
+          value: string;
+          options?: Record<string, unknown>;
+        }[],
+      ) => void;
+      encode?: "tokens-only" | "user-and-tokens";
     },
   });
 }

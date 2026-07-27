@@ -10,5 +10,10 @@ export function createClient() {
     );
   }
 
-  return createBrowserClient(url, key);
+  return createBrowserClient(url, key, {
+    cookies: {
+      // Avoid stuffing the full user object into cookies (Vercel header limits).
+      encode: "tokens-only",
+    },
+  });
 }

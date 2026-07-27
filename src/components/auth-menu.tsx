@@ -193,12 +193,36 @@ export function AuthMenu() {
     setSaveNote(null);
     try {
       const supabase = createClient();
+      let avatarUrl: string | undefined;
+
+      // Never put data-URLs into auth metadata (blows cookie/JWT → Vercel 494).
+      if (avatarDraft?.startsWith("data:image/")) {
+        const res = await fetch("/api/profile/avatar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dataUrl: avatarDraft }),
+        });
+        const payload = (await res.json()) as {
+          avatarUrl?: string;
+          error?: string;
+        };
+        if (!res.ok || !payload.avatarUrl) {
+          throw new Error(payload.error || messages.profileSaveFailed);
+        }
+        avatarUrl = payload.avatarUrl;
+      } else if (avatarDraft && /^https:\/\//i.test(avatarDraft)) {
+        avatarUrl = avatarDraft;
+      } else {
+        const existing = getAvatarUrl(user);
+        avatarUrl = existing || undefined;
+      }
+
       const { data, error: upErr } = await supabase.auth.updateUser({
         data: {
           full_name: name,
           name,
-          avatar_url: avatarDraft || undefined,
-          picture: avatarDraft || undefined,
+          avatar_url: avatarUrl || "",
+          picture: avatarUrl || "",
           country_code: country?.code || "",
           country_flag: country?.flag || "",
           country_name: country?.nameAr || "",
@@ -206,6 +230,7 @@ export function AuthMenu() {
       });
       if (upErr) throw upErr;
       if (data.user) setUser(data.user);
+      setAvatarDraft(avatarUrl || null);
       setSaveNote(messages.profileSaved);
       setEditing(false);
     } catch (e) {
