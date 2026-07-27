@@ -231,7 +231,7 @@ export const tools: Tool[] = [
   },
   {
     slug: "code-formatter",
-    title: "منسّق JSON وHTML Encoder",
+    title: "منسّق JSON& HTML Encoder",
     description:
       "نسّق JSON، وصحّح الأخطاء، ورمّز أو فك ترميز HTML للاستخدام في التطوير والويب.",
     category: "social-dev",

@@ -22,7 +22,7 @@ export const toolTitlesEn: Record<string, string> = {
   "png-library": "Transparent PNG library",
   "thumbnail-downloader": "YouTube & Instagram thumbnail downloader",
   "hashtag-generator": "Smart hashtag generator",
-  "code-formatter": "JSON formatter & HTML encoder",
+  "code-formatter": "JSON& HTML Encoder",
   "video-content-ideas": "Video titles & questions generator",
   "video-subtitles": "Video subtitle generator",
   "kinetic-captions": "Kinetic captions for long videos",

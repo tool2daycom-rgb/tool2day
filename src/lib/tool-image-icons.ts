@@ -37,6 +37,7 @@ export const toolImageIcons: Record<string, string> = {
   "png-library": "/brand/tools/png-library.png",
   "kinetic-captions": "/brand/tools/kinetic-captions.png",
   "hashtag-generator": "/brand/tools/hashtag-generator.png",
+  "code-formatter": "/brand/tools/code-formatter.png",
   "thumbnail-downloader": "/brand/tools/thumbnail-downloader.png",
 };
 

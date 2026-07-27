@@ -438,12 +438,15 @@ const toolExtraKeywords: Record<string, string[]> = {
     "instagram hashtags",
   ],
   "code-formatter": [
+    "منسّق JSON& HTML Encoder",
+    "منسق JSON",
     "JSON formatter",
     "تنسيق JSON",
     "HTML encoder",
     "HTML decoder",
     "ترميز HTML",
     "minify JSON",
+    "JSON& HTML Encoder",
   ],
   "video-content-ideas": [
     "مولد عناوين فيديو",
