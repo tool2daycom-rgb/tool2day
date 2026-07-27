@@ -5,6 +5,16 @@ export type UiMessages = {
   login: string;
   myAccount: string;
   logout: string;
+  editProfile: string;
+  saveProfile: string;
+  profileName: string;
+  profileCountry: string;
+  profileCountryNone: string;
+  changePhoto: string;
+  changePhotoHint: string;
+  profileSaved: string;
+  profileSaveFailed: string;
+  profileNameRequired: string;
   selectLanguage: string;
   search: string;
   translationFeedback: string;
@@ -146,6 +156,16 @@ export const en: UiMessages = {
   login: "Log in",
   myAccount: "My account",
   logout: "Log out",
+  editProfile: "Edit profile",
+  saveProfile: "Save profile",
+  profileName: "Display name",
+  profileCountry: "Country",
+  profileCountryNone: "Select country",
+  changePhoto: "Change photo",
+  changePhotoHint: "Upload a square photo from your device",
+  profileSaved: "Profile updated",
+  profileSaveFailed: "Could not save profile",
+  profileNameRequired: "Please enter a name",
   selectLanguage: "Select language",
   search: "Search",
   translationFeedback: "Found a translation issue? Tell us",
@@ -286,6 +306,16 @@ export const ar: UiMessages = {
   login: "تسجيل الدخول",
   myAccount: "حسابي",
   logout: "تسجيل الخروج",
+  editProfile: "تعديل الملف الشخصي",
+  saveProfile: "حفظ الملف",
+  profileName: "الاسم",
+  profileCountry: "الدولة",
+  profileCountryNone: "اختر الدولة",
+  changePhoto: "تغيير الصورة",
+  changePhotoHint: "ارفع صورة مربعة من جهازك",
+  profileSaved: "تم تحديث الملف الشخصي",
+  profileSaveFailed: "تعذّر حفظ الملف الشخصي",
+  profileNameRequired: "أدخل اسماً للعرض",
   selectLanguage: "اختر لغة",
   search: "بحث",
   translationFeedback: "أخبرنا هل وجدت خطأ في الترجمة؟",
