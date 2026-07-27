@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://tool2day.com/sitemap.xml",
-    host: "https://tool2day.com",
+    sitemap: "https://www.tool2day.com/sitemap.xml",
+    host: "https://www.tool2day.com",
   };
 }

@@ -81,7 +81,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: `${metaTitle} | Tool2Day`,
       description: metaDescription,
-      url: `https://tool2day.com${path}`,
+      url: `https://www.tool2day.com${path}`,
       siteName: "Tool2Day",
       locale: ogLocaleTag(locale),
       type: "website",
@@ -92,7 +92,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: metaDescription,
     },
     alternates: {
-      canonical: `https://tool2day.com${path}`,
+      canonical: `https://www.tool2day.com${path}`,
       languages: buildLanguageAlternateMap(path),
     },
   };

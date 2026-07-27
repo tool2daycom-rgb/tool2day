@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { tools } from "@/lib/tools";
 
-const BASE = "https://tool2day.com";
+const BASE = "https://www.tool2day.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

@@ -14,13 +14,13 @@ export const metadata: Metadata = {
   description: siteSeo.description,
   keywords: getAllSiteKeywords(),
   alternates: {
-    canonical: "https://tool2day.com",
+    canonical: "https://www.tool2day.com",
     languages: buildLanguageAlternateMap(""),
   },
   openGraph: {
     title: siteSeo.title,
     description: siteSeo.description,
-    url: "https://tool2day.com",
+    url: "https://www.tool2day.com",
     siteName: "Tool2Day",
     locale: "en_US",
     alternateLocale: [

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     : "Free online video editor — no watermark on Tool2Day.",
   keywords: tool ? getToolKeywords(tool) : ["video editor", "Tool2Day"],
   alternates: {
-    canonical: "https://tool2day.com/tools/video-editor",
+    canonical: "https://www.tool2day.com/tools/video-editor",
     languages: buildLanguageAlternateMap("/tools/video-editor"),
   },
 };

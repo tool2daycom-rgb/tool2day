@@ -534,7 +534,7 @@ export function ogLocaleTag(locale: LocaleCode): string {
 export function buildLanguageAlternateMap(
   path = "",
 ): Record<string, string> {
-  const url = `https://tool2day.com${path}`;
+  const url = `https://www.tool2day.com${path}`;
   const map: Record<string, string> = { "x-default": url };
   for (const loc of locales) {
     map[loc.code] = url;
@@ -550,7 +550,7 @@ export function buildToolJsonLd(opts: {
   seo: ToolSeoContent;
 }) {
   const { tool, locale, displayTitle, description, seo } = opts;
-  const url = `https://tool2day.com/tools/${tool.slug}`;
+  const url = `https://www.tool2day.com/tools/${tool.slug}`;
   const alternateName = getToolTitlesAllLocales(tool.slug, tool.title).filter(
     (t) => t !== displayTitle,
   );
@@ -576,7 +576,7 @@ export function buildToolJsonLd(opts: {
       publisher: {
         "@type": "Organization",
         name: "Tool2Day",
-        url: "https://tool2day.com",
+        url: "https://www.tool2day.com",
       },
     },
     {
@@ -600,7 +600,7 @@ export function buildToolJsonLd(opts: {
           "@type": "ListItem",
           position: 1,
           name: "Tool2Day",
-          item: "https://tool2day.com",
+          item: "https://www.tool2day.com",
         },
         {
           "@type": "ListItem",
@@ -624,19 +624,19 @@ export function buildHomeJsonLd() {
       "tool2day.com",
       ...locales.map((l) => siteSeoByLocale[l.code].title),
     ],
-    url: "https://tool2day.com",
+    url: "https://www.tool2day.com",
     description: siteSeoByLocale.en.description,
     inLanguage: locales.map((l) => l.code),
     potentialAction: {
       "@type": "SearchAction",
-      target: "https://tool2day.com/#converters",
+      target: "https://www.tool2day.com/#converters",
       "query-input": "required name=search_term_string",
     },
     publisher: {
       "@type": "Organization",
       name: "Tool2Day",
-      url: "https://tool2day.com",
-      logo: "https://tool2day.com/icon-512.png",
+      url: "https://www.tool2day.com",
+      logo: "https://www.tool2day.com/icon-512.png",
     },
     hasPart: tools.map((tool) => {
       const names = getToolTitlesAllLocales(tool.slug, tool.title);
@@ -644,7 +644,7 @@ export function buildHomeJsonLd() {
         "@type": "WebApplication",
         name: names[0],
         alternateName: names.slice(1),
-        url: `https://tool2day.com/tools/${tool.slug}`,
+        url: `https://www.tool2day.com/tools/${tool.slug}`,
         applicationCategory: "MultimediaApplication",
         isAccessibleForFree: true,
         offers: {
