@@ -465,6 +465,18 @@ const toolExtraKeywords: Record<string, string[]> = {
     "ترجمة عربية انجليزية فيديو",
     "closed captions",
   ],
+  "kinetic-captions": [
+    "ترجمة حركية",
+    "ترجمة حركية ملونة",
+    "ترجمة حركية للفيديو",
+    "ترجمة حركية للفيديوهات الطويلة",
+    "كابشن متحرك",
+    "kinetic captions",
+    "animated captions",
+    "karaoke captions",
+    "captions for long videos",
+    "ترجمة يوتيوب حركية",
+  ],
   "merge-videos": [
     "دمج فيديوهات",
     "جمع فيديوهات",

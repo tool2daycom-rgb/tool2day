@@ -9,6 +9,7 @@ import {
 import type { Tool } from "@/lib/tools";
 import { tools } from "@/lib/tools";
 import type { ToolSeoContent } from "@/lib/tool-seo-content";
+import { localizedTitleKeywords } from "@/lib/seo-tool-phrases";
 
 /** High-intent suffixes appended to tool names per language (SEO). */
 export const intentSuffixesByLocale: Record<LocaleCode, string[]> = {
@@ -450,7 +451,9 @@ export function buildMultilangToolKeywords(
 
   for (const loc of locales) {
     const title = getToolTitle(slug, loc.code, arTitle);
-    out.push(...withSuffixes(title, intentSuffixesByLocale[loc.code]));
+    const suffixes = intentSuffixesByLocale[loc.code];
+    out.push(...withSuffixes(title, suffixes));
+    out.push(...localizedTitleKeywords(title, loc.code, suffixes));
     out.push(...brandKeywordsByLocale[loc.code]);
   }
 

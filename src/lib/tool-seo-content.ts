@@ -1,5 +1,6 @@
 import type { LocaleCode } from "@/lib/i18n/locales";
 import { getMessages, type UiMessages } from "@/lib/i18n/messages";
+import { findToolFaqByLocale } from "@/lib/seo-tool-phrases";
 
 export type ToolLike = { slug: string; title: string };
 
@@ -59,11 +60,16 @@ function whyFromMessages(m: UiMessages): ToolSeoContent["why"] {
   ];
 }
 
-function localizedContent(name: string, m: UiMessages): ToolSeoContent {
+function localizedContent(
+  name: string,
+  m: UiMessages,
+  locale: LocaleCode,
+): ToolSeoContent {
+  const find = findToolFaqByLocale[locale] || findToolFaqByLocale.en;
   return {
     tagline: `${name} — ${m.freeInBrowser}`,
     introTitle: `${name} ${m.onlineTool}`,
-    intro: `${name} ${m.onlineIntro}`,
+    intro: `${name} ${m.onlineIntro} Tool2Day.`,
     howTitle: `${m.howUse} ${name}?`,
     howIntro: m.howIntro,
     steps: [
@@ -77,7 +83,11 @@ function localizedContent(name: string, m: UiMessages): ToolSeoContent {
     whyTitle: m.whyUs,
     why: whyFromMessages(m),
     faqs: [
-      { q: m.faqFreeQ.replace("{{tool}}", name), a: m.faqFreeA },
+      { q: m.faqFreeQ.replace(/\{\{tool\}\}/g, name), a: m.faqFreeA },
+      {
+        q: find.q.replace(/\{\{tool\}\}/g, name),
+        a: find.a.replace(/\{\{tool\}\}/g, name),
+      },
       { q: m.faqWaterQ, a: m.faqWaterA },
       { q: m.faqInstallQ, a: m.faqInstallA },
       { q: m.faqWhereQ, a: m.faqWhereA },
@@ -267,5 +277,5 @@ export function getToolSeoContent(
     return overrides[tool.slug] ?? defaultContentAr(tool);
   }
 
-  return localizedContent(title, getMessages(locale));
+  return localizedContent(title, getMessages(locale), locale);
 }
