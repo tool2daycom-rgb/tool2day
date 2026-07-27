@@ -7,8 +7,9 @@ import { Check, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import { createClient } from "@/lib/supabase/client";
 import {
+  clearPostedSiteCommentFlag,
   fetchPublicReviews,
-  hasRatedSite,
+  hasPostedSiteComment,
   submitRating,
   type PublicReview,
 } from "@/lib/ratings";
@@ -163,7 +164,7 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
         setUser(data.user);
         if (data.user) setDisplayName(authDisplayName(data.user));
         setAuthReady(true);
-        if (hasRatedSite()) setDone(true);
+        if (hasPostedSiteComment()) setDone(true);
       });
       const { data } = supabase.auth.onAuthStateChange((_e, session) => {
         const next = session?.user ?? null;
@@ -182,7 +183,7 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
   }, []);
 
   async function submit() {
-    if (!user || busy || done) return;
+    if (!user || busy) return;
     const name = displayName.trim() || authDisplayName(user);
     const text = comment.trim();
     if (!name || text.length < 3) {
@@ -203,6 +204,12 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function startEdit() {
+    clearPostedSiteCommentFlag();
+    setDone(false);
+    setError(null);
   }
 
   return (
@@ -232,9 +239,18 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
           </Link>
         </div>
       ) : done ? (
-        <div className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
-          <Check className="h-4 w-4" />
-          {messages.thankYouRating}
+        <div className="mt-6 space-y-3 text-center">
+          <div className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
+            <Check className="h-4 w-4" />
+            {messages.thankYouRating}
+          </div>
+          <button
+            type="button"
+            onClick={startEdit}
+            className="text-sm font-extrabold text-[#E8874A] underline-offset-4 hover:underline"
+          >
+            {messages.editYourReview}
+          </button>
         </div>
       ) : (
         <div className="mt-6 space-y-4 text-start">

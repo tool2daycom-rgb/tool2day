@@ -11,6 +11,7 @@ const USE_RATED_PREFIX = "tool2day-use-rated-";
 const LOCAL_PREFIX = "tool2day-rating-local-";
 const MY_STARS_PREFIX = "tool2day-my-stars-";
 const SITE_VOTED_KEY = "tool2day-site-voted";
+const SITE_COMMENTED_KEY = "tool2day-site-commented";
 
 export type RatingStats = {
   average: number;
@@ -99,6 +100,22 @@ export function getMyStars(target: string): number {
 export function hasRatedSite(): boolean {
   if (!canUseStorage()) return false;
   return localStorage.getItem(SITE_VOTED_KEY) === "1";
+}
+
+export function hasPostedSiteComment(): boolean {
+  if (!canUseStorage()) return false;
+  return localStorage.getItem(SITE_COMMENTED_KEY) === "1";
+}
+
+export function markPostedSiteComment() {
+  if (!canUseStorage()) return;
+  localStorage.setItem(SITE_COMMENTED_KEY, "1");
+  localStorage.setItem(SITE_VOTED_KEY, "1");
+}
+
+export function clearPostedSiteCommentFlag() {
+  if (!canUseStorage()) return;
+  localStorage.removeItem(SITE_COMMENTED_KEY);
 }
 
 export function markRatedSite() {
@@ -303,6 +320,7 @@ export async function submitRating(
       const data = (await res.json()) as RatingStats & { localOnly?: boolean };
       if (target === SITE_RATING_TARGET) {
         markRatedSite();
+        if (extra?.comment?.trim()) markPostedSiteComment();
       } else {
         markRatedCurrentUse(target, clamped);
       }
@@ -319,8 +337,10 @@ export async function submitRating(
     /* fall through */
   }
 
-  if (target === SITE_RATING_TARGET) markRatedSite();
-  else markRatedCurrentUse(target, clamped);
+  if (target === SITE_RATING_TARGET) {
+    markRatedSite();
+    if (extra?.comment?.trim()) markPostedSiteComment();
+  } else markRatedCurrentUse(target, clamped);
   saveLocalFallback(target, clamped);
   return localFallbackStats(target);
 }
