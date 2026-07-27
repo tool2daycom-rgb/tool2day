@@ -36,6 +36,7 @@ export const toolImageIcons: Record<string, string> = {
   "ai-erase": "/brand/tools/ai-erase.png",
   "png-library": "/brand/tools/png-library.png",
   "kinetic-captions": "/brand/tools/kinetic-captions.png",
+  "hashtag-generator": "/brand/tools/hashtag-generator.png",
   "thumbnail-downloader": "/brand/tools/thumbnail-downloader.png",
 };
 
