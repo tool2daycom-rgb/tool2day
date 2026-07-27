@@ -143,6 +143,7 @@ export async function POST(req: Request) {
   const once = Boolean(body.once);
   const displayName = sanitizeDisplayName(body.displayName);
   const comment = sanitizeComment(body.comment);
+  const wantsReview = Boolean(displayName || comment);
 
   if (
     !target ||
@@ -152,6 +153,27 @@ export async function POST(req: Request) {
     stars > 5
   ) {
     return NextResponse.json({ error: "invalid payload" }, { status: 400 });
+  }
+
+  if (wantsReview) {
+    try {
+      const { createClient: createServerSupabase } = await import(
+        "@/lib/supabase/server"
+      );
+      const authClient = await createServerSupabase();
+      const { data } = await authClient.auth.getUser();
+      if (!data.user) {
+        return NextResponse.json(
+          { error: "login_required", message: "Login required to comment" },
+          { status: 401 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "login_required", message: "Login required to comment" },
+        { status: 401 },
+      );
+    }
   }
 
   const supabase = adminClient();

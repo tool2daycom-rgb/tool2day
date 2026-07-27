@@ -1,10 +1,13 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, ShieldCheck, Sparkles, Star } from "lucide-react";
+import type { User as AuthUser } from "@supabase/supabase-js";
+import { Check, MessageCircleHeart, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { useLocale } from "@/components/locale-provider";
+import { createClient } from "@/lib/supabase/client";
 import {
   fetchRatingStats,
   formatRatingAverage,
@@ -157,6 +160,17 @@ export function ToolRatingBar({
   );
 }
 
+function authDisplayName(user: AuthUser): string {
+  const meta = user.user_metadata || {};
+  const raw =
+    meta.full_name ||
+    meta.name ||
+    meta.preferred_username ||
+    user.email?.split("@")[0] ||
+    "";
+  return String(raw).trim().slice(0, 60);
+}
+
 export function SiteRatingCard() {
   const { messages } = useLocale();
   const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
@@ -166,6 +180,8 @@ export function SiteRatingCard() {
   const [picked, setPicked] = useState(0);
   const [displayName, setDisplayName] = useState("");
   const [comment, setComment] = useState("");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const HINTS = [
     messages.starBad,
     messages.starOk,
@@ -190,6 +206,33 @@ export function SiteRatingCard() {
     return () => window.removeEventListener(RATING_UPDATED_EVENT, onUp);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    let subscription: { unsubscribe: () => void } | undefined;
+    try {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data }) => {
+        if (cancelled) return;
+        setUser(data.user);
+        if (data.user) setDisplayName(authDisplayName(data.user));
+        setAuthReady(true);
+      });
+      const { data } = supabase.auth.onAuthStateChange((_e, session) => {
+        const next = session?.user ?? null;
+        setUser(next);
+        if (next) setDisplayName((prev) => prev || authDisplayName(next));
+        setAuthReady(true);
+      });
+      subscription = data.subscription;
+    } catch {
+      if (!cancelled) setAuthReady(true);
+    }
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
+  }, []);
+
   async function pick(stars: number) {
     if (voted || busy) return;
     setPicked(stars);
@@ -197,8 +240,8 @@ export function SiteRatingCard() {
   }
 
   async function save() {
-    if (voted || busy || picked < 1) return;
-    const name = displayName.trim();
+    if (voted || busy || picked < 1 || !user) return;
+    const name = displayName.trim() || authDisplayName(user);
     if (!name) return;
     setBusy(true);
     try {
@@ -219,9 +262,23 @@ export function SiteRatingCard() {
     preview >= 1
       ? HINTS[Math.min(5, Math.round(preview)) - 1]
       : messages.clickStarsOnce;
+  const loggedIn = Boolean(user);
 
   return (
     <section className="relative mt-14 overflow-hidden border-y border-[#dce8f5] bg-[#eef5fc]">
+      <style>{`
+        @keyframes testimonials-pulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(232, 135, 74, 0.45); }
+          50% { transform: scale(1.03); box-shadow: 0 0 0 12px rgba(232, 135, 74, 0); }
+        }
+        .btn-testimonials-pulse {
+          animation: testimonials-pulse 2.2s ease-in-out infinite;
+        }
+        .btn-testimonials-pulse:hover {
+          animation-play-state: paused;
+          transform: scale(1.04);
+        }
+      `}</style>
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden
@@ -277,9 +334,9 @@ export function SiteRatingCard() {
             onMouseLeave={() => setHover(0)}
           >
             <div
-              className={`flex justify-center ${voted ? "" : "cursor-pointer"}`}
+              className={`flex justify-center ${voted || !loggedIn ? "" : "cursor-pointer"}`}
               onMouseMove={(e) => {
-                if (voted || busy) return;
+                if (voted || busy || !loggedIn) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const n = Math.min(
@@ -291,13 +348,27 @@ export function SiteRatingCard() {
             >
               <StarsRow
                 value={preview || stats.average}
-                onPick={voted ? undefined : pick}
-                disabled={voted || busy}
+                onPick={voted || !loggedIn ? undefined : pick}
+                disabled={voted || busy || !loggedIn}
                 size="xl"
               />
             </div>
 
-            {!voted ? (
+            {!voted && authReady && !loggedIn ? (
+              <div className="w-full rounded-xl border border-[#f3e0d0] bg-[#fff8f2] px-4 py-4 text-center">
+                <p className="text-sm font-bold text-[#7a4a28]">
+                  {messages.loginToComment}
+                </p>
+                <Link
+                  href="/login?next=/"
+                  className="mt-3 inline-flex rounded-xl bg-[#122033] px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#1c3048]"
+                >
+                  {messages.login}
+                </Link>
+              </div>
+            ) : null}
+
+            {!voted && loggedIn ? (
               <div className="w-full space-y-3 text-start">
                 <label className="block text-xs font-bold text-[#444]">
                   {messages.reviewDisplayName}
@@ -348,12 +419,13 @@ export function SiteRatingCard() {
                 : messages.noRatingsYet}
             </p>
 
-            <a
+            <Link
               href="/testimonials"
-              className="text-sm font-extrabold text-[#E8874A] underline-offset-4 hover:underline"
+              className="btn-testimonials-pulse mt-1 inline-flex items-center gap-2 rounded-full bg-gradient-to-l from-[#E8874A] via-[#f0a05f] to-[#F5C518] px-6 py-3 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(232,135,74,0.35)] transition hover:brightness-105"
             >
-              {messages.testimonialsTitle} →
-            </a>
+              <MessageCircleHeart className="h-4 w-4" />
+              {messages.testimonialsTitle}
+            </Link>
           </div>
         </div>
       </div>

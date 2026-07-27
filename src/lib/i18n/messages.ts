@@ -80,6 +80,7 @@ export type UiMessages = {
   reviewComment: string;
   reviewCommentHint: string;
   publishReview: string;
+  loginToComment: string;
   cookieSettings: string;
   footerNav: string;
   cookieTitle: string;
@@ -230,6 +231,7 @@ export const en: UiMessages = {
   reviewComment: "Your comment (optional)",
   reviewCommentHint: "Share what you liked…",
   publishReview: "Publish review",
+  loginToComment: "Log in to rate the site and leave a comment",
   cookieSettings: "Cookie settings",
   footerNav: "Footer links",
   cookieTitle: "Your privacy matters",
@@ -365,6 +367,7 @@ export const ar: UiMessages = {
   reviewComment: "تعليقك (اختياري)",
   reviewCommentHint: "اكتب رأيك باختصار…",
   publishReview: "نشر التقييم",
+  loginToComment: "سجّل الدخول لتقييم الموقع وترك تعليق",
   cookieSettings: "إعدادات الكوكيز",
   footerNav: "روابط التذييل",
   cookieTitle: "خصوصيتك تهمنا",
