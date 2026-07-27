@@ -91,6 +91,56 @@ function StarsMini({ value }: { value: number }) {
   );
 }
 
+function authAvatarUrl(user: AuthUser): string {
+  const meta = user.user_metadata || {};
+  const identity = user.identities?.[0]?.identity_data || {};
+  const candidates = [
+    meta.avatar_url,
+    meta.picture,
+    meta.avatar,
+    meta.profile_image_url,
+    identity.avatar_url,
+    identity.picture,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https:\/\//i.test(c)) return c;
+  }
+  return "";
+}
+
+function ReviewAvatar({
+  name,
+  avatarUrl,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+}) {
+  const [broken, setBroken] = useState(false);
+  const show = Boolean(avatarUrl) && !broken;
+  if (show) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl!}
+        alt={name}
+        width={48}
+        height={48}
+        className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-[#E8874A]/35"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E8874A] text-sm font-extrabold text-white"
+      aria-hidden
+    >
+      {initials(name)}
+    </div>
+  );
+}
+
 function ReviewCard({
   review,
   eyebrow,
@@ -120,12 +170,10 @@ function ReviewCard({
             <StarsMini value={review.stars} />
           </div>
         </div>
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E8874A] text-sm font-extrabold text-white"
-          aria-hidden
-        >
-          {initials(review.displayName)}
-        </div>
+        <ReviewAvatar
+          name={review.displayName}
+          avatarUrl={review.avatarUrl}
+        />
       </div>
 
       <p
@@ -196,6 +244,7 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
       await submitRating("site", stars, {
         displayName: name,
         comment: text,
+        avatarUrl: authAvatarUrl(user) || undefined,
       });
       setDone(true);
       onPosted();
@@ -303,6 +352,7 @@ const FALLBACK: PublicReview[] = [
     comment: "أدوات ممتازة وسريعة — خاصة محرر الفيديو والترجمة الحركية.",
     target: "site",
     createdAt: "",
+    avatarUrl: null,
   },
   {
     id: "fb2",
@@ -311,6 +361,7 @@ const FALLBACK: PublicReview[] = [
     comment: "الموقع سهل ومجاني بدون علامة مائية. أنصح فيه بقوة.",
     target: "site",
     createdAt: "",
+    avatarUrl: null,
   },
   {
     id: "fb3",
@@ -319,6 +370,7 @@ const FALLBACK: PublicReview[] = [
     comment: "Great free tools in the browser. Clean UI and fast exports.",
     target: "site",
     createdAt: "",
+    avatarUrl: null,
   },
   {
     id: "fb4",
@@ -327,6 +379,7 @@ const FALLBACK: PublicReview[] = [
     comment: "وفّر عليّ وقت كثير في تحويل الملفات والصوتيات.",
     target: "converters",
     createdAt: "",
+    avatarUrl: null,
   },
 ];
 

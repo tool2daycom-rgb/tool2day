@@ -171,6 +171,23 @@ function authDisplayName(user: AuthUser): string {
   return String(raw).trim().slice(0, 60);
 }
 
+function authAvatarUrl(user: AuthUser): string {
+  const meta = user.user_metadata || {};
+  const identity = user.identities?.[0]?.identity_data || {};
+  const candidates = [
+    meta.avatar_url,
+    meta.picture,
+    meta.avatar,
+    meta.profile_image_url,
+    identity.avatar_url,
+    identity.picture,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && /^https:\/\//i.test(c)) return c;
+  }
+  return "";
+}
+
 export function SiteRatingCard() {
   const { messages } = useLocale();
   const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
@@ -248,6 +265,7 @@ export function SiteRatingCard() {
       await submitRating("site", picked, {
         displayName: name,
         comment: comment.trim() || undefined,
+        avatarUrl: authAvatarUrl(user) || undefined,
       });
       const next = await fetchRatingStats("site");
       setStats(next);

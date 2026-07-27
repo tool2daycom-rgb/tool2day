@@ -45,7 +45,8 @@ create table if not exists public.tool_ratings (
 
 alter table public.tool_ratings
   add column if not exists display_name text,
-  add column if not exists comment text;
+  add column if not exists comment text,
+  add column if not exists avatar_url text;
 
 create index if not exists tool_ratings_target_idx on public.tool_ratings (target);
 create index if not exists tool_ratings_comment_idx

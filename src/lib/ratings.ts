@@ -289,7 +289,7 @@ function saveLocalFallback(target: string, stars: number) {
 export async function submitRating(
   target: string,
   stars: number,
-  extra?: { displayName?: string; comment?: string },
+  extra?: { displayName?: string; comment?: string; avatarUrl?: string },
 ): Promise<RatingStats> {
   const clamped = Math.min(5, Math.max(1, Math.round(stars)));
   const visitorId = getVisitorId();
@@ -314,6 +314,7 @@ export async function submitRating(
         once: target === SITE_RATING_TARGET,
         displayName: extra?.displayName,
         comment: extra?.comment,
+        avatarUrl: extra?.avatarUrl,
       }),
     });
     if (res.ok) {
@@ -352,6 +353,7 @@ export type PublicReview = {
   comment: string;
   target: string;
   createdAt: string;
+  avatarUrl?: string | null;
 };
 
 export async function fetchPublicReviews(
