@@ -117,6 +117,15 @@ export default function RootLayout({
       className={`${cairo.variable} ${syne.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <Script
+          id="adsense"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       <body className="min-h-full font-sans">
         <Script id="consent-default" strategy="beforeInteractive">
           {`
