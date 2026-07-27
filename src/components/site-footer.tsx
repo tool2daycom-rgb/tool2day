@@ -15,6 +15,7 @@ export function SiteFooter() {
     { href: "/pricing", label: messages.pricing },
     { href: "/help", label: messages.help },
     { href: "/contact", label: messages.contact },
+    { href: "/testimonials", label: messages.testimonialsTitle },
   ];
 
   return (

@@ -67,6 +67,19 @@ export type UiMessages = {
   pricing: string;
   help: string;
   contact: string;
+  testimonialsTitle: string;
+  testimonialsSub: string;
+  viewAllTestimonials: string;
+  allTestimonials: string;
+  customerOpinion: string;
+  testimonialsCtaTitle: string;
+  testimonialsCtaBody: string;
+  browseTools: string;
+  reviewDisplayName: string;
+  reviewDisplayNameHint: string;
+  reviewComment: string;
+  reviewCommentHint: string;
+  publishReview: string;
   cookieSettings: string;
   footerNav: string;
   cookieTitle: string;
@@ -202,6 +215,21 @@ export const en: UiMessages = {
   pricing: "Pricing",
   help: "Help",
   contact: "Contact us",
+  testimonialsTitle: "What they say about us",
+  testimonialsSub:
+    "Real feedback from Tool2Day users — names shown, never emails.",
+  viewAllTestimonials: "View all reviews",
+  allTestimonials: "All reviews",
+  customerOpinion: "Customer opinion",
+  testimonialsCtaTitle: "Ready to try the tools?",
+  testimonialsCtaBody:
+    "Free browser tools with no watermark — convert, edit, and create in minutes.",
+  browseTools: "Browse tools",
+  reviewDisplayName: "Display name",
+  reviewDisplayNameHint: "Your name (not email)",
+  reviewComment: "Your comment (optional)",
+  reviewCommentHint: "Share what you liked…",
+  publishReview: "Publish review",
   cookieSettings: "Cookie settings",
   footerNav: "Footer links",
   cookieTitle: "Your privacy matters",
@@ -322,6 +350,21 @@ export const ar: UiMessages = {
   pricing: "التسعير",
   help: "المساعدة",
   contact: "تواصل معنا",
+  testimonialsTitle: "ماذا يقولون عنا",
+  testimonialsSub:
+    "آراء حقيقية من مستخدمي Tool2Day — نعرض اسم المستخدم وليس الإيميل.",
+  viewAllTestimonials: "عرض كل التعليقات",
+  allTestimonials: "كل التعليقات",
+  customerOpinion: "رأي مستخدم",
+  testimonialsCtaTitle: "جاهز لتجربة الأدوات؟",
+  testimonialsCtaBody:
+    "أدوات مجانية في المتصفح بدون علامة مائية — حوّل وعدّل وأنشئ خلال دقائق.",
+  browseTools: "تصفّح الأدوات",
+  reviewDisplayName: "اسم العرض",
+  reviewDisplayNameHint: "اسمك (وليس الإيميل)",
+  reviewComment: "تعليقك (اختياري)",
+  reviewCommentHint: "اكتب رأيك باختصار…",
+  publishReview: "نشر التقييم",
   cookieSettings: "إعدادات الكوكيز",
   footerNav: "روابط التذييل",
   cookieTitle: "خصوصيتك تهمنا",

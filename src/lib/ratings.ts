@@ -272,6 +272,7 @@ function saveLocalFallback(target: string, stars: number) {
 export async function submitRating(
   target: string,
   stars: number,
+  extra?: { displayName?: string; comment?: string },
 ): Promise<RatingStats> {
   const clamped = Math.min(5, Math.max(1, Math.round(stars)));
   const visitorId = getVisitorId();
@@ -294,6 +295,8 @@ export async function submitRating(
         stars: clamped,
         visitorKey,
         once: target === SITE_RATING_TARGET,
+        displayName: extra?.displayName,
+        comment: extra?.comment,
       }),
     });
     if (res.ok) {
@@ -316,10 +319,43 @@ export async function submitRating(
     /* fall through */
   }
 
-  saveLocalFallback(target, clamped);
   if (target === SITE_RATING_TARGET) markRatedSite();
   else markRatedCurrentUse(target, clamped);
+  saveLocalFallback(target, clamped);
   return localFallbackStats(target);
+}
+
+export type PublicReview = {
+  id: string;
+  displayName: string;
+  stars: number;
+  comment: string;
+  target: string;
+  createdAt: string;
+};
+
+export async function fetchPublicReviews(
+  limit = 60,
+): Promise<{ reviews: PublicReview[]; average: number; count: number }> {
+  try {
+    const res = await fetch(
+      `/api/ratings?target=site&reviews=1&limit=${limit}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) throw new Error("bad status");
+    const data = (await res.json()) as {
+      reviews?: PublicReview[];
+      average?: number;
+      count?: number;
+    };
+    return {
+      reviews: Array.isArray(data.reviews) ? data.reviews : [],
+      average: Number(data.average) || 0,
+      count: Number(data.count) || 0,
+    };
+  } catch {
+    return { reviews: [], average: 0, count: 0 };
+  }
 }
 
 export function formatRatingAverage(average: number) {

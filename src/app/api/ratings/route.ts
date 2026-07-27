@@ -9,6 +9,17 @@ type Body = {
   visitorKey?: string;
   /** تقييم الموقع مرة واحدة لكل زائر (upsert) */
   once?: boolean;
+  displayName?: string;
+  comment?: string;
+};
+
+export type PublicReview = {
+  id: string;
+  displayName: string;
+  stars: number;
+  comment: string;
+  target: string;
+  createdAt: string;
 };
 
 function adminClient() {
@@ -20,6 +31,21 @@ function adminClient() {
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+/** يمنع عرض الإيميل — يستخرج اسم مستخدم فقط */
+function sanitizeDisplayName(raw: string | undefined | null): string {
+  const s = (raw || "").trim().replace(/\s+/g, " ");
+  if (!s) return "";
+  if (s.includes("@")) {
+    const local = s.split("@")[0]?.trim() || "";
+    return local.slice(0, 40);
+  }
+  return s.slice(0, 60);
+}
+
+function sanitizeComment(raw: string | undefined | null): string {
+  return (raw || "").trim().replace(/\s+/g, " ").slice(0, 400);
 }
 
 async function getStats(
@@ -42,22 +68,64 @@ async function getStats(
   return { average: sum / count, count };
 }
 
+async function listReviews(
+  supabase: NonNullable<ReturnType<typeof adminClient>>,
+  limit = 60,
+): Promise<PublicReview[]> {
+  const { data, error } = await supabase
+    .from("tool_ratings")
+    .select("id, display_name, stars, comment, target, created_at")
+    .not("comment", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(100, Math.max(1, limit)));
+
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row) => {
+      const comment = sanitizeComment(row.comment);
+      const displayName = sanitizeDisplayName(row.display_name) || "مستخدم";
+      if (!comment || comment.length < 3) return null;
+      return {
+        id: String(row.id),
+        displayName,
+        stars: Math.min(5, Math.max(1, Number(row.stars) || 5)),
+        comment,
+        target: String(row.target || "site"),
+        createdAt: String(row.created_at || ""),
+      } satisfies PublicReview;
+    })
+    .filter((r): r is PublicReview => Boolean(r));
+}
+
 export async function GET(req: Request) {
-  const target = new URL(req.url).searchParams.get("target")?.trim();
-  if (!target) {
-    return NextResponse.json({ error: "target required" }, { status: 400 });
-  }
+  const url = new URL(req.url);
+  const target = url.searchParams.get("target")?.trim() || "site";
+  const reviews = url.searchParams.get("reviews") === "1";
+  const limit = Number(url.searchParams.get("limit") || 60);
 
   const supabase = adminClient();
   if (!supabase) {
-    return NextResponse.json({ average: 0, count: 0 });
+    return NextResponse.json(
+      reviews ? { reviews: [], average: 0, count: 0 } : { average: 0, count: 0 },
+    );
   }
 
   try {
+    if (reviews) {
+      const [list, stats] = await Promise.all([
+        listReviews(supabase, limit),
+        getStats(supabase, "site"),
+      ]);
+      return NextResponse.json({ reviews: list, ...stats });
+    }
     const stats = await getStats(supabase, target);
     return NextResponse.json(stats);
-  } catch {
-    return NextResponse.json({ average: 0, count: 0 });
+  } catch (err) {
+    console.error("ratings GET failed", err);
+    return NextResponse.json(
+      reviews ? { reviews: [], average: 0, count: 0 } : { average: 0, count: 0 },
+    );
   }
 }
 
@@ -73,6 +141,8 @@ export async function POST(req: Request) {
   const stars = Number(body.stars);
   const visitorKey = body.visitorKey?.trim();
   const once = Boolean(body.once);
+  const displayName = sanitizeDisplayName(body.displayName);
+  const comment = sanitizeComment(body.comment);
 
   if (
     !target ||
@@ -93,11 +163,13 @@ export async function POST(req: Request) {
     });
   }
 
-  const row = {
+  const row: Record<string, unknown> = {
     target,
     stars: Math.round(stars),
     visitor_key: visitorKey,
   };
+  if (displayName) row.display_name = displayName;
+  if (comment) row.comment = comment;
 
   try {
     if (once || target === "site") {
@@ -106,10 +178,8 @@ export async function POST(req: Request) {
         .upsert(row, { onConflict: "target,visitor_key" });
       if (error) throw error;
     } else {
-      // كل استخدام = صف جديد (مفتاح زائر:useId فريد)
       const { error } = await supabase.from("tool_ratings").insert(row);
       if (error) {
-        // إن تكرر نفس المفتاح نحدّث فقط
         const { error: upErr } = await supabase
           .from("tool_ratings")
           .upsert(row, { onConflict: "target,visitor_key" });

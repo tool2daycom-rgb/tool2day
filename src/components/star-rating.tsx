@@ -164,6 +164,8 @@ export function SiteRatingCard() {
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(0);
   const [picked, setPicked] = useState(0);
+  const [displayName, setDisplayName] = useState("");
+  const [comment, setComment] = useState("");
   const HINTS = [
     messages.starBad,
     messages.starOk,
@@ -192,9 +194,18 @@ export function SiteRatingCard() {
     if (voted || busy) return;
     setPicked(stars);
     setHover(0);
+  }
+
+  async function save() {
+    if (voted || busy || picked < 1) return;
+    const name = displayName.trim();
+    if (!name) return;
     setBusy(true);
     try {
-      await submitRating("site", stars);
+      await submitRating("site", picked, {
+        displayName: name,
+        comment: comment.trim() || undefined,
+      });
       const next = await fetchRatingStats("site");
       setStats(next);
       setVoted(true);
@@ -286,6 +297,42 @@ export function SiteRatingCard() {
               />
             </div>
 
+            {!voted ? (
+              <div className="w-full space-y-3 text-start">
+                <label className="block text-xs font-bold text-[#444]">
+                  {messages.reviewDisplayName}
+                  <input
+                    className="mt-1 w-full rounded-xl border border-[#ddd] bg-white px-3 py-2.5 text-sm font-semibold text-[#111]"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder={messages.reviewDisplayNameHint}
+                    maxLength={60}
+                    disabled={busy}
+                    autoComplete="nickname"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-[#444]">
+                  {messages.reviewComment}
+                  <textarea
+                    className="mt-1 min-h-[88px] w-full resize-y rounded-xl border border-[#ddd] bg-white px-3 py-2.5 text-sm leading-6 text-[#111]"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder={messages.reviewCommentHint}
+                    maxLength={400}
+                    disabled={busy}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={busy || picked < 1 || !displayName.trim()}
+                  onClick={() => void save()}
+                  className="w-full rounded-xl bg-[#E8874A] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
+                >
+                  {busy ? messages.saving : messages.publishReview}
+                </button>
+              </div>
+            ) : null}
+
             <div className="flex items-end justify-center gap-2" dir="ltr">
               <span className="text-5xl font-extrabold tabular-nums tracking-tight text-[#122033] sm:text-6xl">
                 {stats.count > 0 ? formatRatingAverage(stats.average) : "—"}
@@ -300,6 +347,13 @@ export function SiteRatingCard() {
                 ? `${stats.count} ${messages.ratingsAggregate}`
                 : messages.noRatingsYet}
             </p>
+
+            <a
+              href="/testimonials"
+              className="text-sm font-extrabold text-[#E8874A] underline-offset-4 hover:underline"
+            >
+              {messages.testimonialsTitle} →
+            </a>
           </div>
         </div>
       </div>
