@@ -39,6 +39,7 @@ export const toolImageIcons: Record<string, string> = {
   "hashtag-generator": "/brand/tools/hashtag-generator.png",
   "code-formatter": "/brand/tools/code-formatter.png",
   "video-content-ideas": "/brand/tools/video-content-ideas.png",
+  "video-subtitles": "/brand/tools/video-subtitles.png",
   "thumbnail-downloader": "/brand/tools/thumbnail-downloader.png",
 };
 
