@@ -63,6 +63,20 @@ export async function getFFmpeg(onProgress?: (ratio: number) => void) {
   return instance;
 }
 
+/** يحرر مثيل FFmpeg بعد Aborted أو ضغط الذاكرة */
+export async function resetFFmpeg() {
+  const inst = ffmpeg;
+  ffmpeg = null;
+  loading = null;
+  lastLog = "";
+  if (!inst) return;
+  try {
+    inst.terminate();
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Runs ffmpeg and throws if exit code is non-zero. */
 export async function runFFmpeg(args: string[]) {
   const ff = await getFFmpeg();

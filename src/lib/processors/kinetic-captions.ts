@@ -27,8 +27,6 @@ export type KineticStyle = {
   baseColor: string;
   highlightColor: string;
   fontSizePx: number;
-  /** عرض معاينة الفيديو على الشاشة — لمطابقة حجم التنزيل مع ما يظهر */
-  previewClientW?: number;
   rtl: boolean;
   position: KineticPosition;
   effect: KineticEffect;
@@ -97,27 +95,34 @@ export const KINETIC_FONTS: {
 ];
 
 /**
- * حجم الخط في بكسلات الفيديو ليطابق المعاينة بصرياً.
- * الرقم المختار = الحجم في المعاينة؛ يُكبَّر بنسبة عرض الفيديو / عرض المعاينة.
+ * حجم الخط داخل الفيديو — الرقم المختار ≈ الحجم على فيديو عرض 720،
+ * مع سقف ~8.5% من العرض حتى لا يخرج النص من الإطار.
  */
 export function kineticBurnFontPx(
   selectedPx: number,
   videoW: number,
-  previewClientW = 0,
 ): number {
-  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 44;
-  const viewW =
-    previewClientW > 40 ? previewClientW : Math.min(390, Math.max(280, videoW * 0.45));
-  const scaled = Math.round(safe * (videoW / viewW));
-  // حد أدنى فقط — بدون تضخيم إضافي حتى يبقى مطابقاً للمعاينة
-  const floor = Math.round(videoW * 0.035);
-  return Math.max(floor, scaled);
+  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 36;
+  const scaled = Math.round(safe * (videoW / 720));
+  const floor = Math.round(videoW * 0.04);
+  const cap = Math.round(videoW * 0.085);
+  return Math.min(cap, Math.max(floor, scaled));
 }
 
-/** في المعاينة نعرض الرقم المختار مباشرة — والتنزيل يُقاس ليطابقه */
-export function kineticPreviewFontPx(selectedPx: number): number {
-  const safe = Number.isFinite(selectedPx) && selectedPx > 0 ? selectedPx : 44;
-  return Math.max(16, Math.min(84, Math.round(safe)));
+/** حجم المعاينة بنفس النسبة البصرية للتنزيل */
+export function kineticPreviewFontPx(
+  selectedPx: number,
+  videoNaturalW: number,
+  previewClientW: number,
+): number {
+  const burn = kineticBurnFontPx(
+    selectedPx,
+    videoNaturalW > 0 ? videoNaturalW : 720,
+  );
+  if (videoNaturalW > 0 && previewClientW > 0) {
+    return Math.max(12, Math.round(burn * (previewClientW / videoNaturalW)));
+  }
+  return Math.max(12, Math.round(selectedPx * 0.5));
 }
 
 export function getSiteCairoFamily(): string {
@@ -253,17 +258,12 @@ export async function renderKineticPng(
   const family = resolveKineticFontStack(style.fontFamily);
   const maxW = Math.max(120, Math.floor(videoW * 0.92));
 
-  let fontSize = kineticBurnFontPx(
-    style.fontSizePx,
-    videoW,
-    style.previewClientW ?? 0,
-  );
-  const minFont = Math.max(18, Math.round(fontSize * 0.85));
-  const gap = () => Math.max(8, Math.round(fontSize * 0.22));
-  const strokeW = () => Math.max(3, Math.round(fontSize * 0.1));
+  let fontSize = kineticBurnFontPx(style.fontSizePx, videoW);
+  const gap = () => Math.max(6, Math.round(fontSize * 0.18));
+  const strokeW = () => Math.max(2, Math.round(fontSize * 0.08));
 
   const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas غير متاح");
 
   const fontCss = (size: number) => `900 ${size}px ${family}`;
@@ -293,16 +293,16 @@ export async function renderKineticPng(
       let dx = 0;
       let dy = 0;
       if (style.effect === "fade" && !isActive) opacity = 0.45;
-      if (isActive && style.effect === "pulse") scale = 1.1;
-      if (isActive && style.effect === "pop") scale = 1.15;
+      if (isActive && style.effect === "pulse") scale = 1.08;
+      if (isActive && style.effect === "pop") scale = 1.12;
       if (isActive && style.effect === "bounce") {
-        scale = 1.06;
-        dy = -Math.round(size * 0.06);
+        scale = 1.05;
+        dy = -Math.round(size * 0.05);
       }
-      if (isActive && style.effect === "zoom") scale = opts.zoomScale ?? 1.12;
+      if (isActive && style.effect === "zoom") scale = opts.zoomScale ?? 1.1;
       if (isActive && style.effect === "slide") {
         const p = opts.slideProgress ?? 1;
-        const from = style.rtl ? size * 0.28 : -size * 0.28;
+        const from = style.rtl ? size * 0.22 : -size * 0.22;
         dx = from * (1 - p);
       }
       const baseW = Math.max(1, Math.ceil(ctx.measureText(text).width));
@@ -321,8 +321,9 @@ export async function renderKineticPng(
   let words = buildWords(fontSize);
   let totalW =
     words.reduce((s, w) => s + w.w, 0) + gap() * Math.max(0, words.length - 1);
+  // صغّر حتى يدخل السطر داخل عرض الفيديو — لا نسمح بالقص
   let guard = 0;
-  while (guard < 30 && fontSize > minFont && totalW > maxW) {
+  while (guard < 80 && fontSize > 14 && totalW > maxW) {
     fontSize -= 1;
     words = buildWords(fontSize);
     totalW =
@@ -470,7 +471,7 @@ async function probeVideoSize(
   }
 }
 
-const BURN_BATCH = 12;
+const BURN_BATCH = 5;
 
 /**
  * يحرق الترجمة الحركية كلمة بكلمة داخل الفيديو.
@@ -482,7 +483,15 @@ export async function downloadKineticBurnedVideo(
   onProgress?: (ratio: number) => void,
   onStatus?: (msg: string) => void,
 ) {
-  const frames = expandLinesToFrames(lines, style.effect);
+  // تأثيرات متعددة الإطارات تسبب Aborted على الأجهزة الضعيفة — نبقي إطاراً لكل كلمة
+  const burnStyle: KineticStyle = {
+    ...style,
+    effect:
+      style.effect === "typewriter" || style.effect === "slide"
+        ? "none"
+        : style.effect,
+  };
+  const frames = expandLinesToFrames(lines, burnStyle.effect);
   if (!frames.length) throw new Error("لا توجد كلمات لحرق الترجمة");
 
   const { fetchFile } = await import("@ffmpeg/util");
@@ -491,6 +500,7 @@ export async function downloadKineticBurnedVideo(
     downloadBlob,
     getFFmpeg,
     inputFileName,
+    resetFFmpeg,
     toBlob,
   } = await import("./ffmpeg-client");
 
@@ -505,76 +515,124 @@ export async function downloadKineticBurnedVideo(
         ? `جاري تنزيل الفيديو ${b + 1}/${batches}…`
         : "جاري تنزيل الفيديو مع الترجمة…",
     );
-    const ffmpeg = await getFFmpeg((r) =>
-      onProgress?.((b + Math.min(1, Math.max(0, r))) / batches),
-    );
-    const input = inputFileName(current, "mp4");
-    const output = "kinetic.mp4";
-    await ffmpeg.writeFile(input, await fetchFile(current));
 
-    const pngNames: string[] = [];
-    for (let i = 0; i < slice.length; i++) {
-      const f = slice[i]!;
-      const png = await renderKineticPng(f.line, f.activeIndex, w, h, style, {
-        charCount: f.charCount,
-        slideProgress: f.slideProgress,
-        zoomScale: f.zoomScale,
-      });
-      const name = `k${b}_${i}.png`;
-      await ffmpeg.writeFile(name, await fetchFile(png));
-      pngNames.push(name);
-    }
-
-    const overlayY = kineticOverlayY(style.position, h);
-    const parts: string[] = [];
-    let lastLabel = "[0:v]";
-    for (let i = 0; i < slice.length; i++) {
-      const f = slice[i]!;
-      const outLabel = i === slice.length - 1 ? "[vout]" : `[kb${b}_${i}]`;
-      // الوسط أفقياً بحجم الطبقة الحقيقي
-      parts.push(
-        `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
+    const runBatch = async () => {
+      const ffmpeg = await getFFmpeg((r) =>
+        onProgress?.((b + Math.min(1, Math.max(0, r))) / batches),
       );
-      lastLabel = outLabel;
-    }
+      const input = inputFileName(current, "mp4");
+      const output = "kinetic.mp4";
+      await ffmpeg.writeFile(input, await fetchFile(current));
 
-    const args = ["-i", input];
-    for (const name of pngNames) args.push("-i", name);
-    args.push(
-      "-filter_complex",
-      parts.join(";"),
-      "-map",
-      "[vout]",
-      "-map",
-      "0:a?",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-crf",
-      "22",
-      "-c:a",
-      "copy",
-      "-movflags",
-      "+faststart",
-      output,
-    );
+      const pngNames: string[] = [];
+      for (let i = 0; i < slice.length; i++) {
+        const f = slice[i]!;
+        const png = await renderKineticPng(
+          f.line,
+          f.activeIndex,
+          w,
+          h,
+          burnStyle,
+          {
+            charCount: f.charCount,
+            slideProgress: f.slideProgress,
+            zoomScale: f.zoomScale,
+          },
+        );
+        const name = `k${b}_${i}.png`;
+        await ffmpeg.writeFile(name, await fetchFile(png));
+        pngNames.push(name);
+      }
 
-    const code = await ffmpeg.exec(args);
-    if (typeof code === "number" && code !== 0) {
-      throw new Error("فشل تجهيز الفيديو للتنزيل — جرّب حجم خط أصغر أو فيديو أقصر");
-    }
-    const data = await ffmpeg.readFile(output);
-    current = new File([toBlob(data, "video/mp4")], `kinetic-partial-${b}.mp4`, {
-      type: "video/mp4",
-    });
+      const overlayY = kineticOverlayY(burnStyle.position, h);
+      const parts: string[] = [];
+      let lastLabel = "[0:v]";
+      for (let i = 0; i < slice.length; i++) {
+        const f = slice[i]!;
+        const outLabel = i === slice.length - 1 ? "[vout]" : `[kb${b}_${i}]`;
+        parts.push(
+          `${lastLabel}[${i + 1}:v]overlay=(W-w)/2:${overlayY}:enable='between(t\\,${f.start.toFixed(3)}\\,${f.end.toFixed(3)})'${outLabel}`,
+        );
+        lastLabel = outLabel;
+      }
+
+      const args = [
+        "-i",
+        input,
+        ...pngNames.flatMap((name) => ["-i", name]),
+        "-filter_complex",
+        parts.join(";"),
+        "-map",
+        "[vout]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "23",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        "-threads",
+        "1",
+        output,
+      ];
+
+      let code: number | undefined | void;
+      try {
+        code = await ffmpeg.exec(args);
+      } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        if (/abort/i.test(m)) {
+          throw new Error("ABORTED_RETRY");
+        }
+        throw e;
+      }
+      if (typeof code === "number" && code !== 0) {
+        throw new Error("فشل تجهيز الفيديو للتنزيل");
+      }
+      const data = await ffmpeg.readFile(output);
+      const next = new File(
+        [toBlob(data, "video/mp4")],
+        `kinetic-partial-${b}.mp4`,
+        { type: "video/mp4" },
+      );
+      try {
+        await ffmpeg.deleteFile(input);
+        await ffmpeg.deleteFile(output);
+        for (const name of pngNames) await ffmpeg.deleteFile(name);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    };
 
     try {
-      await ffmpeg.deleteFile(input);
-      await ffmpeg.deleteFile(output);
-      for (const name of pngNames) await ffmpeg.deleteFile(name);
-    } catch {
-      /* ignore */
+      current = await runBatch();
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      if (m === "ABORTED_RETRY" || /abort/i.test(m)) {
+        onStatus?.("إعادة المحاولة بعد امتلاء الذاكرة…");
+        await resetFFmpeg();
+        try {
+          current = await runBatch();
+        } catch {
+          await resetFFmpeg();
+          throw new Error(
+            "تعذّر دمج الترجمة — جرّب فيديو أقصر أو أغلق تبويبات أخرى ثم أعد المحاولة",
+          );
+        }
+      } else {
+        throw e;
+      }
+    }
+
+    // حرر ذاكرة FFmpeg بين الدفعات لتقليل Aborted
+    if (b < batches - 1 && (b + 1) % 3 === 0) {
+      await resetFFmpeg();
     }
   }
 
