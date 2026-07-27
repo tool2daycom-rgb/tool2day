@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
@@ -559,8 +566,46 @@ function RandomPanel({
   const [pick, setPick] = useState<string | null>(null);
   const [dice, setDice] = useState(6);
   const [roll, setRoll] = useState<number | null>(null);
+  const [overlay, setOverlay] = useState<{
+    value: number;
+    sides: number;
+    rolling: boolean;
+    key: number;
+  } | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   const items = useMemo(() => parseListItems(list), [list]);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!overlay) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [overlay]);
+
+  useEffect(() => {
+    if (!overlay?.rolling) return;
+    const t = window.setTimeout(() => {
+      setOverlay((o) => (o ? { ...o, rolling: false } : o));
+    }, 1150);
+    return () => window.clearTimeout(t);
+  }, [overlay?.key, overlay?.rolling]);
+
+  function throwDice() {
+    beginToolUse(slug);
+    const value = rollDice(dice);
+    setRoll(value);
+    setOverlay({
+      value,
+      sides: dice,
+      rolling: true,
+      key: Date.now(),
+    });
+  }
 
   return (
     <Shell title={title} description={description}>
@@ -606,21 +651,171 @@ function RandomPanel({
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          className={`${btnGhost} mt-2`}
-          onClick={() => {
-            beginToolUse(slug);
-            setRoll(rollDice(dice));
-          }}
-        >
-          ارمِ النرد
+        <button type="button" className={`${btnPrimary} mt-3`} onClick={throwDice}>
+          ارمِ النرد (ملء الشاشة)
         </button>
-        {roll != null ? (
-          <p className="mt-3 text-3xl font-black text-[#111]">{roll}</p>
+        {roll != null && !overlay ? (
+          <p className="mt-3 text-sm text-[#666]">
+            آخر نتيجة: <span className="font-black text-[#111]">{roll}</span>
+          </p>
         ) : null}
       </div>
+
+      {mounted && overlay
+        ? createPortal(
+            <DiceFullscreen
+              key={overlay.key}
+              sides={overlay.sides}
+              value={overlay.value}
+              rolling={overlay.rolling}
+              onClose={() => setOverlay(null)}
+              onReroll={throwDice}
+            />,
+            document.body,
+          )
+        : null}
     </Shell>
+  );
+}
+
+const D6_FACE_TRANSFORM: Record<number, string> = {
+  1: "rotateX(0deg) rotateY(0deg)",
+  2: "rotateY(-90deg)",
+  3: "rotateX(-90deg)",
+  4: "rotateX(90deg)",
+  5: "rotateY(90deg)",
+  6: "rotateY(180deg)",
+};
+
+const PIP_MAP: Record<number, number[]> = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
+};
+
+function DicePips({ value }: { value: number }) {
+  const active = new Set(PIP_MAP[value] ?? [4]);
+  return (
+    <div className="dice-face-pips">
+      {Array.from({ length: 9 }, (_, i) =>
+        active.has(i) ? <span key={i} className="dice-pip" /> : <span key={i} />,
+      )}
+    </div>
+  );
+}
+
+function DiceCube3D({
+  value,
+  rolling,
+}: {
+  value: number;
+  rolling: boolean;
+}) {
+  const final = D6_FACE_TRANSFORM[value] ?? D6_FACE_TRANSFORM[1]!;
+  const half = "calc(var(--dice-size) / 2)";
+
+  const faces: { n: number; transform: string }[] = [
+    { n: 1, transform: `rotateY(0deg) translateZ(${half})` },
+    { n: 6, transform: `rotateY(180deg) translateZ(${half})` },
+    { n: 2, transform: `rotateY(90deg) translateZ(${half})` },
+    { n: 5, transform: `rotateY(-90deg) translateZ(${half})` },
+    { n: 3, transform: `rotateX(90deg) translateZ(${half})` },
+    { n: 4, transform: `rotateX(-90deg) translateZ(${half})` },
+  ];
+
+  return (
+    <div className="dice-stage">
+      <div
+        className={`dice-cube${rolling ? " is-rolling" : ""}`}
+        style={
+          {
+            "--dice-final": final,
+            transform: rolling ? undefined : final,
+          } as CSSProperties
+        }
+      >
+        {faces.map((f) => (
+          <div
+            key={f.n}
+            className="dice-face"
+            style={{ transform: f.transform }}
+            aria-hidden={f.n !== value}
+          >
+            <DicePips value={f.n} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DiceFullscreen({
+  sides,
+  value,
+  rolling,
+  onClose,
+  onReroll,
+}: {
+  sides: number;
+  value: number;
+  rolling: boolean;
+  onClose: () => void;
+  onReroll: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="dice-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="نتيجة رمي النرد"
+      onClick={onClose}
+    >
+      <div
+        className="flex flex-col items-center px-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {sides === 6 ? (
+          <DiceCube3D value={value} rolling={rolling} />
+        ) : (
+          <div className={`dice-poly${rolling ? " is-rolling" : ""}`}>
+            <span className="dice-face-num">{rolling ? "?" : value}</span>
+          </div>
+        )}
+        <p className="dice-result-label">
+          {rolling ? "يرمي…" : `النتيجة: ${value}`}
+          {!rolling ? ` / ${sides}` : ""}
+        </p>
+        <p className="dice-hint">اضغط خارج النرد للإغلاق</p>
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-white px-4 py-2.5 text-sm font-bold text-[#111]"
+            onClick={onReroll}
+            disabled={rolling}
+          >
+            ارمِ مجدداً
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-white/30 bg-transparent px-4 py-2.5 text-sm font-bold text-white"
+            onClick={onClose}
+          >
+            إغلاق
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -205,3 +205,154 @@ a {
   background: rgba(37, 99, 235, 0.4) !important;
   outline: 2px solid #2563eb;
 }
+
+/* Full-page dice roller */
+.dice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(255, 255, 255, 0.12), transparent 55%),
+    linear-gradient(160deg, #0b1220 0%, #1a1030 45%, #0f172a 100%);
+  animation: dice-overlay-in 0.25s ease-out;
+}
+
+@keyframes dice-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dice-stage {
+  --dice-size: min(72vw, 280px);
+  perspective: 900px;
+  width: var(--dice-size);
+  height: var(--dice-size);
+}
+
+.dice-cube {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dice-cube.is-rolling {
+  animation: dice-tumble 1.15s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes dice-tumble {
+  0% {
+    transform: rotateX(12deg) rotateY(-18deg) rotateZ(0deg);
+  }
+  25% {
+    transform: rotateX(220deg) rotateY(140deg) rotateZ(40deg);
+  }
+  55% {
+    transform: rotateX(480deg) rotateY(300deg) rotateZ(-20deg);
+  }
+  80% {
+    transform: rotateX(640deg) rotateY(420deg) rotateZ(10deg);
+  }
+  100% {
+    transform: var(--dice-final, rotateX(0deg) rotateY(0deg));
+  }
+}
+
+.dice-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 18%;
+  background: linear-gradient(145deg, #fffdf8 0%, #f3efe6 55%, #e8e0d2 100%);
+  border: 2px solid rgba(30, 20, 10, 0.12);
+  box-shadow:
+    inset 0 0 0 6px rgba(255, 255, 255, 0.35),
+    inset 0 -10px 24px rgba(0, 0, 0, 0.08);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.dice-face-pips {
+  display: grid;
+  width: 72%;
+  height: 72%;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 6%;
+}
+
+.dice-pip {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #444 0%, #111 70%);
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+  align-self: center;
+  justify-self: center;
+  max-width: 28px;
+}
+
+.dice-face-num {
+  font-size: clamp(3.5rem, 18vw, 6rem);
+  font-weight: 900;
+  color: #141414;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-poly {
+  width: min(72vw, 280px);
+  height: min(72vw, 280px);
+  border-radius: 28% 32% 30% 34%;
+  background: linear-gradient(145deg, #fffdf8 0%, #efe8dc 50%, #d9cfbf 100%);
+  border: 3px solid rgba(20, 16, 10, 0.15);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 10px rgba(255, 255, 255, 0.28);
+  display: grid;
+  place-items: center;
+  transform-style: preserve-3d;
+}
+
+.dice-poly.is-rolling {
+  animation: dice-poly-spin 1.15s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes dice-poly-spin {
+  0% {
+    transform: rotate(-20deg) scale(0.85);
+  }
+  40% {
+    transform: rotate(220deg) scale(1.08);
+  }
+  70% {
+    transform: rotate(480deg) scale(0.95);
+  }
+  100% {
+    transform: rotate(720deg) scale(1);
+  }
+}
+
+.dice-result-label {
+  margin-top: 1.75rem;
+  text-align: center;
+  color: #f8fafc;
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.dice-hint {
+  margin-top: 0.65rem;
+  text-align: center;
+  color: rgba(248, 250, 252, 0.65);
+  font-size: 0.9rem;
+}
