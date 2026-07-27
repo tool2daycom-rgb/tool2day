@@ -75,6 +75,13 @@ export type ActiveToolKind =
   | "video-content-ideas"
   | "video-subtitles"
   | "kinetic-captions"
+  | "company-slogan-generator"
+  | "social-caption-generator"
+  | "bio-username-generator"
+  | "jwt-decoder"
+  | "qr-generator"
+  | "password-generator"
+  | "random-picker"
   | "archive-extract"
   | "archive-convert"
   | "ebook-convert"
@@ -131,6 +138,13 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "video-content-ideas": "video-content-ideas",
   "video-subtitles": "video-subtitles",
   "kinetic-captions": "kinetic-captions",
+  "company-slogan-generator": "company-slogan-generator",
+  "social-caption-generator": "social-caption-generator",
+  "bio-username-generator": "bio-username-generator",
+  "jwt-decoder": "jwt-decoder",
+  "qr-generator": "qr-generator",
+  "password-generator": "password-generator",
+  "random-picker": "random-picker",
   "audio-converter": "audio-convert",
   "trim-audio": "audio-trim",
   "change-audio-volume": "audio-volume",

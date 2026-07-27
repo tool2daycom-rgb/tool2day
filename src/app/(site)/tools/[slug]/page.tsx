@@ -11,6 +11,7 @@ import { ToolPageIntro } from "@/components/tool-page-intro";
 import { ToolSeoSections } from "@/components/tool-seo-sections";
 import { ToolWorkspace } from "@/components/tool-workspace";
 import { UtilityToolWorkspace } from "@/components/utility-tool-workspace";
+import { DailyToolsWorkspace } from "@/components/daily-tools-workspace";
 import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import { VideoSubtitlesWorkspace } from "@/components/video-subtitles-workspace";
 import { KineticCaptionsWorkspace } from "@/components/kinetic-captions-workspace";
@@ -132,6 +133,14 @@ export default async function ToolPage({ params }: Props) {
     kind === "text-tools" ||
     kind === "error-detector" ||
     kind === "speed-test";
+  const isDailyTool =
+    kind === "company-slogan-generator" ||
+    kind === "social-caption-generator" ||
+    kind === "bio-username-generator" ||
+    kind === "jwt-decoder" ||
+    kind === "qr-generator" ||
+    kind === "password-generator" ||
+    kind === "random-picker";
   const isGenerator =
     kind === "cv-builder" ||
     kind === "fancy-text" ||
@@ -212,6 +221,22 @@ export default async function ToolPage({ params }: Props) {
         ) : isUtility ? (
           <UtilityToolWorkspace
             kind={kind as "text-tools" | "error-detector" | "speed-test"}
+            slug={tool.slug}
+            arTitle={tool.title}
+            arDescription={tool.description}
+          />
+        ) : isDailyTool ? (
+          <DailyToolsWorkspace
+            kind={
+              kind as
+                | "company-slogan-generator"
+                | "social-caption-generator"
+                | "bio-username-generator"
+                | "jwt-decoder"
+                | "qr-generator"
+                | "password-generator"
+                | "random-picker"
+            }
             slug={tool.slug}
             arTitle={tool.title}
             arDescription={tool.description}

@@ -59,6 +59,12 @@ import {
   Palette,
   Blend,
   Captions,
+  Building2,
+  KeyRound,
+  MessageSquareText,
+  UserRound,
+  Dices,
+  QrCode,
 } from "lucide-react";
 
 export type ToolCategory =
@@ -209,6 +215,15 @@ export const tools: Tool[] = [
     accept: "text/plain",
     icon: Blend,
   },
+  {
+    slug: "company-slogan-generator",
+    title: "مولد اسم شركة وشعار",
+    description:
+      "ولّد أسماء شركات وشعارات (Slogan) من كلمة مفتاحية — جاهزة للنسخ والتجربة.",
+    category: "generators",
+    accept: "text/plain",
+    icon: Building2,
+  },
 
   // Social & Dev utils
   {
@@ -246,6 +261,33 @@ export const tools: Tool[] = [
     category: "social-dev",
     accept: "text/plain",
     icon: Lightbulb,
+  },
+  {
+    slug: "social-caption-generator",
+    title: "مولد وصف يوتيوب وانستغرام",
+    description:
+      "ولّد أوصاف منشورات وفيديوهات لانستغرام ويوتيوب وتيك توك حسب الموضوع.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: MessageSquareText,
+  },
+  {
+    slug: "bio-username-generator",
+    title: "مولد Bio واسم مستخدم",
+    description:
+      "اقترح أسماء مستخدم ونصوص Bio احترافية حسب اسمك وتخصصك للمنصات الاجتماعية.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: UserRound,
+  },
+  {
+    slug: "jwt-decoder",
+    title: "فك ترميز JWT",
+    description:
+      "اعرض Header وPayload لرموز JWT في المتصفح فقط — بدون إرسال للخادم وبدون التحقق من التوقيع.",
+    category: "social-dev",
+    accept: "text/plain",
+    icon: KeyRound,
   },
   {
     slug: "video-subtitles",
@@ -810,6 +852,33 @@ export const tools: Tool[] = [
   },
 
   // Daily utilities
+  {
+    slug: "qr-generator",
+    title: "مولد رمز QR",
+    description:
+      "أنشئ رمز QR لروابط، واتساب، أو شبكات واي فاي ونزّله PNG مجاناً من المتصفح.",
+    category: "utilities",
+    accept: "text/plain",
+    icon: QrCode,
+  },
+  {
+    slug: "password-generator",
+    title: "مولد كلمات المرور",
+    description:
+      "ولّد كلمات مرور قوية مع قياس القوة — أحرف، أرقام، ورموز — محلياً في المتصفح.",
+    category: "utilities",
+    accept: "text/plain",
+    icon: Lock,
+  },
+  {
+    slug: "random-picker",
+    title: "رمي نرد وعشوائي من قائمة",
+    description:
+      "اختر عشوائياً من قائمتك أو ارمِ نرداً لقرار سريع — مثالي للاختيارات اليومية.",
+    category: "utilities",
+    accept: "text/plain",
+    icon: Dices,
+  },
   {
     slug: "text-tools",
     title: "أدوات النص",

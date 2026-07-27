@@ -82,6 +82,13 @@ export const toolTitlesEn: Record<string, string> = {
   "text-tools": "Text tools",
   "error-detector": "Error detector",
   "speed-test": "Speed test",
+  "company-slogan-generator": "Company name & slogan generator",
+  "social-caption-generator": "YouTube & Instagram caption generator",
+  "bio-username-generator": "Bio & username generator",
+  "jwt-decoder": "JWT decoder",
+  "qr-generator": "QR code generator",
+  "password-generator": "Password generator",
+  "random-picker": "Dice & random list picker",
 };
 
 const toolTitlesDe: Record<string, string> = {
@@ -164,6 +171,13 @@ const toolTitlesDe: Record<string, string> = {
   "text-tools": "Text-Werkzeuge",
   "error-detector": "Fehler-Erkennung",
   "speed-test": "Geschwindigkeitstest",
+  "company-slogan-generator": "Firmennamen- & Slogan-Generator",
+  "social-caption-generator": "YouTube- & Instagram-Beschreibungs-Generator",
+  "bio-username-generator": "Bio- & Benutzernamen-Generator",
+  "jwt-decoder": "JWT-Decoder",
+  "qr-generator": "QR-Code-Generator",
+  "password-generator": "Passwort-Generator",
+  "random-picker": "Würfel & Zufallsauswahl",
 };
 
 const toolTitlesEs: Record<string, string> = {
@@ -246,6 +260,13 @@ const toolTitlesEs: Record<string, string> = {
   "text-tools": "Herramientas de texto",
   "error-detector": "Detector de errores",
   "speed-test": "Prueba de velocidad",
+  "company-slogan-generator": "Generador de nombres y eslóganes",
+  "social-caption-generator": "Generador de descripciones YouTube e Instagram",
+  "bio-username-generator": "Generador de bio y nombre de usuario",
+  "jwt-decoder": "Decodificador JWT",
+  "qr-generator": "Generador de códigos QR",
+  "password-generator": "Generador de contraseñas",
+  "random-picker": "Dado y elección aleatoria",
 };
 
 const toolTitlesPt: Record<string, string> = {
@@ -328,6 +349,13 @@ const toolTitlesPt: Record<string, string> = {
   "text-tools": "Ferramentas de texto",
   "error-detector": "Detector de erros",
   "speed-test": "Teste de velocidade",
+  "company-slogan-generator": "Gerador de nome e slogan de empresa",
+  "social-caption-generator": "Gerador de legendas YouTube e Instagram",
+  "bio-username-generator": "Gerador de bio e nome de usuário",
+  "jwt-decoder": "Decodificador JWT",
+  "qr-generator": "Gerador de QR Code",
+  "password-generator": "Gerador de senhas",
+  "random-picker": "Dado e escolha aleatória",
 };
 
 const toolTitlesIt: Record<string, string> = {
@@ -410,6 +438,13 @@ const toolTitlesIt: Record<string, string> = {
   "text-tools": "Strumenti di testo",
   "error-detector": "Rilevatore di errori",
   "speed-test": "Test di velocità",
+  "company-slogan-generator": "Generatore di nomi e slogan aziendali",
+  "social-caption-generator": "Generatore descrizioni YouTube e Instagram",
+  "bio-username-generator": "Generatore bio e username",
+  "jwt-decoder": "Decodificatore JWT",
+  "qr-generator": "Generatore di codici QR",
+  "password-generator": "Generatore di password",
+  "random-picker": "Dado e scelta casuale",
 };
 
 const toolTitlesFr: Record<string, string> = {
@@ -492,6 +527,13 @@ const toolTitlesFr: Record<string, string> = {
   "text-tools": "Outils de texte",
   "error-detector": "Détecteur d'erreurs",
   "speed-test": "Test de vitesse",
+  "company-slogan-generator": "Générateur de nom et slogan d'entreprise",
+  "social-caption-generator": "Générateur de descriptions YouTube et Instagram",
+  "bio-username-generator": "Générateur de bio et pseudo",
+  "jwt-decoder": "Décodeur JWT",
+  "qr-generator": "Générateur de QR code",
+  "password-generator": "Générateur de mots de passe",
+  "random-picker": "Dé et choix aléatoire",
 };
 
 const toolTitlesRu: Record<string, string> = {
@@ -574,6 +616,13 @@ const toolTitlesRu: Record<string, string> = {
   "text-tools": "Инструменты для текста",
   "error-detector": "Детектор ошибок",
   "speed-test": "Тест скорости",
+  "company-slogan-generator": "Генератор названий и слоганов",
+  "social-caption-generator": "Генератор описаний YouTube и Instagram",
+  "bio-username-generator": "Генератор био и имени пользователя",
+  "jwt-decoder": "Декодер JWT",
+  "qr-generator": "Генератор QR-кодов",
+  "password-generator": "Генератор паролей",
+  "random-picker": "Кубик и случайный выбор",
 };
 
 const toolTitlesPl: Record<string, string> = {
@@ -656,6 +705,13 @@ const toolTitlesPl: Record<string, string> = {
   "text-tools": "Narzędzia tekstowe",
   "error-detector": "Wykrywacz błędów",
   "speed-test": "Test prędkości",
+  "company-slogan-generator": "Generator nazw firm i sloganów",
+  "social-caption-generator": "Generator opisów YouTube i Instagram",
+  "bio-username-generator": "Generator bio i nazwy użytkownika",
+  "jwt-decoder": "Dekoder JWT",
+  "qr-generator": "Generator kodów QR",
+  "password-generator": "Generator haseł",
+  "random-picker": "Kostka i losowy wybór",
 };
 
 const toolTitlesTr: Record<string, string> = {
@@ -738,6 +794,13 @@ const toolTitlesTr: Record<string, string> = {
   "text-tools": "Metin araçları",
   "error-detector": "Hata algılayıcı",
   "speed-test": "Hız testi",
+  "company-slogan-generator": "Şirket adı ve slogan oluşturucu",
+  "social-caption-generator": "YouTube ve Instagram açıklama oluşturucu",
+  "bio-username-generator": "Bio ve kullanıcı adı oluşturucu",
+  "jwt-decoder": "JWT çözücü",
+  "qr-generator": "QR kod oluşturucu",
+  "password-generator": "Şifre oluşturucu",
+  "random-picker": "Zar ve rastgele seçici",
 };
 
 const toolTitlesId: Record<string, string> = {
@@ -820,6 +883,13 @@ const toolTitlesId: Record<string, string> = {
   "text-tools": "Alat teks",
   "error-detector": "Pendeteksi kesalahan",
   "speed-test": "Tes kecepatan",
+  "company-slogan-generator": "Generator nama & slogan perusahaan",
+  "social-caption-generator": "Generator caption YouTube & Instagram",
+  "bio-username-generator": "Generator bio & username",
+  "jwt-decoder": "Decoder JWT",
+  "qr-generator": "Generator kode QR",
+  "password-generator": "Generator kata sandi",
+  "random-picker": "Dadu & pemilih acak",
 };
 
 const toolTitlesJa: Record<string, string> = {
@@ -902,6 +972,13 @@ const toolTitlesJa: Record<string, string> = {
   "text-tools": "テキストツール",
   "error-detector": "エラー検出ツール",
   "speed-test": "速度テスト",
+  "company-slogan-generator": "会社名・スローガンジェネレーター",
+  "social-caption-generator": "YouTube・Instagram説明文ジェネレーター",
+  "bio-username-generator": "Bio・ユーザー名ジェネレーター",
+  "jwt-decoder": "JWTデコーダー",
+  "qr-generator": "QRコードジェネレーター",
+  "password-generator": "パスワードジェネレーター",
+  "random-picker": "サイコロ＆ランダム選択",
 };
 
 const toolTitlesKo: Record<string, string> = {
@@ -984,6 +1061,13 @@ const toolTitlesKo: Record<string, string> = {
   "text-tools": "텍스트 도구",
   "error-detector": "오류 감지기",
   "speed-test": "속도 테스트",
+  "company-slogan-generator": "회사명·슬로건 생성기",
+  "social-caption-generator": "유튜브·인스타 설명 생성기",
+  "bio-username-generator": "바이오·사용자명 생성기",
+  "jwt-decoder": "JWT 디코더",
+  "qr-generator": "QR 코드 생성기",
+  "password-generator": "비밀번호 생성기",
+  "random-picker": "주사위·랜덤 선택",
 };
 
 const toolTitlesZhCn: Record<string, string> = {
@@ -1066,6 +1150,13 @@ const toolTitlesZhCn: Record<string, string> = {
   "text-tools": "文本工具",
   "error-detector": "错误检测器",
   "speed-test": "网速测试",
+  "company-slogan-generator": "公司名称与口号生成器",
+  "social-caption-generator": "YouTube与Instagram描述生成器",
+  "bio-username-generator": "简介与用户名生成器",
+  "jwt-decoder": "JWT解码器",
+  "qr-generator": "二维码生成器",
+  "password-generator": "密码生成器",
+  "random-picker": "骰子与随机选择",
 };
 
 const toolTitlesFa: Record<string, string> = {
@@ -1148,6 +1239,13 @@ const toolTitlesFa: Record<string, string> = {
   "text-tools": "ابزارهای متنی",
   "error-detector": "تشخیص‌دهنده خطا",
   "speed-test": "تست سرعت",
+  "company-slogan-generator": "مولد نام شرکت و شعار",
+  "social-caption-generator": "مولد توضیحات یوتیوب و اینستاگرام",
+  "bio-username-generator": "مولد بیو و نام کاربری",
+  "jwt-decoder": "رمزگشای JWT",
+  "qr-generator": "مولد کد QR",
+  "password-generator": "مولد رمز عبور",
+  "random-picker": "تاس و انتخاب تصادفی",
 };
 
 const toolTitlesZhTw: Record<string, string> = {
@@ -1230,6 +1328,13 @@ const toolTitlesZhTw: Record<string, string> = {
   "text-tools": "文字工具",
   "error-detector": "錯誤偵測工具",
   "speed-test": "網速測試",
+  "company-slogan-generator": "公司名稱與標語產生器",
+  "social-caption-generator": "YouTube與Instagram說明產生器",
+  "bio-username-generator": "簡介與使用者名稱產生器",
+  "jwt-decoder": "JWT解碼器",
+  "qr-generator": "QR碼產生器",
+  "password-generator": "密碼產生器",
+  "random-picker": "骰子與隨機選擇",
 };
 
 const toolTitlesVi: Record<string, string> = {
@@ -1312,6 +1417,13 @@ const toolTitlesVi: Record<string, string> = {
   "text-tools": "Công cụ văn bản",
   "error-detector": "Công cụ phát hiện lỗi",
   "speed-test": "Kiểm tra tốc độ mạng",
+  "company-slogan-generator": "Tạo tên công ty & slogan",
+  "social-caption-generator": "Tạo mô tả YouTube & Instagram",
+  "bio-username-generator": "Tạo bio & tên người dùng",
+  "jwt-decoder": "Bộ giải mã JWT",
+  "qr-generator": "Tạo mã QR",
+  "password-generator": "Tạo mật khẩu",
+  "random-picker": "Xúc xắc & chọn ngẫu nhiên",
 };
 
 const toolTitlesHe: Record<string, string> = {
@@ -1394,6 +1506,13 @@ const toolTitlesHe: Record<string, string> = {
   "text-tools": "כלי טקסט",
   "error-detector": "מזהה שגיאות",
   "speed-test": "בדיקת מהירות",
+  "company-slogan-generator": "מחולל שם חברה וסלוגן",
+  "social-caption-generator": "מחולל תיאורי YouTube ואינסטגרם",
+  "bio-username-generator": "מחולל ביו ושם משתמש",
+  "jwt-decoder": "מפענח JWT",
+  "qr-generator": "מחולל קוד QR",
+  "password-generator": "מחולל סיסמאות",
+  "random-picker": "קובייה ובחירה אקראית",
 };
 
 const toolTitlesHi: Record<string, string> = {
@@ -1476,6 +1595,13 @@ const toolTitlesHi: Record<string, string> = {
   "text-tools": "टेक्स्ट टूल्स",
   "error-detector": "एरर डिटेक्टर",
   "speed-test": "स्पीड टेस्ट",
+  "company-slogan-generator": "कंपनी नाम और स्लोगन जनरेटर",
+  "social-caption-generator": "YouTube और Instagram कैप्शन जनरेटर",
+  "bio-username-generator": "बायो और यूज़रनेम जनरेटर",
+  "jwt-decoder": "JWT डिकोडर",
+  "qr-generator": "QR कोड जनरेटर",
+  "password-generator": "पासवर्ड जनरेटर",
+  "random-picker": "पासा और रैंडम चयन",
 };
 
 const toolTitlesTh: Record<string, string> = {
@@ -1558,6 +1684,13 @@ const toolTitlesTh: Record<string, string> = {
   "text-tools": "เครื่องมือข้อความ",
   "error-detector": "ตัวตรวจจับข้อผิดพลาด",
   "speed-test": "ทดสอบความเร็วอินเทอร์เน็ต",
+  "company-slogan-generator": "เครื่องมือสร้างชื่อบริษัทและสโลแกน",
+  "social-caption-generator": "เครื่องมือสร้างคำบรรยาย YouTube และ Instagram",
+  "bio-username-generator": "เครื่องมือสร้างไบโอและชื่อผู้ใช้",
+  "jwt-decoder": "ตัวถอดรหัส JWT",
+  "qr-generator": "เครื่องมือสร้างคิวอาร์โค้ด",
+  "password-generator": "เครื่องมือสร้างรหัสผ่าน",
+  "random-picker": "ลูกเต๋าและสุ่มจากรายการ",
 };
 
 /** Translated tool titles for every supported locale except Arabic (which uses tools.ts titles directly). */
