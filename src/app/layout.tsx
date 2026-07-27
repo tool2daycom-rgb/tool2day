@@ -55,9 +55,9 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: "ar_AR",
     alternateLocale: [
-      "ar_AR",
+      "en_US",
       "de_DE",
       "es_ES",
       "pt_BR",

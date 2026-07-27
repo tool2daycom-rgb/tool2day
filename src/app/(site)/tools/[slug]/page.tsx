@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { AiToolsWorkspace } from "@/components/ai-tools-workspace";
 import { CalculatorsWorkspace } from "@/components/calculators-workspace";
@@ -16,9 +15,9 @@ import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import { VideoSubtitlesWorkspace } from "@/components/video-subtitles-workspace";
 import { KineticCaptionsWorkspace } from "@/components/kinetic-captions-workspace";
 import { PngLibraryWorkspace } from "@/components/png-library-workspace";
-import { DEFAULT_LOCALE, isLocaleCode } from "@/lib/i18n/locales";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
 import { JsonLd } from "@/components/json-ld";
+import { resolveRequestLocale } from "@/lib/request-locale";
 import { getToolKeywords } from "@/lib/seo-keywords";
 import {
   buildLanguageAlternateMap,
@@ -60,10 +59,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
   const tool = getTool(slug);
   if (!tool) return {};
-  const cookieStore = await cookies();
-  const rawLang = cookieStore.get("tool2day_lang")?.value;
-  const locale =
-    rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
+  const locale = await resolveRequestLocale();
   const displayTitle = getToolTitle(tool.slug, locale, tool.title);
   const seo = getToolSeoContent(tool, { locale, title: displayTitle });
   const metaTitle = getLocalizedMetaTitle(tool.slug, locale, tool.title);
@@ -72,6 +68,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     locale,
     tool.title,
     seo.tagline,
+    tool.description,
   );
   const path = `/tools/${tool.slug}`;
   return {
@@ -107,10 +104,7 @@ export default async function ToolPage({ params }: Props) {
   const tool = getTool(slug);
   if (!tool) notFound();
 
-  const cookieStore = await cookies();
-  const rawLang = cookieStore.get("tool2day_lang")?.value;
-  const locale =
-    rawLang && isLocaleCode(rawLang) ? rawLang : DEFAULT_LOCALE;
+  const locale = await resolveRequestLocale();
   const displayTitle = getToolTitle(tool.slug, locale, tool.title);
   const seo = getToolSeoContent(tool, { locale, title: displayTitle });
   const metaDescription = getLocalizedMetaDescription(
@@ -118,6 +112,7 @@ export default async function ToolPage({ params }: Props) {
     locale,
     tool.title,
     seo.tagline,
+    tool.description,
   );
   const jsonLd = buildToolJsonLd({
     tool,

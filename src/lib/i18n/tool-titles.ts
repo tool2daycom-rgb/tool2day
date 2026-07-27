@@ -3,7 +3,7 @@ import type { LocaleCode } from "./locales";
 /** English titles for tools (default site language) */
 export const toolTitlesEn: Record<string, string> = {
   "cv-builder": "CV / Resume builder",
-  "fancy-text": "Fancy name text generator",
+  "fancy-text": "Fancy text generator",
   "email-generator": "Email message generator",
   "css-generator": "CSS code generator",
   "color-converter": "Color code converter",

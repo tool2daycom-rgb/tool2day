@@ -55,6 +55,9 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "مولد نصوص",
     "مولد سيرة ذاتية",
     "زخرفة أسماء",
+    "زخرفة الأسماء",
+    "مولد زخرفة الأسماء",
+    "زخرفة نص",
     "مولد رسائل",
     "مولد CSS",
     "محول ألوان",
@@ -65,6 +68,7 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "gradient generator",
     "generators",
     "fancy text",
+    "fancy text generator",
     "cv builder",
     "email generator",
     "css generator",
@@ -283,12 +287,28 @@ const toolExtraKeywords: Record<string, string[]> = {
     "كتابة CV",
   ],
   "fancy-text": [
+    "زخرفة الأسماء",
     "زخرفة أسماء",
+    "مولد زخرفة الأسماء",
+    "زخرفة الاسماء",
     "زخرفة نص",
+    "زخرفة نصوص",
+    "زخرفة كتابات",
+    "أسماء مزخرفة",
+    "اسم مزخرف",
+    "زخرفة أسماء أونلاين",
+    "زخرفة أسماء مجاناً",
+    "مولد أسماء مزخرفة",
     "أسماء ألعاب",
-    "fancy text",
-    "nickname generator",
     "أسماء انستغرام",
+    "أسماء تيك توك",
+    "أسماء يوتيوب",
+    "fancy text",
+    "fancy text generator",
+    "fancy name generator",
+    "nickname generator",
+    "cool text generator",
+    "unicode text generator",
   ],
   "email-generator": [
     "مولد رسائل بريد",
@@ -801,6 +821,37 @@ function withIntentVariants(base: string): string[] {
   ];
 }
 
+/** كلمات بحث عربية مشتقة من اسم الأداة — لكل الأدوات تلقائياً */
+export function arabicSearchVariants(title: string): string[] {
+  const t = title.trim();
+  if (!t) return [];
+  const out = [
+    t,
+    `${t} مجاناً`,
+    `${t} أونلاين`,
+    `${t} مجاني`,
+    `${t} بدون علامة مائية`,
+    `${t} في المتصفح`,
+  ];
+  const stripped = t
+    .replace(
+      /^(مولد|محوّل|محول|حاسبة|أداة|أدوات|محرر|منسّق|منسق|مستخرج|كاشف|فحص)\s+/u,
+      "",
+    )
+    .trim();
+  if (stripped && stripped !== t) {
+    out.push(
+      stripped,
+      `${stripped} مجاناً`,
+      `${stripped} أونلاين`,
+      `مولد ${stripped}`,
+      `محول ${stripped}`,
+      `${stripped} بدون علامة مائية`,
+    );
+  }
+  return out;
+}
+
 /** كل أداة + «مجاناً» — مثل: محوّل الخطوط مجاناً */
 export function toolFreeKeyword(title: string) {
   return `${title} مجاناً`;
@@ -811,6 +862,7 @@ export function getToolKeywords(tool: Tool): string[] {
   const extras = toolExtraKeywords[tool.slug] ?? [];
   return unique([
     ...buildMultilangToolKeywords(tool.slug, tool.title, [
+      ...arabicSearchVariants(tool.title),
       ...extras,
       ...extras.flatMap((k) => withIntentVariants(k)),
       ...withIntentVariants(tool.title),
@@ -830,6 +882,7 @@ export function getAllSiteKeywords(): string[] {
       toolFreeKeyword(tool.title),
       `${tool.title} مجاني`,
       `${tool.title} أونلاين`,
+      ...arabicSearchVariants(tool.title),
       ...extras,
     ];
   });
@@ -861,6 +914,6 @@ export function getToolPageDescription(tool: Tool, tagline?: string) {
 }
 
 export const siteSeo = {
-  title: siteSeoByLocale.en.title,
-  description: siteSeoByLocale.en.description,
+  title: siteSeoByLocale.ar.title,
+  description: siteSeoByLocale.ar.description,
 } as const;

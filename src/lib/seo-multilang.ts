@@ -486,7 +486,8 @@ export function getLocalizedMetaTitle(
 ): string {
   const title = getToolTitle(slug, locale, arTitle);
   const free = intentSuffixesByLocale[locale][0] || "free";
-  if (locale === "ar") return `${title} مجاناً`;
+  // Arabic: lead with the searchable tool name people type in Google
+  if (locale === "ar") return `${title} مجاناً أونلاين`;
   if (locale === "en") return `${title} — Free online tool`;
   return `${title} — ${free}`;
 }
@@ -496,11 +497,19 @@ export function getLocalizedMetaDescription(
   locale: LocaleCode,
   arTitle: string,
   tagline?: string,
+  toolDescription?: string,
 ): string {
   const title = getToolTitle(slug, locale, arTitle);
   const m = getMessages(locale);
-  if (locale === "ar" && tagline) {
-    return `${title} مجاناً — ${tagline} مجاني بالكامل وبدون علامة مائية على Tool2Day.`;
+  if (locale === "ar") {
+    const core =
+      toolDescription?.trim() ||
+      tagline?.trim() ||
+      `${title} مجاناً مباشرة من المتصفح`;
+    return `${title} مجاناً — ${core} بدون علامة مائية على Tool2Day.`;
+  }
+  if (tagline) {
+    return `${title} — ${tagline}. ${m.completelyFree}. ${m.noWatermark}. Tool2Day.`;
   }
   return `${title} — ${m.freeInBrowser}. ${m.completelyFree}. ${m.noWatermark}. Tool2Day.`;
 }
