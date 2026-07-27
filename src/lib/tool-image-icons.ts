@@ -34,6 +34,7 @@ export const toolImageIcons: Record<string, string> = {
   "ai-remove-bg": "/brand/tools/ai-remove-bg.png",
   "ai-upscale": "/brand/tools/ai-upscale.png",
   "ai-erase": "/brand/tools/ai-erase.png",
+  "png-library": "/brand/tools/png-library.png",
   "thumbnail-downloader": "/brand/tools/thumbnail-downloader.png",
 };
 
