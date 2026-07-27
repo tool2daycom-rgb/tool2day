@@ -54,10 +54,37 @@ a {
 
   .brand-mark-sway,
   .brand-mark-morph,
-  .brand-dot {
+  .brand-dot,
+  .flag-wave {
     animation: none !important;
   }
 }
+
+@keyframes flag-wave {
+  0% {
+    transform: rotate(-8deg) skewY(-2deg) translateY(0);
+  }
+  25% {
+    transform: rotate(4deg) skewY(1.5deg) translateY(-1px);
+  }
+  50% {
+    transform: rotate(8deg) skewY(2deg) translateY(0);
+  }
+  75% {
+    transform: rotate(-3deg) skewY(-1deg) translateY(1px);
+  }
+  100% {
+    transform: rotate(-8deg) skewY(-2deg) translateY(0);
+  }
+}
+
+.flag-wave {
+  display: inline-block;
+  transform-origin: bottom center;
+  animation: flag-wave 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
+}
+
 
 /* Tool2Day triangle mark — continuous rotate */
 .brand-mark-animated {

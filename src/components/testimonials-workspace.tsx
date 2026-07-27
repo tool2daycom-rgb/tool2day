@@ -11,6 +11,7 @@ import {
   submitRating,
   type PublicReview,
 } from "@/lib/ratings";
+import { countryFromAuthMeta, findCountry } from "@/lib/profile-countries";
 import { tools } from "@/lib/tools";
 
 function initials(name: string) {
@@ -139,13 +140,53 @@ function ReviewAvatar({
   );
 }
 
+function WavingFlag({
+  code,
+  flag,
+  compact,
+}: {
+  code?: string | null;
+  flag?: string | null;
+  compact?: boolean;
+}) {
+  const resolved = findCountry(code);
+  const emoji = flag || resolved?.flag || "";
+  const iso = (resolved?.code || code || "").toLowerCase();
+  if (!emoji && !iso) return null;
+
+  const size = compact ? "text-3xl" : "text-5xl sm:text-6xl";
+  const imgH = compact ? 36 : 52;
+
+  if (iso) {
+    return (
+      <div className="flex justify-center" aria-hidden>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://flagcdn.com/w80/${iso}.png`}
+          alt=""
+          width={Math.round(imgH * 1.5)}
+          height={imgH}
+          className={`flag-wave rounded-sm object-cover shadow-sm ${
+            compact ? "h-9 w-[54px]" : "h-[52px] w-[78px] sm:h-14 sm:w-[84px]"
+          }`}
+          loading="lazy"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex justify-center leading-none ${size}`} aria-hidden>
+      <span className="flag-wave">{emoji}</span>
+    </div>
+  );
+}
+
 function ReviewCard({
   review,
-  eyebrow,
   compact,
 }: {
   review: PublicReview;
-  eyebrow: string;
   compact?: boolean;
 }) {
   const label = toolLabel(review.target);
@@ -155,9 +196,13 @@ function ReviewCard({
         compact ? "px-5 py-6" : "px-6 py-8 sm:px-10 sm:py-10"
       }`}
     >
-      <p className="text-center text-[11px] font-semibold text-[#9aa3af]">
-        {eyebrow} — {label}
-      </p>
+      <div className={compact ? "min-h-9" : "min-h-[52px]"}>
+        <WavingFlag
+          code={review.countryCode}
+          flag={review.countryFlag}
+          compact={compact}
+        />
+      </div>
 
       <div className="mt-5 flex items-center justify-center gap-3">
         <div className="text-end">
@@ -194,7 +239,6 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [stars, setStars] = useState(5);
-  const [displayName, setDisplayName] = useState("");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -208,13 +252,10 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
       supabase.auth.getUser().then(({ data }) => {
         if (cancelled) return;
         setUser(data.user);
-        if (data.user) setDisplayName(authDisplayName(data.user));
         setAuthReady(true);
       });
       const { data } = supabase.auth.onAuthStateChange((_e, session) => {
-        const next = session?.user ?? null;
-        setUser(next);
-        if (next) setDisplayName((prev) => prev || authDisplayName(next));
+        setUser(session?.user ?? null);
         setAuthReady(true);
       });
       subscription = data.subscription;
@@ -229,12 +270,13 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
 
   async function submit() {
     if (!user || busy) return;
-    const name = displayName.trim() || authDisplayName(user);
+    const name = authDisplayName(user);
     const text = comment.trim();
     if (!name || text.length < 3) {
       setError(messages.reviewCommentHint);
       return;
     }
+    const country = countryFromAuthMeta(user.user_metadata);
     setBusy(true);
     setError(null);
     try {
@@ -242,6 +284,8 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
         displayName: name,
         comment: text,
         avatarUrl: authAvatarUrl(user) || undefined,
+        countryCode: country.code || undefined,
+        countryFlag: country.flag || undefined,
       });
       setComment("");
       setStars(5);
@@ -305,18 +349,6 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
         <div className="mt-6 space-y-4 text-start">
           <StarsPick value={stars} onPick={setStars} disabled={busy} />
           <label className="block text-xs font-bold text-[#444]">
-            {messages.reviewDisplayName}
-            <input
-              className="mt-1 w-full rounded-xl border border-[#ddd] bg-[#fafafa] px-3 py-2.5 text-sm font-semibold text-[#111]"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={messages.reviewDisplayNameHint}
-              maxLength={60}
-              disabled={busy}
-              autoComplete="nickname"
-            />
-          </label>
-          <label className="block text-xs font-bold text-[#444]">
             {messages.reviewComment}
             <textarea
               className="mt-1 min-h-[110px] w-full resize-y rounded-xl border border-[#ddd] bg-[#fafafa] px-3 py-2.5 text-sm leading-6 text-[#111]"
@@ -332,7 +364,7 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
           ) : null}
           <button
             type="button"
-            disabled={busy || !displayName.trim() || comment.trim().length < 3}
+            disabled={busy || comment.trim().length < 3}
             onClick={() => void submit()}
             className="w-full rounded-xl bg-[#E8874A] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
           >
@@ -353,6 +385,8 @@ const FALLBACK: PublicReview[] = [
     target: "site",
     createdAt: "",
     avatarUrl: null,
+    countryCode: "SA",
+    countryFlag: "🇸🇦",
   },
   {
     id: "fb2",
@@ -362,6 +396,8 @@ const FALLBACK: PublicReview[] = [
     target: "site",
     createdAt: "",
     avatarUrl: null,
+    countryCode: "EG",
+    countryFlag: "🇪🇬",
   },
   {
     id: "fb3",
@@ -371,6 +407,8 @@ const FALLBACK: PublicReview[] = [
     target: "site",
     createdAt: "",
     avatarUrl: null,
+    countryCode: "AE",
+    countryFlag: "🇦🇪",
   },
   {
     id: "fb4",
@@ -380,6 +418,8 @@ const FALLBACK: PublicReview[] = [
     target: "converters",
     createdAt: "",
     avatarUrl: null,
+    countryCode: "KW",
+    countryFlag: "🇰🇼",
   },
 ];
 
@@ -422,8 +462,6 @@ export function TestimonialsWorkspace({
   function go(delta: number) {
     setIndex((i) => (i + delta + list.length) % list.length);
   }
-
-  const eyebrow = messages.customerOpinion;
 
   return (
     <section
@@ -490,26 +528,18 @@ export function TestimonialsWorkspace({
           <div className="mx-auto grid max-w-3xl grid-cols-[0.7fr_1.4fr_0.7fr] items-center gap-2 sm:gap-4">
             <div className="scale-90 opacity-40 blur-[0.5px]">
               {neighbors.prev ? (
-                <ReviewCard
-                  review={neighbors.prev}
-                  eyebrow={eyebrow}
-                  compact
-                />
+                <ReviewCard review={neighbors.prev} compact />
               ) : (
                 <div className="h-40 rounded-2xl bg-white/10" />
               )}
             </div>
             <div className="relative z-10">
-              <ReviewCard review={active} eyebrow={eyebrow} />
+              <ReviewCard review={active} />
               <div className="mx-auto mt-0 h-0 w-0 border-x-[10px] border-t-[12px] border-x-transparent border-t-white" />
             </div>
             <div className="scale-90 opacity-40 blur-[0.5px]">
               {neighbors.next ? (
-                <ReviewCard
-                  review={neighbors.next}
-                  eyebrow={eyebrow}
-                  compact
-                />
+                <ReviewCard review={neighbors.next} compact />
               ) : (
                 <div className="h-40 rounded-2xl bg-white/10" />
               )}
@@ -553,12 +583,7 @@ export function TestimonialsWorkspace({
               ) : (
                 <div className="mt-8 grid gap-4 sm:grid-cols-2">
                   {list.map((review) => (
-                    <ReviewCard
-                      key={review.id}
-                      review={review}
-                      eyebrow={eyebrow}
-                      compact
-                    />
+                    <ReviewCard key={review.id} review={review} compact />
                   ))}
                 </div>
               )}

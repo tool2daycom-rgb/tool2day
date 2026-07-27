@@ -17,6 +17,7 @@ import {
   submitRating,
   type RatingStats,
 } from "@/lib/ratings";
+import { countryFromAuthMeta } from "@/lib/profile-countries";
 
 function StarButton({
   index,
@@ -195,7 +196,6 @@ export function SiteRatingCard() {
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(0);
   const [picked, setPicked] = useState(0);
-  const [displayName, setDisplayName] = useState("");
   const [comment, setComment] = useState("");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -231,13 +231,10 @@ export function SiteRatingCard() {
       supabase.auth.getUser().then(({ data }) => {
         if (cancelled) return;
         setUser(data.user);
-        if (data.user) setDisplayName(authDisplayName(data.user));
         setAuthReady(true);
       });
       const { data } = supabase.auth.onAuthStateChange((_e, session) => {
-        const next = session?.user ?? null;
-        setUser(next);
-        if (next) setDisplayName((prev) => prev || authDisplayName(next));
+        setUser(session?.user ?? null);
         setAuthReady(true);
       });
       subscription = data.subscription;
@@ -258,14 +255,17 @@ export function SiteRatingCard() {
 
   async function save() {
     if (voted || busy || picked < 1 || !user) return;
-    const name = displayName.trim() || authDisplayName(user);
+    const name = authDisplayName(user);
     if (!name) return;
+    const country = countryFromAuthMeta(user.user_metadata);
     setBusy(true);
     try {
       await submitRating("site", picked, {
         displayName: name,
         comment: comment.trim() || undefined,
         avatarUrl: authAvatarUrl(user) || undefined,
+        countryCode: country.code || undefined,
+        countryFlag: country.flag || undefined,
       });
       const next = await fetchRatingStats("site");
       setStats(next);
@@ -389,18 +389,6 @@ export function SiteRatingCard() {
             {!voted && loggedIn ? (
               <div className="w-full space-y-3 text-start">
                 <label className="block text-xs font-bold text-[#444]">
-                  {messages.reviewDisplayName}
-                  <input
-                    className="mt-1 w-full rounded-xl border border-[#ddd] bg-white px-3 py-2.5 text-sm font-semibold text-[#111]"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder={messages.reviewDisplayNameHint}
-                    maxLength={60}
-                    disabled={busy}
-                    autoComplete="nickname"
-                  />
-                </label>
-                <label className="block text-xs font-bold text-[#444]">
                   {messages.reviewComment}
                   <textarea
                     className="mt-1 min-h-[88px] w-full resize-y rounded-xl border border-[#ddd] bg-white px-3 py-2.5 text-sm leading-6 text-[#111]"
@@ -413,7 +401,7 @@ export function SiteRatingCard() {
                 </label>
                 <button
                   type="button"
-                  disabled={busy || picked < 1 || !displayName.trim()}
+                  disabled={busy || picked < 1}
                   onClick={() => void save()}
                   className="w-full rounded-xl bg-[#E8874A] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
                 >

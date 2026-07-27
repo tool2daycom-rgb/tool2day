@@ -55,3 +55,15 @@ export function findCountry(code: string | undefined | null) {
   if (!code) return null;
   return PROFILE_COUNTRIES.find((c) => c.code === code) || null;
 }
+
+export function countryFromAuthMeta(meta: Record<string, unknown> | undefined | null) {
+  if (!meta) return { code: "", flag: "" };
+  const code =
+    typeof meta.country_code === "string" ? meta.country_code.trim().toUpperCase() : "";
+  const fromList = findCountry(code);
+  const flag =
+    (typeof meta.country_flag === "string" && meta.country_flag.trim()) ||
+    fromList?.flag ||
+    "";
+  return { code: fromList?.code || code.slice(0, 2), flag };
+}

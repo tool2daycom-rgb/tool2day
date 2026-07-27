@@ -13,6 +13,8 @@ type Body = {
   displayName?: string;
   comment?: string;
   avatarUrl?: string;
+  countryCode?: string;
+  countryFlag?: string;
 };
 
 export type PublicReview = {
@@ -23,6 +25,8 @@ export type PublicReview = {
   target: string;
   createdAt: string;
   avatarUrl: string | null;
+  countryCode: string | null;
+  countryFlag: string | null;
 };
 
 function adminClient() {
@@ -58,6 +62,17 @@ function sanitizeAvatarUrl(raw: string | undefined | null): string {
   return s;
 }
 
+function sanitizeCountryCode(raw: string | undefined | null): string {
+  const s = (raw || "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(s) ? s : "";
+}
+
+function sanitizeCountryFlag(raw: string | undefined | null): string {
+  const s = (raw || "").trim();
+  if (!s || s.length > 8) return "";
+  return s;
+}
+
 function avatarFromAuthUser(user: User): string {
   const meta = user.user_metadata || {};
   const identity = user.identities?.[0]?.identity_data || {};
@@ -74,6 +89,17 @@ function avatarFromAuthUser(user: User): string {
     if (ok) return ok;
   }
   return "";
+}
+
+function countryFromAuthUser(user: User): { code: string; flag: string } {
+  const meta = user.user_metadata || {};
+  const code = sanitizeCountryCode(
+    typeof meta.country_code === "string" ? meta.country_code : "",
+  );
+  const flag = sanitizeCountryFlag(
+    typeof meta.country_flag === "string" ? meta.country_flag : "",
+  );
+  return { code, flag };
 }
 
 async function getStats(
@@ -100,21 +126,53 @@ async function listReviews(
   supabase: NonNullable<ReturnType<typeof adminClient>>,
   limit = 60,
 ): Promise<PublicReview[]> {
-  const { data, error } = await supabase
+  const capped = Math.min(100, Math.max(1, limit));
+  let data: Record<string, unknown>[] | null = null;
+
+  const withCountry = await supabase
     .from("tool_ratings")
-    .select("id, display_name, stars, comment, target, created_at, avatar_url")
+    .select(
+      "id, display_name, stars, comment, target, created_at, avatar_url, country_code, country_flag",
+    )
     .not("comment", "is", null)
     .order("created_at", { ascending: false })
-    .limit(Math.min(100, Math.max(1, limit)));
+    .limit(capped);
 
-  if (error) throw error;
+  if (withCountry.error) {
+    const without = await supabase
+      .from("tool_ratings")
+      .select("id, display_name, stars, comment, target, created_at, avatar_url")
+      .not("comment", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(capped);
+    if (without.error) throw without.error;
+    data = (without.data ?? []) as Record<string, unknown>[];
+  } else {
+    data = (withCountry.data ?? []) as Record<string, unknown>[];
+  }
 
-  return (data ?? [])
+  return data
     .map((row) => {
-      const comment = sanitizeComment(row.comment);
-      const displayName = sanitizeDisplayName(row.display_name) || "مستخدم";
+      const comment = sanitizeComment(
+        typeof row.comment === "string" ? row.comment : "",
+      );
+      const displayName =
+        sanitizeDisplayName(
+          typeof row.display_name === "string" ? row.display_name : "",
+        ) || "مستخدم";
       if (!comment || comment.length < 3) return null;
-      const avatarUrl = sanitizeAvatarUrl(row.avatar_url) || null;
+      const avatarUrl =
+        sanitizeAvatarUrl(
+          typeof row.avatar_url === "string" ? row.avatar_url : "",
+        ) || null;
+      const countryCode =
+        sanitizeCountryCode(
+          typeof row.country_code === "string" ? row.country_code : "",
+        ) || null;
+      const countryFlag =
+        sanitizeCountryFlag(
+          typeof row.country_flag === "string" ? row.country_flag : "",
+        ) || null;
       return {
         id: String(row.id),
         displayName,
@@ -123,6 +181,8 @@ async function listReviews(
         target: String(row.target || "site"),
         createdAt: String(row.created_at || ""),
         avatarUrl,
+        countryCode,
+        countryFlag,
       } as PublicReview;
     })
     .filter((r): r is PublicReview => r !== null);
@@ -173,9 +233,9 @@ export async function POST(req: Request) {
   const once = Boolean(body.once);
   let displayName = sanitizeDisplayName(body.displayName);
   const comment = sanitizeComment(body.comment);
-  let avatarUrl =
-    sanitizeAvatarUrl(body.avatarUrl) ||
-    "";
+  let avatarUrl = sanitizeAvatarUrl(body.avatarUrl) || "";
+  let countryCode = sanitizeCountryCode(body.countryCode);
+  let countryFlag = sanitizeCountryFlag(body.countryFlag);
   const wantsReview = Boolean(displayName || comment);
 
   if (
@@ -203,6 +263,9 @@ export async function POST(req: Request) {
       }
       const fromAuth = avatarFromAuthUser(data.user);
       if (fromAuth) avatarUrl = fromAuth;
+      const countryAuth = countryFromAuthUser(data.user);
+      if (countryAuth.code) countryCode = countryAuth.code;
+      if (countryAuth.flag) countryFlag = countryAuth.flag;
       if (!displayName) {
         const meta = data.user.user_metadata || {};
         displayName = sanitizeDisplayName(
@@ -238,20 +301,44 @@ export async function POST(req: Request) {
   if (displayName) row.display_name = displayName;
   if (comment) row.comment = comment;
   if (avatarUrl) row.avatar_url = avatarUrl;
+  if (countryCode) row.country_code = countryCode;
+  if (countryFlag) row.country_flag = countryFlag;
 
   try {
     if (once) {
       const { error } = await supabase
         .from("tool_ratings")
         .upsert(row, { onConflict: "target,visitor_key" });
-      if (error) throw error;
+      if (error) {
+        // أعمدة الدولة قد تكون غير موجودة بعد — أعد المحاولة بدونها
+        if (row.country_code || row.country_flag) {
+          delete row.country_code;
+          delete row.country_flag;
+          const retry = await supabase
+            .from("tool_ratings")
+            .upsert(row, { onConflict: "target,visitor_key" });
+          if (retry.error) throw retry.error;
+        } else throw error;
+      }
     } else {
       const { error } = await supabase.from("tool_ratings").insert(row);
       if (error) {
-        const { error: upErr } = await supabase
-          .from("tool_ratings")
-          .upsert(row, { onConflict: "target,visitor_key" });
-        if (upErr) throw upErr;
+        if (row.country_code || row.country_flag) {
+          delete row.country_code;
+          delete row.country_flag;
+          const retry = await supabase.from("tool_ratings").insert(row);
+          if (retry.error) {
+            const { error: upErr } = await supabase
+              .from("tool_ratings")
+              .upsert(row, { onConflict: "target,visitor_key" });
+            if (upErr) throw upErr;
+          }
+        } else {
+          const { error: upErr } = await supabase
+            .from("tool_ratings")
+            .upsert(row, { onConflict: "target,visitor_key" });
+          if (upErr) throw upErr;
+        }
       }
     }
 
