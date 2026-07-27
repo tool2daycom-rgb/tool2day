@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import type { User as AuthUser } from "@supabase/supabase-js";
+import { Check, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
+import { createClient } from "@/lib/supabase/client";
 import {
   fetchPublicReviews,
+  hasRatedSite,
+  submitRating,
   type PublicReview,
 } from "@/lib/ratings";
 import { tools } from "@/lib/tools";
@@ -21,6 +25,51 @@ function toolLabel(target: string) {
   if (target === "site") return "Tool2Day";
   const tool = tools.find((t) => t.slug === target);
   return tool?.title || "Tool2Day";
+}
+
+function authDisplayName(user: AuthUser): string {
+  const meta = user.user_metadata || {};
+  const raw =
+    meta.full_name ||
+    meta.name ||
+    meta.preferred_username ||
+    user.email?.split("@")[0] ||
+    "";
+  return String(raw).trim().slice(0, 60);
+}
+
+function StarsPick({
+  value,
+  onPick,
+  disabled,
+}: {
+  value: number;
+  onPick: (n: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-center gap-1" dir="ltr">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          disabled={disabled}
+          aria-label={`${n}`}
+          onClick={() => onPick(n)}
+          className="transition hover:scale-110 disabled:opacity-50"
+        >
+          <Star
+            className={`h-8 w-8 ${
+              value >= n
+                ? "fill-[#F5C518] text-[#F5C518]"
+                : "fill-transparent text-[#d4d4d4]"
+            }`}
+            strokeWidth={1.5}
+          />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function StarsMini({ value }: { value: number }) {
@@ -93,6 +142,143 @@ function ReviewCard({
   );
 }
 
+function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
+  const { messages } = useLocale();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [stars, setStars] = useState(5);
+  const [displayName, setDisplayName] = useState("");
+  const [comment, setComment] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let subscription: { unsubscribe: () => void } | undefined;
+    try {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data }) => {
+        if (cancelled) return;
+        setUser(data.user);
+        if (data.user) setDisplayName(authDisplayName(data.user));
+        setAuthReady(true);
+        if (hasRatedSite()) setDone(true);
+      });
+      const { data } = supabase.auth.onAuthStateChange((_e, session) => {
+        const next = session?.user ?? null;
+        setUser(next);
+        if (next) setDisplayName((prev) => prev || authDisplayName(next));
+        setAuthReady(true);
+      });
+      subscription = data.subscription;
+    } catch {
+      if (!cancelled) setAuthReady(true);
+    }
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  async function submit() {
+    if (!user || busy || done) return;
+    const name = displayName.trim() || authDisplayName(user);
+    const text = comment.trim();
+    if (!name || text.length < 3) {
+      setError(messages.reviewCommentHint);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await submitRating("site", stars, {
+        displayName: name,
+        comment: text,
+      });
+      setDone(true);
+      onPosted();
+    } catch {
+      setError(messages.saveFailed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      id="write-review"
+      className="mx-auto mt-8 w-full max-w-xl scroll-mt-28 rounded-2xl bg-white px-5 py-6 text-[#111] shadow-[0_18px_50px_rgba(0,0,0,0.22)] sm:px-8 sm:py-8"
+    >
+      <h2 className="text-center text-lg font-extrabold text-[#122033] sm:text-xl">
+        {messages.writeYourReview}
+      </h2>
+      <p className="mt-2 text-center text-sm text-[#666]">
+        {messages.writeYourReviewSub}
+      </p>
+
+      {!authReady ? (
+        <p className="mt-6 text-center text-sm text-[#888]">…</p>
+      ) : !user ? (
+        <div className="mt-6 rounded-xl border border-[#f3e0d0] bg-[#fff8f2] px-4 py-5 text-center">
+          <p className="text-sm font-bold text-[#7a4a28]">
+            {messages.loginToComment}
+          </p>
+          <Link
+            href="/login?next=/testimonials#write-review"
+            className="mt-4 inline-flex rounded-xl bg-[#122033] px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#1c3048]"
+          >
+            {messages.login}
+          </Link>
+        </div>
+      ) : done ? (
+        <div className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-50 px-3 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
+          <Check className="h-4 w-4" />
+          {messages.thankYouRating}
+        </div>
+      ) : (
+        <div className="mt-6 space-y-4 text-start">
+          <StarsPick value={stars} onPick={setStars} disabled={busy} />
+          <label className="block text-xs font-bold text-[#444]">
+            {messages.reviewDisplayName}
+            <input
+              className="mt-1 w-full rounded-xl border border-[#ddd] bg-[#fafafa] px-3 py-2.5 text-sm font-semibold text-[#111]"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder={messages.reviewDisplayNameHint}
+              maxLength={60}
+              disabled={busy}
+              autoComplete="nickname"
+            />
+          </label>
+          <label className="block text-xs font-bold text-[#444]">
+            {messages.reviewComment}
+            <textarea
+              className="mt-1 min-h-[110px] w-full resize-y rounded-xl border border-[#ddd] bg-[#fafafa] px-3 py-2.5 text-sm leading-6 text-[#111]"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={messages.reviewCommentHint}
+              maxLength={400}
+              disabled={busy}
+            />
+          </label>
+          {error ? (
+            <p className="text-sm font-bold text-red-600">{error}</p>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy || !displayName.trim() || comment.trim().length < 3}
+            onClick={() => void submit()}
+            className="w-full rounded-xl bg-[#E8874A] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
+          >
+            {busy ? messages.saving : messages.publishReview}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const FALLBACK: PublicReview[] = [
   {
     id: "fb1",
@@ -138,23 +324,27 @@ export function TestimonialsWorkspace({
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  function reload() {
     void fetchPublicReviews(80).then((data) => {
-      if (cancelled) return;
       setReviews(data.reviews.length ? data.reviews : FALLBACK);
       setLoaded(true);
+      setIndex(0);
     });
-    return () => {
-      cancelled = true;
-    };
+  }
+
+  useEffect(() => {
+    reload();
   }, []);
 
   const list = reviews.length ? reviews : FALLBACK;
   const active = list[index % list.length]!;
 
   const neighbors = useMemo(() => {
-    if (list.length < 2) return { prev: null as PublicReview | null, next: null as PublicReview | null };
+    if (list.length < 2)
+      return {
+        prev: null as PublicReview | null,
+        next: null as PublicReview | null,
+      };
     const prev = list[(index - 1 + list.length) % list.length]!;
     const next = list[(index + 1) % list.length]!;
     return { prev, next };
@@ -206,7 +396,8 @@ export function TestimonialsWorkspace({
           </p>
         </div>
 
-        {/* Carousel */}
+        {mode === "page" ? <WriteReviewForm onPosted={reload} /> : null}
+
         <div className="relative mt-10 sm:mt-12">
           <button
             type="button"
@@ -240,10 +431,7 @@ export function TestimonialsWorkspace({
               )}
             </div>
             <div className="relative z-10">
-              <ReviewCard
-                review={active}
-                eyebrow={eyebrow}
-              />
+              <ReviewCard review={active} eyebrow={eyebrow} />
               <div className="mx-auto mt-0 h-0 w-0 border-x-[10px] border-t-[12px] border-x-transparent border-t-white" />
             </div>
             <div className="scale-90 opacity-40 blur-[0.5px]">
@@ -279,7 +467,7 @@ export function TestimonialsWorkspace({
         {mode === "teaser" ? (
           <div className="mt-8 text-center">
             <Link
-              href="/testimonials"
+              href="/testimonials#write-review"
               className="inline-flex rounded-full bg-[#E8874A] px-6 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#d9773a]"
             >
               {messages.viewAllTestimonials}
@@ -287,7 +475,6 @@ export function TestimonialsWorkspace({
           </div>
         ) : (
           <>
-            {/* All comments grid */}
             <div className="mt-14">
               <h2 className="text-center text-xl font-extrabold text-white sm:text-2xl">
                 {messages.allTestimonials}

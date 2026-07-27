@@ -420,7 +420,7 @@ export function SiteRatingCard() {
             </p>
 
             <Link
-              href="/testimonials"
+              href="/testimonials#write-review"
               className="btn-testimonials-pulse mt-1 inline-flex items-center gap-2 rounded-full bg-gradient-to-l from-[#E8874A] via-[#f0a05f] to-[#F5C518] px-6 py-3 text-sm font-extrabold text-white shadow-[0_10px_28px_rgba(232,135,74,0.35)] transition hover:brightness-105"
             >
               <MessageCircleHeart className="h-4 w-4" />
