@@ -345,16 +345,6 @@ export const tools: Tool[] = [
     accept: "text/plain",
     icon: Globe2,
   },
-  {
-    slug: "currency-exchange",
-    title: "محوّل العملات والذهب",
-    description:
-      "أسعار صرف لحظية لكل دول العالم مع الذهب والفضة، مخطط تاريخي، وقائمة أزواج شائعة.",
-    category: "calculators",
-    accept: "text/plain",
-    icon: Coins,
-  },
-
   // AI micro-tools
   {
     slug: "ai-ocr",
