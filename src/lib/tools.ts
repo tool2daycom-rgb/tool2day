@@ -400,6 +400,24 @@ export const tools: Tool[] = [
     accept: "image/png",
     icon: ImageDown,
   },
+  {
+    slug: "error-detector",
+    title: "كاشف الأخطاء",
+    description:
+      "افحص JSON والروابط والبريد وصياغة JavaScript وهيكل HTML قبل الاستخدام.",
+    category: "ai",
+    accept: "text/plain",
+    icon: Bug,
+  },
+  {
+    slug: "random-picker",
+    title: "رمي نرد وعشوائي من قائمة",
+    description:
+      "اختر عشوائياً من قائمتك أو ارمِ نرداً لقرار سريع — مثالي للاختيارات اليومية.",
+    category: "ai",
+    accept: "text/plain",
+    icon: Dices,
+  },
 
   // Video
   {
@@ -840,6 +858,15 @@ export const tools: Tool[] = [
     accept: ".ttf,.otf,.woff,.woff2",
     icon: Type,
   },
+  {
+    slug: "text-tools",
+    title: "أدوات النص",
+    description:
+      "عدّ كلمات، تحويل حالة الأحرف، تنظيف المسافات، ترتيب الأسطر، بحث واستبدال، وتنزيل TXT.",
+    category: "converters",
+    accept: "text/plain",
+    icon: Type,
+  },
 
   // Daily utilities
   {
@@ -868,33 +895,6 @@ export const tools: Tool[] = [
     category: "utilities",
     accept: "text/plain",
     icon: Lock,
-  },
-  {
-    slug: "random-picker",
-    title: "رمي نرد وعشوائي من قائمة",
-    description:
-      "اختر عشوائياً من قائمتك أو ارمِ نرداً لقرار سريع — مثالي للاختيارات اليومية.",
-    category: "utilities",
-    accept: "text/plain",
-    icon: Dices,
-  },
-  {
-    slug: "text-tools",
-    title: "أدوات النص",
-    description:
-      "عدّ كلمات، تحويل حالة الأحرف، تنظيف المسافات، ترتيب الأسطر، بحث واستبدال، وتنزيل TXT.",
-    category: "utilities",
-    accept: "text/plain",
-    icon: Type,
-  },
-  {
-    slug: "error-detector",
-    title: "كاشف الأخطاء",
-    description:
-      "افحص JSON والروابط والبريد وصياغة JavaScript وهيكل HTML قبل الاستخدام.",
-    category: "utilities",
-    accept: "text/plain",
-    icon: Bug,
   },
   {
     slug: "speed-test",
