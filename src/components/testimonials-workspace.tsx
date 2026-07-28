@@ -301,9 +301,11 @@ function WriteReviewForm({ onPosted }: { onPosted: () => void }) {
       <h2 className="text-center text-lg font-extrabold text-[#122033] sm:text-xl">
         {messages.writeYourReview}
       </h2>
-      <p className="mt-2 text-center text-sm text-[#666]">
-        {messages.writeYourReviewSub}
-      </p>
+      {messages.writeYourReviewSub ? (
+        <p className="mt-2 text-center text-sm text-[#666]">
+          {messages.writeYourReviewSub}
+        </p>
+      ) : null}
 
       {!authReady ? (
         <p className="mt-6 text-center text-sm text-[#888]">…</p>
@@ -486,9 +488,11 @@ export function TestimonialsWorkspace({
           >
             {messages.testimonialsTitle}
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-white/75 sm:text-[15px]">
-            {messages.testimonialsSub}
-          </p>
+          {messages.testimonialsSub ? (
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-white/75 sm:text-[15px]">
+              {messages.testimonialsSub}
+            </p>
+          ) : null}
         </div>
 
         {mode === "page" ? <WriteReviewForm onPosted={reload} /> : null}

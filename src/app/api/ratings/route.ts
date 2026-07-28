@@ -70,6 +70,28 @@ function sanitizeCountryFlag(raw: string | undefined | null): string {
   return s;
 }
 
+/** Reviews removed from public listing (and purged when service role is available). */
+const HIDDEN_REVIEW_IDS = new Set([
+  "9131eae4-1649-4f48-94ac-e8e264c8b3db", // Ahmad king
+]);
+
+let hiddenReviewsPurged = false;
+
+async function purgeHiddenReviews(
+  supabase: NonNullable<ReturnType<typeof adminClient>>,
+) {
+  if (hiddenReviewsPurged || HIDDEN_REVIEW_IDS.size === 0) return;
+  hiddenReviewsPurged = true;
+  try {
+    await supabase
+      .from("tool_ratings")
+      .delete()
+      .in("id", [...HIDDEN_REVIEW_IDS]);
+  } catch {
+    // ignore — listing filter still hides them
+  }
+}
+
 function avatarFromAuthUser(user: User): string {
   return resolveUserAvatarUrl(user);
 }
@@ -109,6 +131,7 @@ async function listReviews(
   supabase: NonNullable<ReturnType<typeof adminClient>>,
   limit = 60,
 ): Promise<PublicReview[]> {
+  await purgeHiddenReviews(supabase);
   const capped = Math.min(100, Math.max(1, limit));
   let data: Record<string, unknown>[] | null = null;
 
@@ -136,6 +159,8 @@ async function listReviews(
 
   return data
     .map((row) => {
+      const id = String(row.id);
+      if (HIDDEN_REVIEW_IDS.has(id)) return null;
       const comment = sanitizeComment(
         typeof row.comment === "string" ? row.comment : "",
       );
@@ -143,6 +168,7 @@ async function listReviews(
         sanitizeDisplayName(
           typeof row.display_name === "string" ? row.display_name : "",
         ) || "مستخدم";
+      if (displayName.toLowerCase() === "ahmad king") return null;
       if (!comment || comment.length < 3) return null;
       const avatarUrl =
         sanitizeAvatarUrl(
@@ -157,7 +183,7 @@ async function listReviews(
           typeof row.country_flag === "string" ? row.country_flag : "",
         ) || null;
       return {
-        id: String(row.id),
+        id,
         displayName,
         stars: Math.min(5, Math.max(1, Number(row.stars) || 5)),
         comment,
