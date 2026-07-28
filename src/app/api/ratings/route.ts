@@ -73,6 +73,7 @@ function sanitizeCountryFlag(raw: string | undefined | null): string {
 /** Reviews removed from public listing (and purged when service role is available). */
 const HIDDEN_REVIEW_IDS = new Set([
   "9131eae4-1649-4f48-94ac-e8e264c8b3db", // Ahmad king
+  "cb508554-d82e-4afb-97d1-074ca6c0a758", // my best
 ]);
 
 let hiddenReviewsPurged = false;
