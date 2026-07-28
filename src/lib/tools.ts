@@ -843,6 +843,15 @@ export const tools: Tool[] = [
 
   // Daily utilities
   {
+    slug: "currency-exchange",
+    title: "محوّل العملات والذهب",
+    description:
+      "أسعار صرف لحظية لكل دول العالم مع الذهب والفضة، مخطط تاريخي، وقائمة أزواج شائعة.",
+    category: "utilities",
+    accept: "text/plain",
+    icon: Coins,
+  },
+  {
     slug: "qr-generator",
     title: "مولد رمز QR",
     description:
