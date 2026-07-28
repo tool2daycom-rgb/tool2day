@@ -19,14 +19,21 @@ import { BrandLogo } from "@/components/brand-logo";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ToolIcon } from "@/components/tool-icon";
 import { useLocale } from "@/components/locale-provider";
+import { getToolTitle } from "@/lib/i18n/tool-titles";
+import {
+  getRecentToolSlugs,
+  subscribeRecentTools,
+} from "@/lib/recent-tools";
 import {
   categoryMeta,
+  getTool,
   getToolsByCategory,
+  type Tool,
   type ToolCategory,
 } from "@/lib/tools";
-import { getToolTitle } from "@/lib/i18n/tool-titles";
 
 const desktopNavOrder: ToolCategory[] = [
+  "utilities",
   "generators",
   "calculators",
   "ai",
@@ -35,7 +42,6 @@ const desktopNavOrder: ToolCategory[] = [
   "audio",
   "pdf",
   "converters",
-  "utilities",
 ];
 
 const categoryIcon: Record<ToolCategory, typeof Video> = {
@@ -52,8 +58,15 @@ const categoryIcon: Record<ToolCategory, typeof Video> = {
 
 export function SiteHeader() {
   const [open, setOpen] = useState<ToolCategory | null>(null);
+  const [recentSlugs, setRecentSlugs] = useState<string[]>([]);
   const navRef = useRef<HTMLElement>(null);
   const { locale, messages, localeDef } = useLocale();
+
+  useEffect(() => {
+    const refresh = () => setRecentSlugs(getRecentToolSlugs());
+    refresh();
+    return subscribeRecentTools(refresh);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -71,6 +84,22 @@ export function SiteHeader() {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  function navItemsFor(category: ToolCategory): Tool[] {
+    const base = getToolsByCategory(category);
+    if (category !== "utilities") return base;
+    const seen = new Set(base.map((t) => t.slug));
+    const extras: Tool[] = [];
+    for (const slug of recentSlugs) {
+      if (seen.has(slug)) continue;
+      const tool = getTool(slug);
+      if (tool) {
+        seen.add(slug);
+        extras.push(tool);
+      }
+    }
+    return [...base, ...extras];
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0a0a0a] text-white">
@@ -92,7 +121,7 @@ export function SiteHeader() {
         >
           <div className="flex max-w-full flex-wrap items-center gap-0 overflow-visible">
             {desktopNavOrder.map((category) => {
-              const items = getToolsByCategory(category);
+              const items = navItemsFor(category);
               const isOpen = open === category;
               const Icon = categoryIcon[category];
               const label = messages.categories[category].label;

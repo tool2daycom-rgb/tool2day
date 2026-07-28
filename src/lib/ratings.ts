@@ -49,6 +49,8 @@ export function getVisitorId(): string {
   return id;
 }
 
+import { recordRecentTool } from "@/lib/recent-tools";
+
 /** يبدأ استخداماً جديداً للأداة — التقييم مطلوب مرة لكل استخدام */
 export function beginToolUse(toolSlug: string) {
   if (!canUseSession() || !toolSlug || toolSlug === SITE_RATING_TARGET) return;
@@ -58,6 +60,7 @@ export function beginToolUse(toolSlug: string) {
       : `u-${Date.now()}`;
   sessionStorage.setItem(`${USE_ID_PREFIX}${toolSlug}`, useId);
   sessionStorage.removeItem(`${USE_RATED_PREFIX}${toolSlug}`);
+  recordRecentTool(toolSlug);
 }
 
 export function getCurrentUseId(toolSlug: string): string | null {

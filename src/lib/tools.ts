@@ -139,6 +139,7 @@ export const categoryMeta: Record<
 };
 
 export const navCategories: ToolCategory[] = [
+  "utilities",
   "generators",
   "calculators",
   "ai",
@@ -147,7 +148,6 @@ export const navCategories: ToolCategory[] = [
   "pdf",
   "audio",
   "video",
-  "utilities",
 ];
 
 export const tools: Tool[] = [
@@ -908,6 +908,7 @@ export const tools: Tool[] = [
 ];
 
 export const categoryOrder: ToolCategory[] = [
+  "utilities",
   "generators",
   "calculators",
   "ai",
@@ -916,7 +917,6 @@ export const categoryOrder: ToolCategory[] = [
   "audio",
   "pdf",
   "converters",
-  "utilities",
 ];
 
 export function getTool(slug: string) {
