@@ -23,6 +23,26 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
+/** Fill gaps (e.g. SYP) from open.er-api.com — rates are "1 USD = x CURRENCY". */
+async function loadUsdSupplement(): Promise<Record<string, number>> {
+  try {
+    const raw = (await fetchJson("https://open.er-api.com/v6/latest/USD")) as {
+      result?: string;
+      rates?: Record<string, number>;
+    };
+    if (raw.result !== "success" || !raw.rates) return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw.rates)) {
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) {
+        out[k.toUpperCase()] = v;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 async function loadRates(base: string, date: string): Promise<RatesPayload> {
   const b = base.toLowerCase();
   const primary = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/${b}.min.json`;
@@ -45,6 +65,21 @@ async function loadRates(base: string, date: string): Promise<RatesPayload> {
   for (const [k, v] of Object.entries(bucket)) {
     if (typeof v === "number" && Number.isFinite(v) && v > 0) {
       rates[k.toUpperCase()] = v;
+    }
+  }
+
+  // Primary CDN omits some fiat codes (notably SYP). Merge USD-based supplement.
+  if (base.toLowerCase() === "usd") {
+    const extra = await loadUsdSupplement();
+    let filled = 0;
+    for (const [code, value] of Object.entries(extra)) {
+      if (rates[code] == null) {
+        rates[code] = value;
+        filled += 1;
+      }
+    }
+    if (filled > 0) {
+      source = `${source} + open.er-api.com`;
     }
   }
 
@@ -127,14 +162,18 @@ export async function GET(request: Request) {
     const hit = memoryCache.get(cacheKey);
     if (hit && Date.now() - hit.at < TTL_MS) {
       return NextResponse.json(hit.data, {
-        headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+        headers: {
+          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+        },
       });
     }
 
     const data = await loadRates(base, date);
     memoryCache.set(cacheKey, { at: Date.now(), data });
     return NextResponse.json(data, {
-      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+      },
     });
   } catch (e) {
     return NextResponse.json(

@@ -585,7 +585,12 @@ function CurrencyPanel({
     change != null && prevRate ? (change / prevRate) * 100 : null;
 
   useEffect(() => {
-    if (!rates || rate == null) return;
+    if (!rates) return;
+    if (rate == null) {
+      // Avoid showing a stale amount from a previous pair (e.g. SAR 3.75 as SYP).
+      if (editSide === "from") setAmountTo("");
+      return;
+    }
     if (editSide === "from") {
       setAmountTo(
         String(Number((amountFrom * rate).toFixed(rate < 1 ? 8 : 4))),
@@ -728,6 +733,16 @@ function CurrencyPanel({
           {rate == null ? "…" : formatMoney(rate, rate < 1 ? 6 : 4)}{" "}
           {currencyCodeWithSymbol(to)}
         </p>
+        {rates && rate == null ? (
+          <p className="mt-1 text-center text-sm font-medium text-amber-700">
+            لا يتوفر سعر حي لهذه العملة حالياً — جرّب التحديث أو زوجاً آخر.
+          </p>
+        ) : null}
+        {rate != null && (from === "SYP" || to === "SYP") ? (
+          <p className="mt-1 text-center text-[11px] text-[#888]">
+            سعر الليرة السورية مرجعي من مصادر دولية وقد يختلف عن سعر السوق المحلي.
+          </p>
+        ) : null}
         {change != null && changePct != null ? (
           <p
             className={`mt-1 text-center text-sm font-semibold ${
