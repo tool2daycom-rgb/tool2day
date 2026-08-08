@@ -321,7 +321,7 @@ export async function exportVideoProject(
     let lw = Math.max(4, Math.round(removeLogo.w) - 2);
     let lh = Math.max(4, Math.round(removeLogo.h) - 2);
     prep.push(
-      `delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}:band=1:show=0`,
+      `delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}:show=0`,
     );
   }
   if (chromaKey?.enabled) {

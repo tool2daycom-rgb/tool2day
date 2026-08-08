@@ -6,6 +6,7 @@ import {
   getFFmpeg,
   getLastFfmpegLog,
   inputFileName,
+  resetFFmpeg,
   toBlob,
 } from "./ffmpeg-client";
 
@@ -15,7 +16,16 @@ async function execOrThrow(
   ffmpeg: Awaited<ReturnType<typeof getFFmpeg>>,
   args: string[],
 ) {
-  const code = await ffmpeg.exec(args);
+  let code: number | undefined;
+  try {
+    code = await ffmpeg.exec(args);
+  } catch (e) {
+    const detail =
+      e instanceof Error ? e.message : typeof e === "string" ? e : "abort";
+    throw new Error(
+      `فشل FFmpeg (${detail})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
+    );
+  }
   if (typeof code === "number" && code !== 0) {
     throw new Error(
       `فشل FFmpeg (رمز ${code})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
@@ -760,12 +770,9 @@ export async function removeLogo(
     return { x, y, w, h };
   });
 
-  // band=1 يعطي حافة ناعمة خفيفة عبر الاستيفاء (ليس تمويه boxblur).
+  // show=0 فقط — خيار band أُزيل في إصدارات FFmpeg الحديثة ويسبب فشل/abort في wasm.
   const delogoChain = cleaned
-    .map(
-      (b) =>
-        `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:band=1:show=0`,
-    )
+    .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:show=0`)
     .join(",");
 
   // بدون scale إضافي حتى لا تلين الصورة؛ فقط تثبيت SAR والصيغة.
@@ -775,7 +782,8 @@ export async function removeLogo(
   const input = inputFileName(file, "mp4");
   const output = "output.mp4";
   await ffmpeg.writeFile(input, await fetchFile(file));
-  await execOrThrow(ffmpeg, [
+
+  const encodeArgs = [
     "-i",
     input,
     "-vf",
@@ -787,25 +795,64 @@ export async function removeLogo(
     "-c:v",
     "libx264",
     "-preset",
-    "veryfast",
+    "ultrafast",
     "-crf",
-    "17",
+    "18",
     "-pix_fmt",
     "yuv420p",
     "-c:a",
-    "copy",
+    "aac",
+    "-b:a",
+    "128k",
     "-movflags",
     "+faststart",
     output,
-  ]);
-  const data = await ffmpeg.readFile(output);
+  ];
+
+  let active = ffmpeg;
+  try {
+    await execOrThrow(active, encodeArgs);
+  } catch (firstErr) {
+    // بعد abort غالباً المثيل تالف — أعد التحميل وجرّب سلسلة أبسط.
+    await resetFFmpeg();
+    active = await getFFmpeg(onProgress);
+    await active.writeFile(input, await fetchFile(file));
+    const simpleVf = cleaned
+      .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}`)
+      .join(",");
+    try {
+      await execOrThrow(active, [
+        "-i",
+        input,
+        "-vf",
+        simpleVf,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "20",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ]);
+    } catch {
+      throw firstErr instanceof Error
+        ? firstErr
+        : new Error("تعذّر حذف العلامة المائية من الفيديو");
+    }
+  }
+
+  const data = await active.readFile(output);
   await downloadBlob(
     toBlob(data, "video/mp4"),
     `${basename(file.name)}-no-watermark.mp4`,
   );
   try {
-    await ffmpeg.deleteFile(input);
-    await ffmpeg.deleteFile(output);
+    await active.deleteFile(input);
+    await active.deleteFile(output);
   } catch {
     /* ignore */
   }
