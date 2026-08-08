@@ -719,14 +719,9 @@ export async function addTextToVideo(
   await addImageToVideo(video, overlay, onProgress);
 }
 
-function evenInt(n: number) {
-  const v = Math.max(2, Math.round(n));
-  return v % 2 === 0 ? v : v + 1;
-}
-
 /**
- * إزالة شعار بتغطية ناعمة من المنطقة المحيطة (أفضل بكثير من delogo).
- * ينسخ محيط الشعار، يموّهه بقوة، ثم يغطي الشعار بحواف أنعم.
+ * إزالة علامة مائية/شعار بتنقية احترافية عبر delogo:
+ * يملأ المنطقة باستيفاء من البكسلات المحيطة (بدون boxblur / لطخات غبش).
  */
 export async function removeLogo(
   file: File,
@@ -743,63 +738,38 @@ export async function removeLogo(
   const { w: vw, h: vh } = await probeVideoSize(file);
   if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الفيديو");
 
-  const chains: string[] = [];
-  boxes.forEach((raw, i) => {
-    let x = Math.max(0, Math.min(vw - 4, Math.round(raw.x)));
-    let y = Math.max(0, Math.min(vh - 4, Math.round(raw.y)));
-    let w = evenInt(Math.max(8, Math.min(vw - x, Math.round(raw.w))));
-    let h = evenInt(Math.max(8, Math.min(vh - y, Math.round(raw.h))));
-    if (x + w >= vw) w = evenInt(Math.max(8, vw - x - 2));
-    if (y + h >= vh) h = evenInt(Math.max(8, vh - y - 2));
+  // delogo يحتاج هامشاً من حافة الإطار؛ نضيّق التحديد قليلاً لتقليل الأثر المرئي.
+  const cleaned = boxes.map((raw) => {
+    let x = Math.round(raw.x);
+    let y = Math.round(raw.y);
+    let w = Math.round(raw.w);
+    let h = Math.round(raw.h);
 
-    // منطقة أوسع حول الشعار لأخذ ألوان الخلفية الحقيقية
-    const pad = evenInt(Math.max(20, Math.round(Math.min(w, h) * 0.9)));
-    let cx = Math.max(0, x - pad);
-    let cy = Math.max(0, y - pad);
-    let cw = evenInt(Math.min(vw - cx, w + 2 * pad));
-    let ch = evenInt(Math.min(vh - cy, h + 2 * pad));
-    if (cx + cw > vw) cw = evenInt(vw - cx);
-    if (cy + ch > vh) ch = evenInt(vh - cy);
+    // قلّص الإطار بكسلين من كل جهة إن أمكن — يتجنب غطاء زائد حول الشعار.
+    const inset = 1;
+    x += inset;
+    y += inset;
+    w = Math.max(4, w - inset * 2);
+    h = Math.max(4, h - inset * 2);
 
-    const ox = Math.max(0, Math.min(cw - w, x - cx));
-    const oy = Math.max(0, Math.min(ch - h, y - cy));
-    // تمويه قوي من المحيط (ليس delogo الرمادي)
-    const blur = Math.max(14, Math.min(56, Math.round(Math.min(w, h) * 0.65)));
-    const blurLuma = Math.max(3, Math.floor(blur / 2));
-
-    // طبقة أوسع قليلاً لدمج الحواف مع الخلفية
-    const feather = evenInt(Math.max(8, Math.round(Math.min(w, h) * 0.18)));
-    const fx = Math.max(0, x - feather);
-    const fy = Math.max(0, y - feather);
-    const fw = evenInt(Math.min(vw - fx, w + 2 * feather));
-    const fh = evenInt(Math.min(vh - fy, h + 2 * feather));
-    const fox = Math.max(0, Math.min(cw - fw, fx - cx));
-    const foy = Math.max(0, Math.min(ch - fh, fy - cy));
-    const softBlur = Math.max(8, Math.floor(blur * 0.4));
-    const softLuma = Math.max(2, Math.floor(blurLuma * 0.4));
-
-    const src = i === 0 ? "[0:v]" : `[v${i}]`;
-    const dst = i === boxes.length - 1 ? "[vout]" : `[v${i + 1}]`;
-
-    // 1) تمويه المحيط → طبقة ريش أوسع
-    // 2) تغطية مركز الشعار بتمويه أقوى من نفس المحيط
-    chains.push(
-      `${src}split=2[base${i}][nb${i}];` +
-        `[nb${i}]crop=${cw}:${ch}:${cx}:${cy},boxblur=${blur}:${blurLuma}[blur${i}];` +
-        `[blur${i}]split=2[bcore${i}][bedge${i}];` +
-        `[bedge${i}]crop=${fw}:${fh}:${fox}:${foy},boxblur=${softBlur}:${softLuma}[edge${i}];` +
-        `[base${i}][edge${i}]overlay=${fx}:${fy}[soft${i}];` +
-        `[bcore${i}]crop=${w}:${h}:${ox}:${oy}[core${i}];` +
-        `[soft${i}][core${i}]overlay=${x}:${y}${dst}`,
-    );
+    const margin = 2;
+    x = Math.max(margin, Math.min(vw - margin - 4, x));
+    y = Math.max(margin, Math.min(vh - margin - 4, y));
+    w = Math.max(4, Math.min(vw - x - margin, w));
+    h = Math.max(4, Math.min(vh - y - margin, h));
+    return { x, y, w, h };
   });
 
-  // Force exact source resolution (no scale-down / crop side effects).
-  const outW = evenInt(vw);
-  const outH = evenInt(vh);
-  const filterComplex =
-    `${chains.join("")};` +
-    `[vout]scale=${outW}:${outH}:flags=bicubic,setsar=1,format=yuv420p[outv]`;
+  // band=1 يعطي حافة ناعمة خفيفة عبر الاستيفاء (ليس تمويه boxblur).
+  const delogoChain = cleaned
+    .map(
+      (b) =>
+        `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:band=1:show=0`,
+    )
+    .join(",");
+
+  // بدون scale إضافي حتى لا تلين الصورة؛ فقط تثبيت SAR والصيغة.
+  const vf = `${delogoChain},setsar=1,format=yuv420p`;
 
   const ffmpeg = await getFFmpeg(onProgress);
   const input = inputFileName(file, "mp4");
@@ -808,10 +778,10 @@ export async function removeLogo(
   await execOrThrow(ffmpeg, [
     "-i",
     input,
-    "-filter_complex",
-    filterComplex,
+    "-vf",
+    vf,
     "-map",
-    "[outv]",
+    "0:v:0",
     "-map",
     "0:a?",
     "-c:v",
@@ -819,9 +789,9 @@ export async function removeLogo(
     "-preset",
     "veryfast",
     "-crf",
-    "18",
-    "-s",
-    `${outW}x${outH}`,
+    "17",
+    "-pix_fmt",
+    "yuv420p",
     "-c:a",
     "copy",
     "-movflags",
