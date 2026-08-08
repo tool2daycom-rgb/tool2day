@@ -241,7 +241,9 @@ export function LogoRemoveControls({ file, onBoxesChange }: Props) {
       {previewUrl && dims.w > 0 ? (
         <div>
           <p className="mb-2 text-xs text-[#888]">
-            معاينة — {mode === "draw" ? "اسحب مربعاً فوق الشعار" : "المناطق المحددة بالبرتقالي"}
+            معاينة {dims.w}×{dims.h} —{" "}
+            {mode === "draw" ? "اسحب مربعاً فوق العلامة المائية" : "المناطق المحددة بالبرتقالي"}
+            {" · "}التصدير بنفس هذه الدقة
           </p>
           <canvas
             ref={canvasRef}

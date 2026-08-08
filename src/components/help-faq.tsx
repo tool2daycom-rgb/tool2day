@@ -424,6 +424,41 @@ const sections: FaqSection[] = [
         ),
       },
       {
+        id: "remove-watermark",
+        question: "كيف أحذف علامة مائية من فيديو بنفس الدقة؟",
+        answer: (
+          <>
+            <p>
+              استخدم أداة{" "}
+              <Link
+                href="/tools/remove-watermark"
+                className="font-medium text-[#2563eb] hover:underline"
+              >
+                حذف العلامة المائية من الفيديو
+              </Link>
+              . ارفع الفيديو، حدّد منطقة العلامة، ثم صدّر — الناتج بنفس دقة المصدر.
+            </p>
+            <p className="mt-3 font-semibold">الخطوات:</p>
+            <ol className="mt-2 list-decimal space-y-2 ps-5">
+              <li>
+                افتح{" "}
+                <Link
+                  href="/tools/remove-watermark"
+                  className="font-medium text-[#2563eb] hover:underline"
+                >
+                  حذف العلامة المائية
+                </Link>
+                .
+              </li>
+              <li>ارفع الفيديو وارسم مربعاً فوق العلامة المائية أو اللوجو.</li>
+              <li>
+                اضغط <strong>تصدير</strong> — نحافظ على عرض وارتفاع الفيديو الأصليين.
+              </li>
+            </ol>
+          </>
+        ),
+      },
+      {
         id: "remove-logo",
         question: "كيف أزيل شعاراً أو علامة مائية من فيديو؟",
         answer: (
@@ -431,23 +466,29 @@ const sections: FaqSection[] = [
             <p>
               استخدم أداة{" "}
               <Link
+                href="/tools/remove-watermark"
+                className="font-medium text-[#2563eb] hover:underline"
+              >
+                حذف العلامة المائية
+              </Link>{" "}
+              أو{" "}
+              <Link
                 href="/tools/remove-logo"
                 className="font-medium text-[#2563eb] hover:underline"
               >
                 إزالة الشعار
-              </Link>{" "}
-              لطمس الشعارات أو العلامات المائية. تعمل بشكل أفضل على سطح المكتب؛ دعم الجوال
-              محدود حالياً.
+              </Link>
+              . تعمل بشكل أفضل على سطح المكتب؛ دعم الجوال محدود حالياً.
             </p>
             <p className="mt-3 font-semibold">الخطوات:</p>
             <ol className="mt-2 list-decimal space-y-2 ps-5">
               <li>
                 افتح{" "}
                 <Link
-                  href="/tools/remove-logo"
+                  href="/tools/remove-watermark"
                   className="font-medium text-[#2563eb] hover:underline"
                 >
-                  إزالة الشعار من الفيديو
+                  حذف العلامة المائية من الفيديو
                 </Link>
                 .
               </li>
@@ -456,9 +497,8 @@ const sections: FaqSection[] = [
               </li>
               <li>ارسم تحديداً فوق الشعار (يمكن تحديد أكثر من منطقة).</li>
               <li>
-                اضغط <strong>تصدير</strong> عند الانتهاء.
+                اضغط <strong>تصدير</strong> عند الانتهاء — الناتج بنفس دقة الفيديو.
               </li>
-              <li>اختر الدقة والصيغة ثم نزّل النتيجة.</li>
             </ol>
           </>
         ),

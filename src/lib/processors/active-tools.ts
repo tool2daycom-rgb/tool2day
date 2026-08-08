@@ -103,6 +103,7 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "add-audio-to-video": "video-add-audio",
   "add-image-to-video": "video-add-image",
   "add-text-to-video": "video-add-text",
+  "remove-watermark": "video-delogo",
   "remove-logo": "video-delogo",
   "stabilize-video": "video-stabilize",
   "enhance-video": "video-enhance",

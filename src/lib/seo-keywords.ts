@@ -565,6 +565,14 @@ const toolExtraKeywords: Record<string, string[]> = {
     "عناوين فيديو",
     "caption video",
   ],
+  "remove-watermark": [
+    "حذف علامة مائية من فيديو",
+    "إزالة واترمارك",
+    "remove watermark from video",
+    "video watermark remover",
+    "نفس دقة الفيديو",
+    "حذف لوجو بدون تقليل الجودة",
+  ],
   "remove-logo": [
     "إزالة لوجو من فيديو",
     "حذف شعار فيديو",

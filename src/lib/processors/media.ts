@@ -794,7 +794,12 @@ export async function removeLogo(
     );
   });
 
-  const filterComplex = `${chains.join("")};[vout]format=yuv420p[outv]`;
+  // Force exact source resolution (no scale-down / crop side effects).
+  const outW = evenInt(vw);
+  const outH = evenInt(vh);
+  const filterComplex =
+    `${chains.join("")};` +
+    `[vout]scale=${outW}:${outH}:flags=bicubic,setsar=1,format=yuv420p[outv]`;
 
   const ffmpeg = await getFFmpeg(onProgress);
   const input = inputFileName(file, "mp4");
@@ -812,9 +817,11 @@ export async function removeLogo(
     "-c:v",
     "libx264",
     "-preset",
-    "ultrafast",
+    "veryfast",
     "-crf",
-    "22",
+    "18",
+    "-s",
+    `${outW}x${outH}`,
     "-c:a",
     "copy",
     "-movflags",
@@ -824,7 +831,7 @@ export async function removeLogo(
   const data = await ffmpeg.readFile(output);
   await downloadBlob(
     toBlob(data, "video/mp4"),
-    `${basename(file.name)}-delogo.mp4`,
+    `${basename(file.name)}-no-watermark.mp4`,
   );
   try {
     await ffmpeg.deleteFile(input);
