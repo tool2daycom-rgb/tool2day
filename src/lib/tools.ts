@@ -430,6 +430,15 @@ export const tools: Tool[] = [
     icon: Clapperboard,
   },
   {
+    slug: "remove-watermark",
+    title: "حذف العلامة المائية من الفيديو",
+    description:
+      "احذف العلامة المائية أو اللوجو مع الإبقاء على نفس دقة الفيديو الأصلية.",
+    category: "video",
+    accept: "video/*",
+    icon: Eraser,
+  },
+  {
     slug: "screen-recorder",
     title: "مسجل الشاشة",
     description: "سجّل الشاشة مباشرة من متصفحك — مجاناً وبدون علامة مائية.",
@@ -504,17 +513,8 @@ export const tools: Tool[] = [
     icon: PencilLine,
   },
   {
-    slug: "remove-watermark",
-    title: "حذف العلامة المائية من الفيديو",
-    description:
-      "احذف العلامة المائية أو اللوجو مع الإبقاء على نفس دقة الفيديو الأصلية.",
-    category: "video",
-    accept: "video/*",
-    icon: Eraser,
-  },
-  {
     slug: "remove-logo",
-    title: "إزالة الشعار من الفيديو",
+    title: "إزالة الشعار / العلامة المائية",
     description:
       "أخفِ الشعارات والعلامات المائية مع الحفاظ على دقة الفيديو نفسها.",
     category: "video",
