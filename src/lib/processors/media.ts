@@ -730,9 +730,10 @@ export async function addTextToVideo(
 }
 
 /**
- * إزالة شعار/علامة مائية بشكل نظيف:
- * - خلفية سادة: رقعة لون مضبوط بحواف شفافة ناعمة (بدون boxblur)
- * - خلفية معقّدة: استنساخ بكسلات حقيقية من الجانب الأنظف
+ * إزالة شعار/علامة مائية بشكل نظيف وشفاف قدر الإمكان:
+ * 1) استنساخ بكسلات من الجانب المتجانس (يفضّل على السطح نفسه مثل الحذاء)
+ * 2) وإلا delogo — استيفاء شفاف من الحواف (بدون مربع لون سميك)
+ * 3) ملء لون فقط إذا كانت كل الجوانب حول التحديد نفس اللون تقريباً (خلفية سادة بالكامل)
  */
 export async function removeLogo(
   file: File,
@@ -758,43 +759,15 @@ export async function removeLogo(
   const output = "output.mp4";
   await ffmpeg.writeFile(input, await fetchFile(file));
 
-  const patchNames: string[] = [];
-  const inputs = ["-i", input];
-  let inputIndex = 1;
-
-  for (let i = 0; i < plans.length; i++) {
-    const plan = plans[i]!;
-    if (plan.mode === "fill") {
-      const png = await makeFeatheredColorPatch(
-        plan.w,
-        plan.h,
-        plan.rgb,
-        Math.max(2, Math.min(6, Math.round(Math.min(plan.w, plan.h) * 0.12))),
-      );
-      const name = `patch${i}.png`;
-      await ffmpeg.writeFile(name, await fetchFile(png));
-      patchNames.push(name);
-      inputs.push("-i", name);
-      plan.overlayInput = inputIndex;
-      inputIndex += 1;
-    }
-  }
-
   const filter = buildCleanFilter(plans);
-  const useComplex = filter.startsWith("[");
-
-  const runOnce = async (
-    ff: Awaited<ReturnType<typeof getFFmpeg>>,
-    args: string[],
-  ) => {
-    await execOrThrow(ff, args);
-  };
+  const useComplex = filter.includes("[outv]");
 
   let active = ffmpeg;
   try {
     if (useComplex) {
-      await runOnce(active, [
-        ...inputs,
+      await execOrThrow(active, [
+        "-i",
+        input,
         "-filter_complex",
         filter,
         "-map",
@@ -816,7 +789,7 @@ export async function removeLogo(
         output,
       ]);
     } else {
-      await runOnce(active, [
+      await execOrThrow(active, [
         "-i",
         input,
         "-vf",
@@ -844,19 +817,15 @@ export async function removeLogo(
     await resetFFmpeg();
     active = await getFFmpeg(onProgress);
     await active.writeFile(input, await fetchFile(file));
-    const hex = rgbToHex(plans[0]?.rgb || [0, 0, 0]);
-    const simple = plans
-      .map(
-        (p) =>
-          `drawbox=x=${p.x}:y=${p.y}:w=${p.w}:h=${p.h}:color=0x${hex}:t=fill`,
-      )
+    const delogoOnly = cleaned
+      .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:show=0`)
       .join(",");
     try {
-      await runOnce(active, [
+      await execOrThrow(active, [
         "-i",
         input,
         "-vf",
-        `${simple},format=yuv420p`,
+        `${delogoOnly},format=yuv420p`,
         "-c:v",
         "libx264",
         "-preset",
@@ -884,7 +853,6 @@ export async function removeLogo(
   try {
     await active.deleteFile(input);
     await active.deleteFile(output);
-    for (const name of patchNames) await active.deleteFile(name);
   } catch {
     /* ignore */
   }
@@ -895,10 +863,9 @@ type CleanPlan = {
   y: number;
   w: number;
   h: number;
-  mode: "fill" | "clone";
+  mode: "delogo" | "clone" | "fill";
   rgb: [number, number, number];
   clone?: { sx: number; sy: number };
-  overlayInput?: number;
 };
 
 function tightenBox(
@@ -906,11 +873,12 @@ function tightenBox(
   vw: number,
   vh: number,
 ) {
-  let x = Math.round(raw.x) + 1;
-  let y = Math.round(raw.y) + 1;
-  let w = Math.max(4, Math.round(raw.w) - 2);
-  let h = Math.max(4, Math.round(raw.h) - 2);
-  const margin = 1;
+  // تضييق أقوى حتى لا يغطي التحديد جزء الحذاء/الخلفية بالخطأ
+  let x = Math.round(raw.x) + 2;
+  let y = Math.round(raw.y) + 2;
+  let w = Math.max(4, Math.round(raw.w) - 4);
+  let h = Math.max(4, Math.round(raw.h) - 4);
+  const margin = 2;
   x = Math.max(margin, Math.min(vw - margin - 4, x));
   y = Math.max(margin, Math.min(vh - margin - 4, y));
   w = Math.max(4, Math.min(vw - x - margin, w));
@@ -920,57 +888,34 @@ function tightenBox(
 
 function buildCleanFilter(plans: CleanPlan[]): string {
   const clones = plans.filter((p) => p.mode === "clone" && p.clone);
-  const fills = plans.filter(
-    (p) => p.mode === "fill" && typeof p.overlayInput === "number",
-  );
 
-  // Simple path: only clones via filter_complex from single input, or only drawbox
-  if (!fills.length && !clones.length) {
-    return "format=yuv420p";
-  }
-
-  if (!fills.length && clones.length) {
-    let chain = `[0:v]format=yuv420p[base0];`;
-    clones.forEach((p, i) => {
-      const src = `[base${i}]`;
-      const dst = i === clones.length - 1 ? "[vout]" : `[base${i + 1}]`;
-      chain +=
-        `${src}split=2[keep${i}][take${i}];` +
-        `[take${i}]crop=${p.w}:${p.h}:${p.clone!.sx}:${p.clone!.sy}[patch${i}];` +
-        `[keep${i}][patch${i}]overlay=${p.x}:${p.y}${dst};`;
-    });
-    chain += `[vout]setsar=1,format=yuv420p[outv]`;
-    return chain;
-  }
-
-  // Fills (PNG overlays) and optional clones
-  let label = "0:v";
-  let chain = "";
-  let step = 0;
-
-  fills.forEach((p) => {
-    const next = `f${step}`;
-    const src = step === 0 ? `[${label}]` : `[${label}]`;
-    chain += `${src}[${p.overlayInput}:v]overlay=${p.x}:${p.y}:format=auto[${next}];`;
-    label = next;
-    step += 1;
-  });
-
+  // فقط استيفاء شفاف (delogo) — بدون مربعات لون معتمة
   if (!clones.length) {
-    chain += `[${label}]setsar=1,format=yuv420p[outv]`;
-    return chain;
+    const parts = plans.map(
+      (p) => `delogo=x=${p.x}:y=${p.y}:w=${p.w}:h=${p.h}:show=0`,
+    );
+    return `${parts.join(",")},setsar=1,format=yuv420p`;
   }
 
-  chain += `[${label}]format=yuv420p[base0];`;
+  let chain = `[0:v]format=yuv420p[base0];`;
   clones.forEach((p, i) => {
     const src = `[base${i}]`;
-    const dst = i === clones.length - 1 ? "[vout]" : `[base${i + 1}]`;
+    const dst = `[base${i + 1}]`;
     chain +=
       `${src}split=2[keep${i}][take${i}];` +
-      `[take${i}]crop=${p.w}:${p.h}:${p.clone!.sx}:${p.clone!.sy}[c${i}];` +
-      `[keep${i}][c${i}]overlay=${p.x}:${p.y}${dst};`;
+      `[take${i}]crop=${p.w}:${p.h}:${p.clone!.sx}:${p.clone!.sy}[patch${i}];` +
+      `[keep${i}][patch${i}]overlay=${p.x}:${p.y}${dst};`;
   });
-  chain += `[vout]setsar=1,format=yuv420p[outv]`;
+  const after = `base${clones.length}`;
+  const rest = plans.filter((p) => p.mode !== "clone");
+  if (rest.length) {
+    const delogoChain = rest
+      .map((p) => `delogo=x=${p.x}:y=${p.y}:w=${p.w}:h=${p.h}:show=0`)
+      .join(",");
+    chain += `[${after}]${delogoChain},setsar=1,format=yuv420p[outv]`;
+  } else {
+    chain += `[${after}]setsar=1,format=yuv420p[outv]`;
+  }
   return chain;
 }
 
@@ -980,67 +925,116 @@ function planCleanFix(
   vw: number,
   vh: number,
 ): CleanPlan {
-  const sides = sampleSideBands(imageData, box, vw, vh, 6);
+  const sides = sampleSideBands(imageData, box, vw, vh, 5);
   sides.sort((a, b) => a.variance - b.variance);
   const best = sides[0];
   const rgb = best?.median || ([0, 0, 0] as [number, number, number]);
-  const bestVar = best?.variance ?? 999;
 
-  // خلفية متجانسة → ملء لون دقيق بحواف شفافة
-  if (bestVar < 36) {
-    return { ...box, mode: "fill", rgb };
-  }
+  // هل كل الجوانب متقاربة اللون؟ (الشعار بالكامل على خلفية سادة)
+  const uniformBg =
+    sides.length >= 2 &&
+    sides.every((s) => colorDistance(s.median, rgb) < 28) &&
+    (best?.variance ?? 999) < 28;
 
+  // فضّل استنساخ من سطح مشابه (مثل أبيض الحذاء) قبل أي ملء لون
   const clones = rankCloneSides(imageData, box, vw, vh);
-  if (clones[0] && clones[0].score < 48) {
-    return {
-      ...box,
-      mode: "clone",
-      rgb,
-      clone: { sx: clones[0].sx, sy: clones[0].sy },
-    };
-  }
-
-  return { ...box, mode: "fill", rgb };
-}
-
-async function makeFeatheredColorPatch(
-  w: number,
-  h: number,
-  rgb: [number, number, number],
-  feather: number,
-): Promise<File> {
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(2, w);
-  canvas.height = Math.max(2, h);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("تعذّر إنشاء رقعة اللون");
-
-  const img = ctx.createImageData(canvas.width, canvas.height);
-  const [r, g, b] = rgb;
-  const f = Math.max(1, feather);
-
-  for (let y = 0; y < canvas.height; y++) {
-    for (let x = 0; x < canvas.width; x++) {
-      const dist = Math.min(x + 1, y + 1, canvas.width - x, canvas.height - y);
-      const alpha =
-        dist >= f ? 255 : Math.max(0, Math.min(255, Math.round((dist / f) * 255)));
-      const i = (y * canvas.width + x) * 4;
-      img.data[i] = r;
-      img.data[i + 1] = g;
-      img.data[i + 2] = b;
-      img.data[i + 3] = alpha;
+  const bestClone = clones[0];
+  if (bestClone && bestClone.score < 70) {
+    // تأكد أن رقعة الاستنساخ أقرب للألوان الملامسة للتحديد من لون أرضية بعيدة
+    const edge = sampleImmediateEdge(imageData, box, vw, vh);
+    const cloneColor = sampleRectMedian(
+      imageData,
+      bestClone.sx,
+      bestClone.sy,
+      box.w,
+      box.h,
+      vw,
+      vh,
+    );
+    const fillDist = colorDistance(rgb, edge);
+    const cloneDist = colorDistance(cloneColor, edge);
+    if (cloneDist <= fillDist + 12) {
+      return {
+        ...box,
+        mode: "clone",
+        rgb: cloneColor,
+        clone: { sx: bestClone.sx, sy: bestClone.sy },
+      };
     }
   }
-  ctx.putImageData(img, 0, 0);
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء الرقعة"))),
-      "image/png",
+  if (uniformBg) {
+    // حتى على خلفية سادة: delogo أخف بصرياً من مربع لون معتم
+    return { ...box, mode: "delogo", rgb };
+  }
+
+  return { ...box, mode: "delogo", rgb };
+}
+
+function sampleImmediateEdge(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+): [number, number, number] {
+  const samples: Array<[number, number, number]> = [];
+  const { data, width } = imageData;
+  const push = (px: number, py: number) => {
+    if (px < 0 || py < 0 || px >= vw || py >= vh) return;
+    const sx = Math.min(width - 1, Math.round((px / vw) * width));
+    const sy = Math.min(
+      imageData.height - 1,
+      Math.round((py / vh) * imageData.height),
     );
-  });
-  return new File([blob], "patch.png", { type: "image/png" });
+    const i = (sy * width + sx) * 4;
+    samples.push([data[i], data[i + 1], data[i + 2]]);
+  };
+  for (let x = box.x; x < box.x + box.w; x++) {
+    push(x, box.y - 1);
+    push(x, box.y + box.h);
+  }
+  for (let y = box.y; y < box.y + box.h; y++) {
+    push(box.x - 1, y);
+    push(box.x + box.w, y);
+  }
+  return medianRgb(samples);
+}
+
+function sampleRectMedian(
+  imageData: ImageData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  vw: number,
+  vh: number,
+): [number, number, number] {
+  const samples: Array<[number, number, number]> = [];
+  const { data, width } = imageData;
+  const step = Math.max(1, Math.floor(Math.min(w, h) / 10));
+  for (let py = y; py < y + h; py += step) {
+    for (let px = x; px < x + w; px += step) {
+      if (px < 0 || py < 0 || px >= vw || py >= vh) continue;
+      const sx = Math.min(width - 1, Math.round((px / vw) * width));
+      const sy = Math.min(
+        imageData.height - 1,
+        Math.round((py / vh) * imageData.height),
+      );
+      const i = (sy * width + sx) * 4;
+      samples.push([data[i], data[i + 1], data[i + 2]]);
+    }
+  }
+  return medianRgb(samples);
+}
+
+function colorDistance(
+  a: [number, number, number],
+  b: [number, number, number],
+) {
+  const dr = a[0] - b[0];
+  const dg = a[1] - b[1];
+  const db = a[2] - b[2];
+  return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
 function sampleSideBands(
@@ -1146,14 +1140,6 @@ function colorVariance(
     acc += dr * dr + dg * dg + db * db;
   }
   return Math.sqrt(acc / samples.length);
-}
-
-function rgbToHex([r, g, b]: [number, number, number]) {
-  return [r, g, b]
-    .map((v) =>
-      Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"),
-    )
-    .join("");
 }
 
 function grabVideoFrameData(file: File): Promise<ImageData> {
