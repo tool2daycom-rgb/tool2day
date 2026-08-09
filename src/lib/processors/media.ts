@@ -730,8 +730,9 @@ export async function addTextToVideo(
 }
 
 /**
- * إزالة علامة مائية مع إظهار السطح الأصلي (مثل الحذاء):
- * مسح تدريجي يستنسخ شرائح رفيعة من جهة السطح نفسه — بدون مربع لون/غبش سميك.
+ * إزالة علامة مائية وكأنها غير موجودة قدر الإمكان داخل المتصفح:
+ * 1) removelogo بقناع ناعم (inpainting من FFmpeg)
+ * 2) وإلا استنساخ ناعم من جهة السطح (الحذاء) مع قناع ألفا شفاف الحواف
  */
 export async function removeLogo(
   file: File,
@@ -750,24 +751,71 @@ export async function removeLogo(
 
   const cleaned = boxes.map((raw) => tightenBox(raw, vw, vh));
   const frame = await grabVideoFrameData(file);
-  const plans = cleaned.map((box) => planCleanFix(frame, box, vw, vh));
+  const source = pickCloneSource(frame, cleaned[0]!, vw, vh);
 
   const ffmpeg = await getFFmpeg(onProgress);
   const input = inputFileName(file, "mp4");
   const output = "output.mp4";
+  const maskName = "logo-mask.png";
   await ffmpeg.writeFile(input, await fetchFile(file));
 
-  const filter = buildCleanFilter(plans, vw, vh);
-  const useComplex = filter.includes("[outv]");
+  const maskFile = await makeSoftLogoMask(vw, vh, cleaned);
+  await ffmpeg.writeFile(maskName, await fetchFile(maskFile));
 
   let active = ffmpeg;
+  let ok = false;
+
+  // 1) removelogo — أفضل إخفاء شفاف متاح في FFmpeg wasm
   try {
-    if (useComplex) {
+    await execOrThrow(active, [
+      "-i",
+      input,
+      "-vf",
+      `removelogo=${maskName},format=yuv420p`,
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a?",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "17",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      output,
+    ]);
+    ok = true;
+  } catch {
+    /* try next */
+  }
+
+  // 2) استنساخ ناعم من جهة الحذاء + قناع ألفا شفاف الحواف
+  if (!ok && source) {
+    try {
+      await resetFFmpeg();
+      active = await getFFmpeg(onProgress);
+      await active.writeFile(input, await fetchFile(file));
+      const softMask = await makeBoxAlphaMask(cleaned[0]!.w, cleaned[0]!.h);
+      await active.writeFile("soft-alpha.png", await fetchFile(softMask));
+      const b = cleaned[0]!;
+      const fc =
+        `[0:v]split=2[base][tmp];` +
+        `[tmp]crop=${source.sw}:${source.sh}:${source.sx}:${source.sy},` +
+        `scale=${b.w}:${b.h}:flags=lanczos[rgb];` +
+        `[1:v]format=gray,scale=${b.w}:${b.h}[msk];` +
+        `[rgb][msk]alphamerge[ov];` +
+        `[base][ov]overlay=${b.x}:${b.y}:format=auto,format=yuv420p[outv]`;
       await execOrThrow(active, [
         "-i",
         input,
+        "-i",
+        "soft-alpha.png",
         "-filter_complex",
-        filter,
+        fc,
         "-map",
         "[outv]",
         "-map",
@@ -778,102 +826,52 @@ export async function removeLogo(
         "ultrafast",
         "-crf",
         "17",
-        "-pix_fmt",
-        "yuv420p",
         "-c:a",
         "copy",
         "-movflags",
         "+faststart",
         output,
       ]);
-    } else {
-      await execOrThrow(active, [
-        "-i",
-        input,
-        "-vf",
-        filter,
-        "-map",
-        "0:v:0",
-        "-map",
-        "0:a?",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        "17",
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "copy",
-        "-movflags",
-        "+faststart",
-        output,
-      ]);
+      ok = true;
+      try {
+        await active.deleteFile("soft-alpha.png");
+      } catch {
+        /* ignore */
+      }
+    } catch {
+      /* try next */
     }
-  } catch (firstErr) {
+  }
+
+  // 3) آخر حل: delogo ضيّق جداً
+  if (!ok) {
     await resetFFmpeg();
     active = await getFFmpeg(onProgress);
     await active.writeFile(input, await fetchFile(file));
-    // Fallback: single-side clone if possible, else delogo
-    const fallback = cleaned
-      .map((b) => {
-        if (b.x - b.w >= 0) {
-          return null; // handled below via complex if needed
-        }
-        return `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:show=0`;
-      })
-      .filter(Boolean)
+    const vf = cleaned
+      .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:show=0`)
       .join(",");
-    try {
-      const b0 = cleaned[0]!;
-      if (b0.x - Math.min(8, b0.w) >= 0) {
-        const sw = Math.min(8, b0.w);
-        await execOrThrow(active, [
-          "-i",
-          input,
-          "-filter_complex",
-          `[0:v]split=2[a][b];[b]crop=${b0.w}:${b0.h}:${b0.x - sw}:${b0.y}[p];[a][p]overlay=${b0.x}:${b0.y},format=yuv420p[outv]`,
-          "-map",
-          "[outv]",
-          "-map",
-          "0:a?",
-          "-c:v",
-          "libx264",
-          "-preset",
-          "ultrafast",
-          "-crf",
-          "18",
-          "-c:a",
-          "copy",
-          "-movflags",
-          "+faststart",
-          output,
-        ]);
-      } else {
-        await execOrThrow(active, [
-          "-i",
-          input,
-          "-vf",
-          `${fallback || `delogo=x=${b0.x}:y=${b0.y}:w=${b0.w}:h=${b0.h}:show=0`},format=yuv420p`,
-          "-c:v",
-          "libx264",
-          "-preset",
-          "ultrafast",
-          "-crf",
-          "18",
-          "-c:a",
-          "copy",
-          "-movflags",
-          "+faststart",
-          output,
-        ]);
-      }
-    } catch {
-      throw firstErr instanceof Error
-        ? firstErr
-        : new Error("تعذّر حذف العلامة المائية من الفيديو");
-    }
+    await execOrThrow(active, [
+      "-i",
+      input,
+      "-vf",
+      `${vf},format=yuv420p`,
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a?",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "17",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      output,
+    ]);
   }
 
   const data = await active.readFile(output);
@@ -884,241 +882,150 @@ export async function removeLogo(
   try {
     await active.deleteFile(input);
     await active.deleteFile(output);
+    await active.deleteFile(maskName);
   } catch {
     /* ignore */
   }
 }
-
-type SweepDir = "left" | "right" | "up" | "down";
-
-type CleanPlan = {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  mode: "sweep" | "delogo";
-  rgb: [number, number, number];
-  dir?: SweepDir;
-};
 
 function tightenBox(
   raw: { x: number; y: number; w: number; h: number },
   vw: number,
   vh: number,
 ) {
-  let x = Math.round(raw.x) + 1;
-  let y = Math.round(raw.y) + 1;
-  let w = Math.max(4, Math.round(raw.w) - 2);
-  let h = Math.max(4, Math.round(raw.h) - 2);
+  let x = Math.round(raw.x) + 2;
+  let y = Math.round(raw.y) + 2;
+  let w = Math.max(6, Math.round(raw.w) - 4);
+  let h = Math.max(6, Math.round(raw.h) - 4);
   const margin = 2;
-  x = Math.max(margin, Math.min(vw - margin - 4, x));
-  y = Math.max(margin, Math.min(vh - margin - 4, y));
-  w = Math.max(4, Math.min(vw - x - margin, w));
-  h = Math.max(4, Math.min(vh - y - margin, h));
+  x = Math.max(margin, Math.min(vw - margin - 6, x));
+  y = Math.max(margin, Math.min(vh - margin - 6, y));
+  w = Math.max(6, Math.min(vw - x - margin, w));
+  h = Math.max(6, Math.min(vh - y - margin, h));
   return { x, y, w, h };
 }
 
-function buildCleanFilter(
-  plans: CleanPlan[],
+/** قناع أبيض ناعم على أسود لحجم الفيديو الكامل — لـ removelogo */
+async function makeSoftLogoMask(
   vw: number,
   vh: number,
-): string {
-  // سلسلة واحدة: نطبّق كل خطة بالتتابع على نفس الفيديو
-  let chain = `[0:v]format=yuv420p[v0];`;
-  let idx = 0;
-
-  for (const plan of plans) {
-    const src = `[v${idx}]`;
-    const dst = `[v${idx + 1}]`;
-    if (plan.mode === "sweep" && plan.dir) {
-      chain += buildSweepChain(src, dst, plan, plan.dir, vw, vh);
-    } else {
-      chain += `${src}delogo=x=${plan.x}:y=${plan.y}:w=${plan.w}:h=${plan.h}:show=0${dst};`;
-    }
-    idx += 1;
+  boxes: Array<{ x: number; y: number; w: number; h: number }>,
+): Promise<File> {
+  const base = document.createElement("canvas");
+  base.width = vw;
+  base.height = vh;
+  const ctx = base.getContext("2d");
+  if (!ctx) throw new Error("تعذّر إنشاء قناع الإزالة");
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, vw, vh);
+  ctx.fillStyle = "#fff";
+  for (const b of boxes) {
+    const pad = Math.max(2, Math.round(Math.min(b.w, b.h) * 0.08));
+    ctx.beginPath();
+    const x = b.x - pad;
+    const y = b.y - pad;
+    const w = b.w + pad * 2;
+    const h = b.h + pad * 2;
+    const r = Math.min(8, Math.floor(Math.min(w, h) / 3));
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+    ctx.fill();
   }
 
-  chain += `[v${idx}]setsar=1,format=yuv420p[outv]`;
-  return chain;
+  const soft = document.createElement("canvas");
+  soft.width = vw;
+  soft.height = vh;
+  const sctx = soft.getContext("2d");
+  if (!sctx) throw new Error("تعذّر تنعيم القناع");
+  sctx.filter = "blur(4px)";
+  sctx.drawImage(base, 0, 0);
+  sctx.filter = "none";
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    soft.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("فشل حفظ القناع"))),
+      "image/png",
+    );
+  });
+  return new File([blob], "logo-mask.png", { type: "image/png" });
 }
 
-/** استنساخ شرائح رفيعة باتجاه السطح (يُظهر الحذاء بدل غبش مختلط). */
-function buildSweepChain(
-  srcLabel: string,
-  dstLabel: string,
-  box: { x: number; y: number; w: number; h: number },
-  dir: SweepDir,
-  vw: number,
-  vh: number,
-): string {
-  const strip =
-    dir === "left" || dir === "right"
-      ? Math.max(2, Math.min(6, Math.round(box.w / 8)))
-      : Math.max(2, Math.min(6, Math.round(box.h / 8)));
+/** قناع ألفا للحواف الشفافة حول رقعة الاستنساخ */
+async function makeBoxAlphaMask(w: number, h: number): Promise<File> {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(4, w);
+  canvas.height = Math.max(4, h);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("تعذّر إنشاء قناع الشفافية");
+  const img = ctx.createImageData(canvas.width, canvas.height);
+  const feather = Math.max(4, Math.min(14, Math.round(Math.min(w, h) * 0.22)));
 
-  const steps =
-    dir === "left" || dir === "right"
-      ? Math.ceil(box.w / strip)
-      : Math.ceil(box.h / strip);
-
-  if (dir === "left" && box.x - strip < 0) {
-    return `${srcLabel}delogo=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}:show=0${dstLabel};`;
-  }
-  if (dir === "right" && box.x + box.w + strip > vw) {
-    return `${srcLabel}delogo=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}:show=0${dstLabel};`;
-  }
-  if (dir === "up" && box.y - strip < 0) {
-    return `${srcLabel}delogo=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}:show=0${dstLabel};`;
-  }
-  if (dir === "down" && box.y + box.h + strip > vh) {
-    return `${srcLabel}delogo=x=${box.x}:y=${box.y}:w=${box.w}:h=${box.h}:show=0${dstLabel};`;
-  }
-
-  let chain = `${srcLabel}format=yuv420p[s0];`;
-  let last = 0;
-
-  for (let i = 0; i < steps; i++) {
-    let dx = box.x;
-    let dy = box.y;
-    let dw = box.w;
-    let dh = box.h;
-    let sx = box.x;
-    let sy = box.y;
-
-    if (dir === "left") {
-      dx = box.x + i * strip;
-      dw = Math.min(strip, box.x + box.w - dx);
-      dh = box.h;
-      dy = box.y;
-      sx = dx - strip;
-      sy = box.y;
-    } else if (dir === "right") {
-      const end = box.x + box.w - i * strip;
-      dw = Math.min(strip, end - box.x);
-      dx = end - dw;
-      dy = box.y;
-      dh = box.h;
-      sx = dx + dw;
-      sy = box.y;
-    } else if (dir === "up") {
-      dy = box.y + i * strip;
-      dh = Math.min(strip, box.y + box.h - dy);
-      dx = box.x;
-      dw = box.w;
-      sx = box.x;
-      sy = dy - strip;
-    } else {
-      const end = box.y + box.h - i * strip;
-      dh = Math.min(strip, end - box.y);
-      dy = end - dh;
-      dx = box.x;
-      dw = box.w;
-      sx = box.x;
-      sy = dy + dh;
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const d = Math.min(x + 1, y + 1, canvas.width - x, canvas.height - y);
+      // alphamerge يستخدم لuminance كألفا: أبيض=ظاهر، أسود=شفاف
+      let a = 255;
+      if (d < feather) {
+        const t = d / feather;
+        const s = t * t * (3 - 2 * t);
+        a = Math.round(255 * s);
+      }
+      const i = (y * canvas.width + x) * 4;
+      img.data[i] = a;
+      img.data[i + 1] = a;
+      img.data[i + 2] = a;
+      img.data[i + 3] = 255;
     }
-
-    if (dw < 1 || dh < 1) continue;
-    chain +=
-      `[s${i}]split=2[a${i}][b${i}];` +
-      `[b${i}]crop=${dw}:${dh}:${sx}:${sy}[p${i}];` +
-      `[a${i}][p${i}]overlay=${dx}:${dy}[s${i + 1}];`;
-    last = i + 1;
   }
-
-  chain += `[s${last}]format=yuv420p${dstLabel};`;
-  return chain;
+  ctx.putImageData(img, 0, 0);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("فشل قناع الشفافية"))),
+      "image/png",
+    );
+  });
+  return new File([blob], "soft-alpha.png", { type: "image/png" });
 }
 
-function planCleanFix(
+function pickCloneSource(
   imageData: ImageData,
   box: { x: number; y: number; w: number; h: number },
   vw: number,
   vh: number,
-): CleanPlan {
-  const left = sampleBand(
-    imageData,
-    box.x - 4,
-    box.y,
-    box.x,
-    box.y + box.h,
-    vw,
-    vh,
-  );
-  const right = sampleBand(
-    imageData,
-    box.x + box.w,
-    box.y,
-    box.x + box.w + 4,
-    box.y + box.h,
-    vw,
-    vh,
-  );
-  const top = sampleBand(
-    imageData,
-    box.x,
-    box.y - 4,
-    box.x + box.w,
-    box.y,
-    vw,
-    vh,
-  );
-  const bottom = sampleBand(
-    imageData,
-    box.x,
-    box.y + box.h,
-    box.x + box.w,
-    box.y + box.h + 4,
-    vw,
-    vh,
-  );
-
-  const candidates: Array<{
-    dir: SweepDir;
+): { sx: number; sy: number; sw: number; sh: number } | null {
+  const options: Array<{
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
     score: number;
-    rgb: [number, number, number];
   }> = [];
 
-  // نفضّل الجهة الأقرب للون حافة التحديد من نفس الجهة = استمرار السطح (حذاء أبيض)
-  if (left && box.x >= 4) {
-    candidates.push({
-      dir: "left",
-      rgb: left.median,
-      score: left.variance - brightness(left.median) * 0.15,
-    });
-  }
-  if (right && box.x + box.w + 4 <= vw) {
-    candidates.push({
-      dir: "right",
-      rgb: right.median,
-      score: right.variance - brightness(right.median) * 0.15,
-    });
-  }
-  if (top && box.y >= 4) {
-    candidates.push({
-      dir: "up",
-      rgb: top.median,
-      score: top.variance - brightness(top.median) * 0.1,
-    });
-  }
-  if (bottom && box.y + box.h + 4 <= vh) {
-    candidates.push({
-      dir: "down",
-      rgb: bottom.median,
-      score: bottom.variance - brightness(bottom.median) * 0.1,
-    });
-  }
-
-  candidates.sort((a, b) => a.score - b.score);
-  const best = candidates[0];
-  if (best) {
-    return { ...box, mode: "sweep", dir: best.dir, rgb: best.rgb };
-  }
-
-  return {
-    ...box,
-    mode: "delogo",
-    rgb: left?.median || right?.median || ([200, 200, 200] as [number, number, number]),
+  const consider = (sx: number, sy: number, sw: number, sh: number) => {
+    if (sx < 0 || sy < 0 || sx + sw > vw || sy + sh > vh) return;
+    if (sw < 4 || sh < 4) return;
+    const band = sampleBand(imageData, sx, sy, sx + sw, sy + sh, vw, vh);
+    if (!band) return;
+    // نفضّل سطحاً ساطعاً متجانساً (طرف الحذاء الأبيض) على أرضية صفراء بعيدة
+    const score = band.variance - brightness(band.median) * 0.2;
+    options.push({ sx, sy, sw, sh, score });
   };
+
+  // خذ شريحة من يسار/يمين/فوق/تحت بعرض مناسب ثم نكبّرها للتغطية
+  const tw = Math.max(8, Math.min(box.w, Math.round(box.w * 0.85)));
+  const th = Math.max(8, Math.min(box.h, Math.round(box.h * 0.85)));
+  consider(box.x - tw, box.y, tw, box.h);
+  consider(box.x + box.w, box.y, tw, box.h);
+  consider(box.x, box.y - th, box.w, th);
+  consider(box.x, box.y + box.h, box.w, th);
+
+  options.sort((a, b) => a.score - b.score);
+  const best = options[0];
+  return best ? { sx: best.sx, sy: best.sy, sw: best.sw, sh: best.sh } : null;
 }
 
 function brightness([r, g, b]: [number, number, number]) {
@@ -1136,8 +1043,10 @@ function sampleBand(
 ) {
   const samples: Array<[number, number, number]> = [];
   const { data, width } = imageData;
-  for (let py = Math.floor(ys); py < Math.ceil(ye); py++) {
-    for (let px = Math.floor(xs); px < Math.ceil(xe); px++) {
+  const stepX = Math.max(1, Math.floor((xe - xs) / 24));
+  const stepY = Math.max(1, Math.floor((ye - ys) / 24));
+  for (let py = Math.floor(ys); py < Math.ceil(ye); py += stepY) {
+    for (let px = Math.floor(xs); px < Math.ceil(xe); px += stepX) {
       if (px < 0 || py < 0 || px >= vw || py >= vh) continue;
       const sx = Math.min(width - 1, Math.round((px / vw) * width));
       const sy = Math.min(
