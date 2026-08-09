@@ -730,8 +730,10 @@ export async function addTextToVideo(
 }
 
 /**
- * إزالة علامة مائية/شعار بتنقية احترافية عبر delogo:
- * يملأ المنطقة باستيفاء من البكسلات المحيطة (بدون boxblur / لطخات غبش).
+ * إزالة علامة مائية بدون غبش:
+ * 1) إن كانت الخلفية حول التحديد متجانسة → ملء بلون متوسط مضبوط (drawbox)
+ * 2) وإلا → استنساخ رقعة من الجانب الأكثر تجانساً (overlay)
+ * لا نستخدم delogo/boxblur لأنها تُنتج بكسلات موحلة.
  */
 export async function removeLogo(
   file: File,
@@ -748,21 +750,17 @@ export async function removeLogo(
   const { w: vw, h: vh } = await probeVideoSize(file);
   if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الفيديو");
 
-  // delogo يحتاج هامشاً من حافة الإطار؛ نضيّق التحديد قليلاً لتقليل الأثر المرئي.
   const cleaned = boxes.map((raw) => {
     let x = Math.round(raw.x);
     let y = Math.round(raw.y);
     let w = Math.round(raw.w);
     let h = Math.round(raw.h);
-
-    // قلّص الإطار بكسلين من كل جهة إن أمكن — يتجنب غطاء زائد حول الشعار.
     const inset = 1;
     x += inset;
     y += inset;
     w = Math.max(4, w - inset * 2);
     h = Math.max(4, h - inset * 2);
-
-    const margin = 2;
+    const margin = 1;
     x = Math.max(margin, Math.min(vw - margin - 4, x));
     y = Math.max(margin, Math.min(vh - margin - 4, y));
     w = Math.max(4, Math.min(vw - x - margin, w));
@@ -770,68 +768,89 @@ export async function removeLogo(
     return { x, y, w, h };
   });
 
-  // show=0 فقط — خيار band أُزيل في إصدارات FFmpeg الحديثة ويسبب فشل/abort في wasm.
-  const delogoChain = cleaned
-    .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:show=0`)
-    .join(",");
-
-  // بدون scale إضافي حتى لا تلين الصورة؛ فقط تثبيت SAR والصيغة.
-  const vf = `${delogoChain},setsar=1,format=yuv420p`;
+  const frame = await grabVideoFrame(file);
+  const plans = cleaned.map((box) => planWatermarkFix(frame, box, vw, vh));
+  const built = buildWatermarkFilter(plans);
 
   const ffmpeg = await getFFmpeg(onProgress);
   const input = inputFileName(file, "mp4");
   const output = "output.mp4";
   await ffmpeg.writeFile(input, await fetchFile(file));
 
-  const encodeArgs = [
-    "-i",
-    input,
-    "-vf",
-    vf,
-    "-map",
-    "0:v:0",
-    "-map",
-    "0:a?",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "ultrafast",
-    "-crf",
-    "18",
-    "-pix_fmt",
-    "yuv420p",
-    "-c:a",
-    "aac",
-    "-b:a",
-    "128k",
-    "-movflags",
-    "+faststart",
-    output,
-  ];
+  const encodeArgs = built.complex
+    ? [
+        "-i",
+        input,
+        "-filter_complex",
+        built.filter,
+        "-map",
+        "[outv]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "17",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ]
+    : [
+        "-i",
+        input,
+        "-vf",
+        built.filter,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "17",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ];
 
   let active = ffmpeg;
   try {
     await execOrThrow(active, encodeArgs);
   } catch (firstErr) {
-    // بعد abort غالباً المثيل تالف — أعد التحميل وجرّب سلسلة أبسط.
     await resetFFmpeg();
     active = await getFFmpeg(onProgress);
     await active.writeFile(input, await fetchFile(file));
-    const simpleVf = cleaned
-      .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}`)
+    // Fallback: solid fills only (no complex filter_complex).
+    const fillOnly = plans
+      .map((p) => {
+        const hex = p.fillHex || "000000";
+        return `drawbox=x=${p.x}:y=${p.y}:w=${p.w}:h=${p.h}:color=0x${hex}:t=fill`;
+      })
       .join(",");
     try {
       await execOrThrow(active, [
         "-i",
         input,
         "-vf",
-        simpleVf,
+        `${fillOnly},format=yuv420p`,
         "-c:v",
         "libx264",
         "-preset",
         "ultrafast",
         "-crf",
-        "20",
+        "18",
         "-c:a",
         "copy",
         "-movflags",
@@ -856,6 +875,369 @@ export async function removeLogo(
   } catch {
     /* ignore */
   }
+}
+
+type WatermarkPlan = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  mode: "fill" | "clone";
+  fillHex: string;
+  clone?: { sx: number; sy: number };
+};
+
+function buildWatermarkFilter(plans: WatermarkPlan[]): {
+  filter: string;
+  complex: boolean;
+} {
+  const fills = plans.filter((p) => p.mode === "fill");
+  const clones = plans.filter((p) => p.mode === "clone" && p.clone);
+
+  const drawParts = fills.map(
+    (p) =>
+      `drawbox=x=${p.x}:y=${p.y}:w=${p.w}:h=${p.h}:color=0x${p.fillHex}:t=fill`,
+  );
+
+  if (!clones.length) {
+    return {
+      complex: false,
+      filter: [...drawParts, "setsar=1", "format=yuv420p"].join(","),
+    };
+  }
+
+  const n = clones.length;
+  let chain = "";
+  if (drawParts.length) {
+    chain += `[0:v]${drawParts.join(",")}[base0];`;
+  } else {
+    chain += `[0:v]format=yuv420p[base0];`;
+  }
+
+  clones.forEach((p, i) => {
+    const src = `[base${i}]`;
+    const dst = i === n - 1 ? "[vout]" : `[base${i + 1}]`;
+    const sx = p.clone!.sx;
+    const sy = p.clone!.sy;
+    chain +=
+      `${src}split=2[keep${i}][take${i}];` +
+      `[take${i}]crop=${p.w}:${p.h}:${sx}:${sy}[patch${i}];` +
+      `[keep${i}][patch${i}]overlay=${p.x}:${p.y}${dst};`;
+  });
+
+  chain += `[vout]setsar=1,format=yuv420p[outv]`;
+  return { complex: true, filter: chain };
+}
+
+function planWatermarkFix(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+): WatermarkPlan {
+  // لون الملء من الجانب الأكثر تجانساً (يتجنب خلط لون الحذاء مع الخلفية).
+  const sideColors = sampleSideBands(imageData, box, vw, vh, 5);
+  sideColors.sort((a, b) => a.variance - b.variance);
+  const best = sideColors[0];
+  const fillHex = rgbToHex(best?.median || [0, 0, 0]);
+  const bestVar = best?.variance ?? 999;
+
+  if (bestVar < 42) {
+    return { ...box, mode: "fill", fillHex };
+  }
+
+  const sides = rankCloneSides(imageData, box, vw, vh);
+  if (sides[0] && sides[0].score < 60) {
+    return {
+      ...box,
+      mode: "clone",
+      fillHex,
+      clone: { sx: sides[0].sx, sy: sides[0].sy },
+    };
+  }
+
+  return { ...box, mode: "fill", fillHex };
+}
+
+function sampleSideBands(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+  band: number,
+) {
+  const sides: Array<{
+    name: string;
+    samples: Array<[number, number, number]>;
+    median: [number, number, number];
+    variance: number;
+  }> = [];
+
+  const collect = (
+    name: string,
+    xs: number,
+    ys: number,
+    xe: number,
+    ye: number,
+  ) => {
+    const samples: Array<[number, number, number]> = [];
+    const { data, width } = imageData;
+    for (let py = ys; py < ye; py++) {
+      for (let px = xs; px < xe; px++) {
+        if (px < 0 || py < 0 || px >= vw || py >= vh) continue;
+        const sx = Math.min(width - 1, Math.round((px / vw) * width));
+        const sy = Math.min(
+          imageData.height - 1,
+          Math.round((py / vh) * imageData.height),
+        );
+        const i = (sy * width + sx) * 4;
+        samples.push([data[i], data[i + 1], data[i + 2]]);
+      }
+    }
+    if (samples.length < 8) return;
+    const median = medianRgb(samples);
+    sides.push({
+      name,
+      samples,
+      median,
+      variance: colorVariance(samples, median),
+    });
+  };
+
+  collect("top", box.x, box.y - band, box.x + box.w, box.y);
+  collect("bottom", box.x, box.y + box.h, box.x + box.w, box.y + box.h + band);
+  collect("left", box.x - band, box.y, box.x, box.y + box.h);
+  collect("right", box.x + box.w, box.y, box.x + box.w + band, box.y + box.h);
+
+  if (!sides.length) {
+    const ring = sampleRing(imageData, box, vw, vh, band);
+    const median = medianRgb(ring.samples);
+    sides.push({
+      name: "ring",
+      samples: ring.samples,
+      median,
+      variance: colorVariance(ring.samples, median),
+    });
+  }
+  return sides;
+}
+
+function sampleRing(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+  band: number,
+) {
+  const samples: Array<[number, number, number]> = [];
+  const { data, width } = imageData;
+  const push = (px: number, py: number) => {
+    if (px < 0 || py < 0 || px >= vw || py >= vh) return;
+    // imageData may be scaled — map to bitmap coords
+    const sx = Math.min(width - 1, Math.round((px / vw) * width));
+    const sy = Math.min(
+      imageData.height - 1,
+      Math.round((py / vh) * imageData.height),
+    );
+    const i = (sy * width + sx) * 4;
+    samples.push([data[i], data[i + 1], data[i + 2]]);
+  };
+
+  for (let t = 1; t <= band; t++) {
+    for (let x = box.x; x < box.x + box.w; x++) {
+      push(x, box.y - t);
+      push(x, box.y + box.h + t - 1);
+    }
+    for (let y = box.y; y < box.y + box.h; y++) {
+      push(box.x - t, y);
+      push(box.x + box.w + t - 1, y);
+    }
+  }
+  return { samples };
+}
+
+function sampleRectStats(
+  imageData: ImageData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  vw: number,
+  vh: number,
+) {
+  const samples: Array<[number, number, number]> = [];
+  const { data, width } = imageData;
+  const step = Math.max(1, Math.floor(Math.min(w, h) / 12));
+  for (let py = y; py < y + h; py += step) {
+    for (let px = x; px < x + w; px += step) {
+      if (px < 0 || py < 0 || px >= vw || py >= vh) continue;
+      const sx = Math.min(width - 1, Math.round((px / vw) * width));
+      const sy = Math.min(
+        imageData.height - 1,
+        Math.round((py / vh) * imageData.height),
+      );
+      const i = (sy * width + sx) * 4;
+      samples.push([data[i], data[i + 1], data[i + 2]]);
+    }
+  }
+  const median = medianRgb(samples);
+  return { samples, median, variance: colorVariance(samples, median) };
+}
+
+function rankCloneSides(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+) {
+  const candidates: Array<{ sx: number; sy: number; score: number }> = [];
+  // left
+  if (box.x - box.w >= 0) {
+    const s = sampleRectStats(
+      imageData,
+      box.x - box.w,
+      box.y,
+      box.w,
+      box.h,
+      vw,
+      vh,
+    );
+    candidates.push({ sx: box.x - box.w, sy: box.y, score: s.variance });
+  }
+  // right
+  if (box.x + 2 * box.w <= vw) {
+    const s = sampleRectStats(
+      imageData,
+      box.x + box.w,
+      box.y,
+      box.w,
+      box.h,
+      vw,
+      vh,
+    );
+    candidates.push({ sx: box.x + box.w, sy: box.y, score: s.variance });
+  }
+  // top
+  if (box.y - box.h >= 0) {
+    const s = sampleRectStats(
+      imageData,
+      box.x,
+      box.y - box.h,
+      box.w,
+      box.h,
+      vw,
+      vh,
+    );
+    candidates.push({ sx: box.x, sy: box.y - box.h, score: s.variance });
+  }
+  // bottom
+  if (box.y + 2 * box.h <= vh) {
+    const s = sampleRectStats(
+      imageData,
+      box.x,
+      box.y + box.h,
+      box.w,
+      box.h,
+      vw,
+      vh,
+    );
+    candidates.push({ sx: box.x, sy: box.y + box.h, score: s.variance });
+  }
+  return candidates.sort((a, b) => a.score - b.score);
+}
+
+function medianRgb(samples: Array<[number, number, number]>): [number, number, number] {
+  if (!samples.length) return [0, 0, 0];
+  const mid = Math.floor(samples.length / 2);
+  const r = [...samples].map((s) => s[0]).sort((a, b) => a - b)[mid];
+  const g = [...samples].map((s) => s[1]).sort((a, b) => a - b)[mid];
+  const b = [...samples].map((s) => s[2]).sort((a, b) => a - b)[mid];
+  return [r, g, b];
+}
+
+function colorVariance(
+  samples: Array<[number, number, number]>,
+  mean: [number, number, number],
+) {
+  if (!samples.length) return 999;
+  let acc = 0;
+  for (const s of samples) {
+    const dr = s[0] - mean[0];
+    const dg = s[1] - mean[1];
+    const db = s[2] - mean[2];
+    acc += dr * dr + dg * dg + db * db;
+  }
+  return Math.sqrt(acc / samples.length);
+}
+
+function rgbToHex([r, g, b]: [number, number, number]) {
+  return [r, g, b]
+    .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function grabVideoFrame(file: File): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر قراءة إطار الفيديو"));
+    };
+    video.onloadedmetadata = () => {
+      const t =
+        Number.isFinite(video.duration) && video.duration > 0.2
+          ? Math.min(0.12, video.duration * 0.02)
+          : 0.001;
+      const done = () => {
+        const w = video.videoWidth || 0;
+        const h = video.videoHeight || 0;
+        if (!w || !h) {
+          URL.revokeObjectURL(url);
+          reject(new Error("أبعاد الفيديو غير صالحة"));
+          return;
+        }
+        const maxW = 720;
+        const scale = Math.min(1, maxW / w);
+        const cw = Math.max(2, Math.round(w * scale));
+        const ch = Math.max(2, Math.round(h * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = cw;
+        canvas.height = ch;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("تعذّر إنشاء كانفاس المعاينة"));
+          return;
+        }
+        ctx.drawImage(video, 0, 0, cw, ch);
+        const data = ctx.getImageData(0, 0, cw, ch);
+        URL.revokeObjectURL(url);
+        resolve(data);
+      };
+      const onSeeked = () => {
+        video.removeEventListener("seeked", onSeeked);
+        done();
+      };
+      video.addEventListener("seeked", onSeeked);
+      try {
+        video.currentTime = t;
+      } catch {
+        void video
+          .play()
+          .then(() => {
+            video.pause();
+            done();
+          })
+          .catch(() => done());
+      }
+    };
+    video.src = url;
+    video.load();
+  });
 }
 
 function probeVideoSize(file: File): Promise<{ w: number; h: number }> {
