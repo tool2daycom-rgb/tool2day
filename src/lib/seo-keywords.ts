@@ -572,6 +572,13 @@ const toolExtraKeywords: Record<string, string[]> = {
     "إزالة علامة مائية من فيديو",
     "remove logo video",
   ],
+  "remove-logo-image": [
+    "إزالة لوجو من صورة",
+    "حذف شعار من صورة",
+    "remove watermark from image",
+    "إزالة علامة مائية من صورة",
+    "remove logo from photo",
+  ],
   "crop-video": [
     "قص إطار فيديو",
     "اقتصاص فيديو",

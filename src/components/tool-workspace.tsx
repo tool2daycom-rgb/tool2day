@@ -458,6 +458,13 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
           await media.removeLogo(files[0], delogoBoxes, onProgress);
           break;
         }
+        case "image-delogo": {
+          if (!delogoBoxes.length) {
+            throw new Error("اختر وضع الإزالة أو ارسم منطقة الشعار على المعاينة");
+          }
+          await media.removeLogoFromImage(files[0], delogoBoxes, onProgress);
+          break;
+        }
         case "video-add-audio":
           if (files.length < 2) throw new Error("اختر فيديو ثم ملف صوت (ملفين)");
           await media.addAudioToVideo(files[0], files[1], onProgress);
@@ -1137,7 +1144,7 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
             <Field label={fields.height}><input className={sel} type="number" value={cropH} onChange={(e) => setCropH(e.target.value)} /></Field>
           </>
         )}
-        {kind === "video-delogo" && (
+        {(kind === "video-delogo" || kind === "image-delogo") && (
           <LogoRemoveControls
             file={files[0] || null}
             onBoxesChange={setDelogoBoxes}

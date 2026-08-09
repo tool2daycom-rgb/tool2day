@@ -14,6 +14,7 @@ export type ActiveToolKind =
   | "video-add-image"
   | "video-add-text"
   | "video-delogo"
+  | "image-delogo"
   | "video-stabilize"
   | "video-enhance"
   | "audio-convert"
@@ -104,6 +105,7 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "add-image-to-video": "video-add-image",
   "add-text-to-video": "video-add-text",
   "remove-logo": "video-delogo",
+  "remove-logo-image": "image-delogo",
   "stabilize-video": "video-stabilize",
   "enhance-video": "video-enhance",
   "screen-recorder": "screen-recorder",

@@ -732,7 +732,7 @@ export async function addTextToVideo(
 /**
  * إزالة علامة مائية وكأنها غير موجودة قدر الإمكان داخل المتصفح:
  * 1) removelogo بقناع ناعم (inpainting من FFmpeg)
- * 2) وإلا استنساخ ناعم من جهة السطح (الحذاء) مع قناع ألفا شفاف الحواف
+ * 2) وإلا استنساخ ناعم من جهة السطح مع قناع ألفا شفاف الحواف
  */
 export async function removeLogo(
   file: File,
@@ -741,21 +741,48 @@ export async function removeLogo(
     | Array<{ x: number; y: number; w: number; h: number }>,
   onProgress?: MediaProgress,
 ) {
+  await removeLogoMedia(file, boxOrBoxes, "video", onProgress);
+}
+
+/** نفس نظام إزالة شعار الفيديو، لكن لصورة ثابتة (PNG بنفس الأبعاد). */
+export async function removeLogoFromImage(
+  file: File,
+  boxOrBoxes:
+    | { x: number; y: number; w: number; h: number }
+    | Array<{ x: number; y: number; w: number; h: number }>,
+  onProgress?: MediaProgress,
+) {
+  await removeLogoMedia(file, boxOrBoxes, "image", onProgress);
+}
+
+async function removeLogoMedia(
+  file: File,
+  boxOrBoxes:
+    | { x: number; y: number; w: number; h: number }
+    | Array<{ x: number; y: number; w: number; h: number }>,
+  kind: "video" | "image",
+  onProgress?: MediaProgress,
+) {
   const boxes = Array.isArray(boxOrBoxes) ? boxOrBoxes : [boxOrBoxes];
   if (!boxes.length) {
     throw new Error("حدّد منطقة الشعار أولاً");
   }
 
-  const { w: vw, h: vh } = await probeVideoSize(file);
-  if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الفيديو");
+  const { w: vw, h: vh } =
+    kind === "image" ? await probeImageSize(file) : await probeVideoSize(file);
+  if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الملف");
 
   const cleaned = boxes.map((raw) => tightenBox(raw, vw, vh));
-  const frame = await grabVideoFrameData(file);
+  const frame =
+    kind === "image"
+      ? await grabImageFrameData(file)
+      : await grabVideoFrameData(file);
   const source = pickCloneSource(frame, cleaned[0]!, vw, vh);
 
   const ffmpeg = await getFFmpeg(onProgress);
-  const input = inputFileName(file, "mp4");
-  const output = "output.mp4";
+  const input =
+    kind === "image" ? inputFileName(file, "png") : inputFileName(file, "mp4");
+  const output = kind === "image" ? "output.png" : "output.mp4";
   const maskName = "logo-mask.png";
   await ffmpeg.writeFile(input, await fetchFile(file));
 
@@ -765,59 +792,26 @@ export async function removeLogo(
   let active = ffmpeg;
   let ok = false;
 
-  // 1) removelogo — أفضل إخفاء شفاف متاح في FFmpeg wasm
+  // 1) removelogo
   try {
-    await execOrThrow(active, [
-      "-i",
-      input,
-      "-vf",
-      `removelogo=${maskName},format=yuv420p`,
-      "-map",
-      "0:v:0",
-      "-map",
-      "0:a?",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-crf",
-      "17",
-      "-c:a",
-      "copy",
-      "-movflags",
-      "+faststart",
-      output,
-    ]);
-    ok = true;
-  } catch {
-    /* try next */
-  }
-
-  // 2) استنساخ ناعم من جهة الحذاء + قناع ألفا شفاف الحواف
-  if (!ok && source) {
-    try {
-      await resetFFmpeg();
-      active = await getFFmpeg(onProgress);
-      await active.writeFile(input, await fetchFile(file));
-      const softMask = await makeBoxAlphaMask(cleaned[0]!.w, cleaned[0]!.h);
-      await active.writeFile("soft-alpha.png", await fetchFile(softMask));
-      const b = cleaned[0]!;
-      const fc =
-        `[0:v]split=2[base][tmp];` +
-        `[tmp]crop=${source.sw}:${source.sh}:${source.sx}:${source.sy},` +
-        `scale=${b.w}:${b.h}:flags=lanczos[rgb];` +
-        `[1:v]format=gray,scale=${b.w}:${b.h}[msk];` +
-        `[rgb][msk]alphamerge[ov];` +
-        `[base][ov]overlay=${b.x}:${b.y}:format=auto,format=yuv420p[outv]`;
+    if (kind === "image") {
       await execOrThrow(active, [
         "-i",
         input,
+        "-vf",
+        `removelogo=${maskName}`,
+        "-frames:v",
+        "1",
+        output,
+      ]);
+    } else {
+      await execOrThrow(active, [
         "-i",
-        "soft-alpha.png",
-        "-filter_complex",
-        fc,
+        input,
+        "-vf",
+        `removelogo=${maskName},format=yuv420p`,
         "-map",
-        "[outv]",
+        "0:v:0",
         "-map",
         "0:a?",
         "-c:v",
@@ -832,6 +826,55 @@ export async function removeLogo(
         "+faststart",
         output,
       ]);
+    }
+    ok = true;
+  } catch {
+    /* try next */
+  }
+
+  // 2) soft clone + alpha
+  if (!ok && source) {
+    try {
+      await resetFFmpeg();
+      active = await getFFmpeg(onProgress);
+      await active.writeFile(input, await fetchFile(file));
+      const softMask = await makeBoxAlphaMask(cleaned[0]!.w, cleaned[0]!.h);
+      await active.writeFile("soft-alpha.png", await fetchFile(softMask));
+      const b = cleaned[0]!;
+      const outFmt = kind === "image" ? "rgba" : "yuv420p";
+      const fc =
+        `[0:v]split=2[base][tmp];` +
+        `[tmp]crop=${source.sw}:${source.sh}:${source.sx}:${source.sy},` +
+        `scale=${b.w}:${b.h}:flags=lanczos[rgb];` +
+        `[1:v]format=gray,scale=${b.w}:${b.h}[msk];` +
+        `[rgb][msk]alphamerge[ov];` +
+        `[base][ov]overlay=${b.x}:${b.y}:format=auto,format=${outFmt}[outv]`;
+      await execOrThrow(active, [
+        "-i",
+        input,
+        "-i",
+        "soft-alpha.png",
+        "-filter_complex",
+        fc,
+        "-map",
+        "[outv]",
+        ...(kind === "video" ? (["-map", "0:a?"] as string[]) : []),
+        "-c:v",
+        kind === "image" ? "png" : "libx264",
+        ...(kind === "video"
+          ? [
+              "-preset",
+              "ultrafast",
+              "-crf",
+              "17",
+              "-c:a",
+              "copy",
+              "-movflags",
+              "+faststart",
+            ]
+          : ["-frames:v", "1"]),
+        output,
+      ]);
       ok = true;
       try {
         await active.deleteFile("soft-alpha.png");
@@ -843,7 +886,7 @@ export async function removeLogo(
     }
   }
 
-  // 3) آخر حل: delogo ضيّق جداً
+  // 3) delogo fallback
   if (!ok) {
     await resetFFmpeg();
     active = await getFFmpeg(onProgress);
@@ -851,34 +894,53 @@ export async function removeLogo(
     const vf = cleaned
       .map((b) => `delogo=x=${b.x}:y=${b.y}:w=${b.w}:h=${b.h}:show=0`)
       .join(",");
-    await execOrThrow(active, [
-      "-i",
-      input,
-      "-vf",
-      `${vf},format=yuv420p`,
-      "-map",
-      "0:v:0",
-      "-map",
-      "0:a?",
-      "-c:v",
-      "libx264",
-      "-preset",
-      "ultrafast",
-      "-crf",
-      "17",
-      "-c:a",
-      "copy",
-      "-movflags",
-      "+faststart",
-      output,
-    ]);
+    if (kind === "image") {
+      await execOrThrow(active, [
+        "-i",
+        input,
+        "-vf",
+        vf,
+        "-frames:v",
+        "1",
+        output,
+      ]);
+    } else {
+      await execOrThrow(active, [
+        "-i",
+        input,
+        "-vf",
+        `${vf},format=yuv420p`,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "17",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ]);
+    }
   }
 
   const data = await active.readFile(output);
-  await downloadBlob(
-    toBlob(data, "video/mp4"),
-    `${basename(file.name)}-no-watermark.mp4`,
-  );
+  if (kind === "image") {
+    await downloadBlob(
+      toBlob(data, "image/png"),
+      `${basename(file.name)}-no-watermark.png`,
+    );
+  } else {
+    await downloadBlob(
+      toBlob(data, "video/mp4"),
+      `${basename(file.name)}-no-watermark.mp4`,
+    );
+  }
   try {
     await active.deleteFile(input);
     await active.deleteFile(output);
@@ -886,6 +948,63 @@ export async function removeLogo(
   } catch {
     /* ignore */
   }
+}
+
+function probeImageSize(file: File): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || 0;
+      const h = img.naturalHeight || 0;
+      URL.revokeObjectURL(url);
+      if (!w || !h) reject(new Error("أبعاد الصورة غير صالحة"));
+      else resolve({ w, h });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر قراءة الصورة"));
+    };
+    img.src = url;
+  });
+}
+
+function grabImageFrameData(file: File): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || 0;
+      const h = img.naturalHeight || 0;
+      if (!w || !h) {
+        URL.revokeObjectURL(url);
+        reject(new Error("أبعاد الصورة غير صالحة"));
+        return;
+      }
+      const maxW = 720;
+      const scale = Math.min(1, maxW / w);
+      const cw = Math.max(2, Math.round(w * scale));
+      const ch = Math.max(2, Math.round(h * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("تعذّر إنشاء كانفاس"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, cw, ch);
+      const data = ctx.getImageData(0, 0, cw, ch);
+      URL.revokeObjectURL(url);
+      resolve(data);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر قراءة إطار الصورة"));
+    };
+    img.src = url;
+  });
 }
 
 function tightenBox(

@@ -879,6 +879,15 @@ export const tools: Tool[] = [
     icon: Coins,
   },
   {
+    slug: "remove-logo-image",
+    title: "إزالة الشعار من صورة",
+    description:
+      "أخفِ الشعارات والعلامات المائية من الصور بنفس نظام إزالة شعار الفيديو — بدون غبش سميك.",
+    category: "utilities",
+    accept: "image/*",
+    icon: WandSparkles,
+  },
+  {
     slug: "qr-generator",
     title: "مولد رمز QR",
     description:

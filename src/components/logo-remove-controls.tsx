@@ -54,6 +54,37 @@ function allCornerBoxes(
   ).map((c) => cornerBox(c, vw, vh, size));
 }
 
+function captureImageFrame(
+  file: File,
+): Promise<{ w: number; h: number; bitmap: ImageBitmap }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = async () => {
+      const w = img.naturalWidth || 0;
+      const h = img.naturalHeight || 0;
+      if (!w || !h) {
+        URL.revokeObjectURL(url);
+        reject(new Error("تعذّر قراءة أبعاد الصورة"));
+        return;
+      }
+      try {
+        const bitmap = await createImageBitmap(img);
+        URL.revokeObjectURL(url);
+        resolve({ w, h, bitmap });
+      } catch {
+        URL.revokeObjectURL(url);
+        reject(new Error("تعذّر عرض معاينة الصورة"));
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر تحميل الصورة للمعاينة"));
+    };
+    img.src = url;
+  });
+}
+
 /** التقاط إطار مفكوك فعلياً (مش كانفاس أبيض قبل decode). */
 function captureVideoFrame(
   file: File,
@@ -138,6 +169,13 @@ function captureVideoFrame(
   });
 }
 
+function captureMediaFrame(
+  file: File,
+): Promise<{ w: number; h: number; bitmap: ImageBitmap }> {
+  if (file.type.startsWith("image/")) return captureImageFrame(file);
+  return captureVideoFrame(file);
+}
+
 type Props = {
   file: File | null;
   onBoxesChange: (boxes: DelogoBox[]) => void;
@@ -211,7 +249,7 @@ export function LogoRemoveControls({ file, onBoxesChange }: Props) {
     setReady(false);
     setDrawBox(null);
 
-    void captureVideoFrame(file)
+    void captureMediaFrame(file)
       .then(({ w, h, bitmap }) => {
         if (cancelled) {
           bitmap.close();
@@ -244,7 +282,7 @@ export function LogoRemoveControls({ file, onBoxesChange }: Props) {
         if (cancelled) return;
         setLoadingPreview(false);
         setPreviewError(
-          e instanceof Error ? e.message : "تعذّر عرض معاينة الفيديو",
+          e instanceof Error ? e.message : "تعذّر عرض المعاينة",
         );
       });
 
