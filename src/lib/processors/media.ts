@@ -6,6 +6,7 @@ import {
   getFFmpeg,
   getLastFfmpegLog,
   inputFileName,
+  resetFFmpeg,
   toBlob,
 } from "./ffmpeg-client";
 
@@ -15,7 +16,16 @@ async function execOrThrow(
   ffmpeg: Awaited<ReturnType<typeof getFFmpeg>>,
   args: string[],
 ) {
-  const code = await ffmpeg.exec(args);
+  let code: number | undefined;
+  try {
+    code = await ffmpeg.exec(args);
+  } catch (e) {
+    const detail =
+      e instanceof Error ? e.message : typeof e === "string" ? e : "abort";
+    throw new Error(
+      `فشل FFmpeg (${detail})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
+    );
+  }
   if (typeof code === "number" && code !== 0) {
     throw new Error(
       `فشل FFmpeg (رمز ${code})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
@@ -719,14 +729,10 @@ export async function addTextToVideo(
   await addImageToVideo(video, overlay, onProgress);
 }
 
-function evenInt(n: number) {
-  const v = Math.max(2, Math.round(n));
-  return v % 2 === 0 ? v : v + 1;
-}
-
 /**
- * إزالة شعار بتغطية ناعمة من المنطقة المحيطة (أفضل بكثير من delogo).
- * ينسخ محيط الشعار، يموّهه بقوة، ثم يغطي الشعار بحواف أنعم.
+ * إزالة شعار/علامة مائية بشكل نظيف:
+ * - خلفية سادة: رقعة لون مضبوط بحواف شفافة ناعمة (بدون boxblur)
+ * - خلفية معقّدة: استنساخ بكسلات حقيقية من الجانب الأنظف
  */
 export async function removeLogo(
   file: File,
@@ -743,95 +749,475 @@ export async function removeLogo(
   const { w: vw, h: vh } = await probeVideoSize(file);
   if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الفيديو");
 
-  const chains: string[] = [];
-  boxes.forEach((raw, i) => {
-    let x = Math.max(0, Math.min(vw - 4, Math.round(raw.x)));
-    let y = Math.max(0, Math.min(vh - 4, Math.round(raw.y)));
-    let w = evenInt(Math.max(8, Math.min(vw - x, Math.round(raw.w))));
-    let h = evenInt(Math.max(8, Math.min(vh - y, Math.round(raw.h))));
-    if (x + w >= vw) w = evenInt(Math.max(8, vw - x - 2));
-    if (y + h >= vh) h = evenInt(Math.max(8, vh - y - 2));
-
-    // منطقة أوسع حول الشعار لأخذ ألوان الخلفية الحقيقية
-    const pad = evenInt(Math.max(20, Math.round(Math.min(w, h) * 0.9)));
-    let cx = Math.max(0, x - pad);
-    let cy = Math.max(0, y - pad);
-    let cw = evenInt(Math.min(vw - cx, w + 2 * pad));
-    let ch = evenInt(Math.min(vh - cy, h + 2 * pad));
-    if (cx + cw > vw) cw = evenInt(vw - cx);
-    if (cy + ch > vh) ch = evenInt(vh - cy);
-
-    const ox = Math.max(0, Math.min(cw - w, x - cx));
-    const oy = Math.max(0, Math.min(ch - h, y - cy));
-    // تمويه قوي من المحيط (ليس delogo الرمادي)
-    const blur = Math.max(14, Math.min(56, Math.round(Math.min(w, h) * 0.65)));
-    const blurLuma = Math.max(3, Math.floor(blur / 2));
-
-    // طبقة أوسع قليلاً لدمج الحواف مع الخلفية
-    const feather = evenInt(Math.max(8, Math.round(Math.min(w, h) * 0.18)));
-    const fx = Math.max(0, x - feather);
-    const fy = Math.max(0, y - feather);
-    const fw = evenInt(Math.min(vw - fx, w + 2 * feather));
-    const fh = evenInt(Math.min(vh - fy, h + 2 * feather));
-    const fox = Math.max(0, Math.min(cw - fw, fx - cx));
-    const foy = Math.max(0, Math.min(ch - fh, fy - cy));
-    const softBlur = Math.max(8, Math.floor(blur * 0.4));
-    const softLuma = Math.max(2, Math.floor(blurLuma * 0.4));
-
-    const src = i === 0 ? "[0:v]" : `[v${i}]`;
-    const dst = i === boxes.length - 1 ? "[vout]" : `[v${i + 1}]`;
-
-    // 1) تمويه المحيط → طبقة ريش أوسع
-    // 2) تغطية مركز الشعار بتمويه أقوى من نفس المحيط
-    chains.push(
-      `${src}split=2[base${i}][nb${i}];` +
-        `[nb${i}]crop=${cw}:${ch}:${cx}:${cy},boxblur=${blur}:${blurLuma}[blur${i}];` +
-        `[blur${i}]split=2[bcore${i}][bedge${i}];` +
-        `[bedge${i}]crop=${fw}:${fh}:${fox}:${foy},boxblur=${softBlur}:${softLuma}[edge${i}];` +
-        `[base${i}][edge${i}]overlay=${fx}:${fy}[soft${i}];` +
-        `[bcore${i}]crop=${w}:${h}:${ox}:${oy}[core${i}];` +
-        `[soft${i}][core${i}]overlay=${x}:${y}${dst}`,
-    );
-  });
-
-  const filterComplex = `${chains.join("")};[vout]format=yuv420p[outv]`;
+  const cleaned = boxes.map((raw) => tightenBox(raw, vw, vh));
+  const frame = await grabVideoFrameData(file);
+  const plans = cleaned.map((box) => planCleanFix(frame, box, vw, vh));
 
   const ffmpeg = await getFFmpeg(onProgress);
   const input = inputFileName(file, "mp4");
   const output = "output.mp4";
   await ffmpeg.writeFile(input, await fetchFile(file));
-  await execOrThrow(ffmpeg, [
-    "-i",
-    input,
-    "-filter_complex",
-    filterComplex,
-    "-map",
-    "[outv]",
-    "-map",
-    "0:a?",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "ultrafast",
-    "-crf",
-    "22",
-    "-c:a",
-    "copy",
-    "-movflags",
-    "+faststart",
-    output,
-  ]);
-  const data = await ffmpeg.readFile(output);
+
+  const patchNames: string[] = [];
+  const inputs = ["-i", input];
+  let inputIndex = 1;
+
+  for (let i = 0; i < plans.length; i++) {
+    const plan = plans[i]!;
+    if (plan.mode === "fill") {
+      const png = await makeFeatheredColorPatch(
+        plan.w,
+        plan.h,
+        plan.rgb,
+        Math.max(2, Math.min(6, Math.round(Math.min(plan.w, plan.h) * 0.12))),
+      );
+      const name = `patch${i}.png`;
+      await ffmpeg.writeFile(name, await fetchFile(png));
+      patchNames.push(name);
+      inputs.push("-i", name);
+      plan.overlayInput = inputIndex;
+      inputIndex += 1;
+    }
+  }
+
+  const filter = buildCleanFilter(plans);
+  const useComplex = filter.startsWith("[");
+
+  const runOnce = async (
+    ff: Awaited<ReturnType<typeof getFFmpeg>>,
+    args: string[],
+  ) => {
+    await execOrThrow(ff, args);
+  };
+
+  let active = ffmpeg;
+  try {
+    if (useComplex) {
+      await runOnce(active, [
+        ...inputs,
+        "-filter_complex",
+        filter,
+        "-map",
+        "[outv]",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "17",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ]);
+    } else {
+      await runOnce(active, [
+        "-i",
+        input,
+        "-vf",
+        filter,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "17",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ]);
+    }
+  } catch (firstErr) {
+    await resetFFmpeg();
+    active = await getFFmpeg(onProgress);
+    await active.writeFile(input, await fetchFile(file));
+    const hex = rgbToHex(plans[0]?.rgb || [0, 0, 0]);
+    const simple = plans
+      .map(
+        (p) =>
+          `drawbox=x=${p.x}:y=${p.y}:w=${p.w}:h=${p.h}:color=0x${hex}:t=fill`,
+      )
+      .join(",");
+    try {
+      await runOnce(active, [
+        "-i",
+        input,
+        "-vf",
+        `${simple},format=yuv420p`,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "18",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        output,
+      ]);
+    } catch {
+      throw firstErr instanceof Error
+        ? firstErr
+        : new Error("تعذّر حذف العلامة المائية من الفيديو");
+    }
+  }
+
+  const data = await active.readFile(output);
   await downloadBlob(
     toBlob(data, "video/mp4"),
-    `${basename(file.name)}-delogo.mp4`,
+    `${basename(file.name)}-no-watermark.mp4`,
   );
   try {
-    await ffmpeg.deleteFile(input);
-    await ffmpeg.deleteFile(output);
+    await active.deleteFile(input);
+    await active.deleteFile(output);
+    for (const name of patchNames) await active.deleteFile(name);
   } catch {
     /* ignore */
   }
+}
+
+type CleanPlan = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  mode: "fill" | "clone";
+  rgb: [number, number, number];
+  clone?: { sx: number; sy: number };
+  overlayInput?: number;
+};
+
+function tightenBox(
+  raw: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+) {
+  let x = Math.round(raw.x) + 1;
+  let y = Math.round(raw.y) + 1;
+  let w = Math.max(4, Math.round(raw.w) - 2);
+  let h = Math.max(4, Math.round(raw.h) - 2);
+  const margin = 1;
+  x = Math.max(margin, Math.min(vw - margin - 4, x));
+  y = Math.max(margin, Math.min(vh - margin - 4, y));
+  w = Math.max(4, Math.min(vw - x - margin, w));
+  h = Math.max(4, Math.min(vh - y - margin, h));
+  return { x, y, w, h };
+}
+
+function buildCleanFilter(plans: CleanPlan[]): string {
+  const clones = plans.filter((p) => p.mode === "clone" && p.clone);
+  const fills = plans.filter(
+    (p) => p.mode === "fill" && typeof p.overlayInput === "number",
+  );
+
+  // Simple path: only clones via filter_complex from single input, or only drawbox
+  if (!fills.length && !clones.length) {
+    return "format=yuv420p";
+  }
+
+  if (!fills.length && clones.length) {
+    let chain = `[0:v]format=yuv420p[base0];`;
+    clones.forEach((p, i) => {
+      const src = `[base${i}]`;
+      const dst = i === clones.length - 1 ? "[vout]" : `[base${i + 1}]`;
+      chain +=
+        `${src}split=2[keep${i}][take${i}];` +
+        `[take${i}]crop=${p.w}:${p.h}:${p.clone!.sx}:${p.clone!.sy}[patch${i}];` +
+        `[keep${i}][patch${i}]overlay=${p.x}:${p.y}${dst};`;
+    });
+    chain += `[vout]setsar=1,format=yuv420p[outv]`;
+    return chain;
+  }
+
+  // Fills (PNG overlays) and optional clones
+  let label = "0:v";
+  let chain = "";
+  let step = 0;
+
+  fills.forEach((p) => {
+    const next = `f${step}`;
+    const src = step === 0 ? `[${label}]` : `[${label}]`;
+    chain += `${src}[${p.overlayInput}:v]overlay=${p.x}:${p.y}:format=auto[${next}];`;
+    label = next;
+    step += 1;
+  });
+
+  if (!clones.length) {
+    chain += `[${label}]setsar=1,format=yuv420p[outv]`;
+    return chain;
+  }
+
+  chain += `[${label}]format=yuv420p[base0];`;
+  clones.forEach((p, i) => {
+    const src = `[base${i}]`;
+    const dst = i === clones.length - 1 ? "[vout]" : `[base${i + 1}]`;
+    chain +=
+      `${src}split=2[keep${i}][take${i}];` +
+      `[take${i}]crop=${p.w}:${p.h}:${p.clone!.sx}:${p.clone!.sy}[c${i}];` +
+      `[keep${i}][c${i}]overlay=${p.x}:${p.y}${dst};`;
+  });
+  chain += `[vout]setsar=1,format=yuv420p[outv]`;
+  return chain;
+}
+
+function planCleanFix(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+): CleanPlan {
+  const sides = sampleSideBands(imageData, box, vw, vh, 6);
+  sides.sort((a, b) => a.variance - b.variance);
+  const best = sides[0];
+  const rgb = best?.median || ([0, 0, 0] as [number, number, number]);
+  const bestVar = best?.variance ?? 999;
+
+  // خلفية متجانسة → ملء لون دقيق بحواف شفافة
+  if (bestVar < 36) {
+    return { ...box, mode: "fill", rgb };
+  }
+
+  const clones = rankCloneSides(imageData, box, vw, vh);
+  if (clones[0] && clones[0].score < 48) {
+    return {
+      ...box,
+      mode: "clone",
+      rgb,
+      clone: { sx: clones[0].sx, sy: clones[0].sy },
+    };
+  }
+
+  return { ...box, mode: "fill", rgb };
+}
+
+async function makeFeatheredColorPatch(
+  w: number,
+  h: number,
+  rgb: [number, number, number],
+  feather: number,
+): Promise<File> {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(2, w);
+  canvas.height = Math.max(2, h);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("تعذّر إنشاء رقعة اللون");
+
+  const img = ctx.createImageData(canvas.width, canvas.height);
+  const [r, g, b] = rgb;
+  const f = Math.max(1, feather);
+
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const dist = Math.min(x + 1, y + 1, canvas.width - x, canvas.height - y);
+      const alpha =
+        dist >= f ? 255 : Math.max(0, Math.min(255, Math.round((dist / f) * 255)));
+      const i = (y * canvas.width + x) * 4;
+      img.data[i] = r;
+      img.data[i + 1] = g;
+      img.data[i + 2] = b;
+      img.data[i + 3] = alpha;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء الرقعة"))),
+      "image/png",
+    );
+  });
+  return new File([blob], "patch.png", { type: "image/png" });
+}
+
+function sampleSideBands(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+  band: number,
+) {
+  const sides: Array<{
+    median: [number, number, number];
+    variance: number;
+  }> = [];
+
+  const collect = (xs: number, ys: number, xe: number, ye: number) => {
+    const samples: Array<[number, number, number]> = [];
+    const { data, width } = imageData;
+    for (let py = ys; py < ye; py++) {
+      for (let px = xs; px < xe; px++) {
+        if (px < 0 || py < 0 || px >= vw || py >= vh) continue;
+        const sx = Math.min(width - 1, Math.round((px / vw) * width));
+        const sy = Math.min(
+          imageData.height - 1,
+          Math.round((py / vh) * imageData.height),
+        );
+        const i = (sy * width + sx) * 4;
+        samples.push([data[i], data[i + 1], data[i + 2]]);
+      }
+    }
+    if (samples.length < 10) return;
+    const median = medianRgb(samples);
+    sides.push({ median, variance: colorVariance(samples, median) });
+  };
+
+  collect(box.x, box.y - band, box.x + box.w, box.y);
+  collect(box.x, box.y + box.h, box.x + box.w, box.y + box.h + band);
+  collect(box.x - band, box.y, box.x, box.y + box.h);
+  collect(box.x + box.w, box.y, box.x + box.w + band, box.y + box.h);
+
+  if (!sides.length) {
+    sides.push({ median: [128, 128, 128], variance: 999 });
+  }
+  return sides;
+}
+
+function rankCloneSides(
+  imageData: ImageData,
+  box: { x: number; y: number; w: number; h: number },
+  vw: number,
+  vh: number,
+) {
+  const candidates: Array<{ sx: number; sy: number; score: number }> = [];
+  const trySide = (sx: number, sy: number) => {
+    if (sx < 0 || sy < 0 || sx + box.w > vw || sy + box.h > vh) return;
+    const samples: Array<[number, number, number]> = [];
+    const { data, width } = imageData;
+    const step = Math.max(1, Math.floor(Math.min(box.w, box.h) / 10));
+    for (let py = sy; py < sy + box.h; py += step) {
+      for (let px = sx; px < sx + box.w; px += step) {
+        const ix = Math.min(width - 1, Math.round((px / vw) * width));
+        const iy = Math.min(
+          imageData.height - 1,
+          Math.round((py / vh) * imageData.height),
+        );
+        const i = (iy * width + ix) * 4;
+        samples.push([data[i], data[i + 1], data[i + 2]]);
+      }
+    }
+    const median = medianRgb(samples);
+    candidates.push({
+      sx,
+      sy,
+      score: colorVariance(samples, median),
+    });
+  };
+
+  trySide(box.x - box.w, box.y);
+  trySide(box.x + box.w, box.y);
+  trySide(box.x, box.y - box.h);
+  trySide(box.x, box.y + box.h);
+  return candidates.sort((a, b) => a.score - b.score);
+}
+
+function medianRgb(samples: Array<[number, number, number]>): [number, number, number] {
+  if (!samples.length) return [0, 0, 0];
+  const mid = Math.floor(samples.length / 2);
+  const r = [...samples].map((s) => s[0]).sort((a, b) => a - b)[mid]!;
+  const g = [...samples].map((s) => s[1]).sort((a, b) => a - b)[mid]!;
+  const b = [...samples].map((s) => s[2]).sort((a, b) => a - b)[mid]!;
+  return [r, g, b];
+}
+
+function colorVariance(
+  samples: Array<[number, number, number]>,
+  mean: [number, number, number],
+) {
+  if (!samples.length) return 999;
+  let acc = 0;
+  for (const s of samples) {
+    const dr = s[0] - mean[0];
+    const dg = s[1] - mean[1];
+    const db = s[2] - mean[2];
+    acc += dr * dr + dg * dg + db * db;
+  }
+  return Math.sqrt(acc / samples.length);
+}
+
+function rgbToHex([r, g, b]: [number, number, number]) {
+  return [r, g, b]
+    .map((v) =>
+      Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"),
+    )
+    .join("");
+}
+
+function grabVideoFrameData(file: File): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("تعذّر قراءة إطار الفيديو"));
+    };
+    video.onloadedmetadata = () => {
+      const t =
+        Number.isFinite(video.duration) && video.duration > 0.2
+          ? Math.min(0.12, video.duration * 0.02)
+          : 0.001;
+      const done = () => {
+        const w = video.videoWidth || 0;
+        const h = video.videoHeight || 0;
+        if (!w || !h) {
+          URL.revokeObjectURL(url);
+          reject(new Error("أبعاد الفيديو غير صالحة"));
+          return;
+        }
+        const maxW = 720;
+        const scale = Math.min(1, maxW / w);
+        const cw = Math.max(2, Math.round(w * scale));
+        const ch = Math.max(2, Math.round(h * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = cw;
+        canvas.height = ch;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("تعذّر إنشاء كانفاس"));
+          return;
+        }
+        ctx.drawImage(video, 0, 0, cw, ch);
+        const data = ctx.getImageData(0, 0, cw, ch);
+        URL.revokeObjectURL(url);
+        resolve(data);
+      };
+      const onSeeked = () => {
+        video.removeEventListener("seeked", onSeeked);
+        done();
+      };
+      video.addEventListener("seeked", onSeeked);
+      try {
+        video.currentTime = t;
+      } catch {
+        void video
+          .play()
+          .then(() => {
+            video.pause();
+            done();
+          })
+          .catch(() => done());
+      }
+    };
+    video.src = url;
+    video.load();
+  });
 }
 
 function probeVideoSize(file: File): Promise<{ w: number; h: number }> {
