@@ -6,7 +6,6 @@ import {
   getFFmpeg,
   getLastFfmpegLog,
   inputFileName,
-  resetFFmpeg,
   toBlob,
 } from "./ffmpeg-client";
 
@@ -16,16 +15,7 @@ async function execOrThrow(
   ffmpeg: Awaited<ReturnType<typeof getFFmpeg>>,
   args: string[],
 ) {
-  let code: number | undefined;
-  try {
-    code = await ffmpeg.exec(args);
-  } catch (e) {
-    const detail =
-      e instanceof Error ? e.message : typeof e === "string" ? e : "abort";
-    throw new Error(
-      `فشل FFmpeg (${detail})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
-    );
-  }
+  const code = await ffmpeg.exec(args);
   if (typeof code === "number" && code !== 0) {
     throw new Error(
       `فشل FFmpeg (رمز ${code})${getLastFfmpegLog() ? `: ${getLastFfmpegLog()}` : ""}`,
@@ -729,9 +719,14 @@ export async function addTextToVideo(
   await addImageToVideo(video, overlay, onProgress);
 }
 
+function evenInt(n: number) {
+  const v = Math.max(2, Math.round(n));
+  return v % 2 === 0 ? v : v + 1;
+}
+
 /**
- * إزالة علامة مائية بشكل غير مرئي تقريباً:
- * رقعة مستنسخة/ملونة بحواف شفافة تدريجية (feather) — بدون مربع صلب أو boxblur.
+ * إزالة شعار بتغطية ناعمة من المنطقة المحيطة (أفضل بكثير من delogo).
+ * ينسخ محيط الشعار، يموّهه بقوة، ثم يغطي الشعار بحواف أنعم.
  */
 export async function removeLogo(
   file: File,
@@ -748,47 +743,70 @@ export async function removeLogo(
   const { w: vw, h: vh } = await probeVideoSize(file);
   if (!vw || !vh) throw new Error("تعذّر قراءة أبعاد الفيديو");
 
-  const cleaned = boxes.map((raw) => clampLogoBox(raw, vw, vh));
-  const frame = await grabVideoFrame(file);
+  const chains: string[] = [];
+  boxes.forEach((raw, i) => {
+    let x = Math.max(0, Math.min(vw - 4, Math.round(raw.x)));
+    let y = Math.max(0, Math.min(vh - 4, Math.round(raw.y)));
+    let w = evenInt(Math.max(8, Math.min(vw - x, Math.round(raw.w))));
+    let h = evenInt(Math.max(8, Math.min(vh - y, Math.round(raw.h))));
+    if (x + w >= vw) w = evenInt(Math.max(8, vw - x - 2));
+    if (y + h >= vh) h = evenInt(Math.max(8, vh - y - 2));
 
-  const patches: Array<{ x: number; y: number; name: string; bytes: Uint8Array }> =
-    [];
-  for (let i = 0; i < cleaned.length; i++) {
-    const box = cleaned[i];
-    const feather = Math.max(
-      6,
-      Math.min(18, Math.round(Math.min(box.w, box.h) * 0.35)),
+    // منطقة أوسع حول الشعار لأخذ ألوان الخلفية الحقيقية
+    const pad = evenInt(Math.max(20, Math.round(Math.min(w, h) * 0.9)));
+    let cx = Math.max(0, x - pad);
+    let cy = Math.max(0, y - pad);
+    let cw = evenInt(Math.min(vw - cx, w + 2 * pad));
+    let ch = evenInt(Math.min(vh - cy, h + 2 * pad));
+    if (cx + cw > vw) cw = evenInt(vw - cx);
+    if (cy + ch > vh) ch = evenInt(vh - cy);
+
+    const ox = Math.max(0, Math.min(cw - w, x - cx));
+    const oy = Math.max(0, Math.min(ch - h, y - cy));
+    // تمويه قوي من المحيط (ليس delogo الرمادي)
+    const blur = Math.max(14, Math.min(56, Math.round(Math.min(w, h) * 0.65)));
+    const blurLuma = Math.max(3, Math.floor(blur / 2));
+
+    // طبقة أوسع قليلاً لدمج الحواف مع الخلفية
+    const feather = evenInt(Math.max(8, Math.round(Math.min(w, h) * 0.18)));
+    const fx = Math.max(0, x - feather);
+    const fy = Math.max(0, y - feather);
+    const fw = evenInt(Math.min(vw - fx, w + 2 * feather));
+    const fh = evenInt(Math.min(vh - fy, h + 2 * feather));
+    const fox = Math.max(0, Math.min(cw - fw, fx - cx));
+    const foy = Math.max(0, Math.min(ch - fh, fy - cy));
+    const softBlur = Math.max(8, Math.floor(blur * 0.4));
+    const softLuma = Math.max(2, Math.floor(blurLuma * 0.4));
+
+    const src = i === 0 ? "[0:v]" : `[v${i}]`;
+    const dst = i === boxes.length - 1 ? "[vout]" : `[v${i + 1}]`;
+
+    // 1) تمويه المحيط → طبقة ريش أوسع
+    // 2) تغطية مركز الشعار بتمويه أقوى من نفس المحيط
+    chains.push(
+      `${src}split=2[base${i}][nb${i}];` +
+        `[nb${i}]crop=${cw}:${ch}:${cx}:${cy},boxblur=${blur}:${blurLuma}[blur${i}];` +
+        `[blur${i}]split=2[bcore${i}][bedge${i}];` +
+        `[bedge${i}]crop=${fw}:${fh}:${fox}:${foy},boxblur=${softBlur}:${softLuma}[edge${i}];` +
+        `[base${i}][edge${i}]overlay=${fx}:${fy}[soft${i}];` +
+        `[bcore${i}]crop=${w}:${h}:${ox}:${oy}[core${i}];` +
+        `[soft${i}][core${i}]overlay=${x}:${y}${dst}`,
     );
-    const built = await buildFeatheredPatch(frame, box, vw, vh, feather);
-    const name = `patch${i}.png`;
-    patches.push({ ...built, name });
-  }
+  });
+
+  const filterComplex = `${chains.join("")};[vout]format=yuv420p[outv]`;
 
   const ffmpeg = await getFFmpeg(onProgress);
   const input = inputFileName(file, "mp4");
   const output = "output.mp4";
   await ffmpeg.writeFile(input, await fetchFile(file));
-  for (const p of patches) {
-    await ffmpeg.writeFile(p.name, p.bytes);
-  }
-
-  // [0]=video, [1..n]=png patches with alpha
-  let filter = "";
-  patches.forEach((p, i) => {
-    const src = i === 0 ? "[0:v]" : `[v${i}]`;
-    const dst = i === patches.length - 1 ? "[outv]" : `[v${i + 1}]`;
-    filter += `${src}[${i + 1}:v]overlay=${p.x}:${p.y}:format=auto${dst};`;
-  });
-  filter += `[outv]setsar=1,format=yuv420p[vout]`;
-
-  const args = [
+  await execOrThrow(ffmpeg, [
     "-i",
     input,
-    ...patches.flatMap((p) => ["-i", p.name]),
     "-filter_complex",
-    filter,
+    filterComplex,
     "-map",
-    "[vout]",
+    "[outv]",
     "-map",
     "0:a?",
     "-c:v",
@@ -796,354 +814,24 @@ export async function removeLogo(
     "-preset",
     "ultrafast",
     "-crf",
-    "17",
-    "-pix_fmt",
-    "yuv420p",
+    "22",
     "-c:a",
     "copy",
     "-movflags",
     "+faststart",
     output,
-  ];
-
-  let active = ffmpeg;
-  try {
-    await execOrThrow(active, args);
-  } catch (firstErr) {
-    await resetFFmpeg();
-    active = await getFFmpeg(onProgress);
-    await active.writeFile(input, await fetchFile(file));
-    for (const p of patches) {
-      await active.writeFile(p.name, p.bytes);
-    }
-    try {
-      await execOrThrow(active, args);
-    } catch {
-      throw firstErr instanceof Error
-        ? firstErr
-        : new Error("تعذّر حذف العلامة المائية من الفيديو");
-    }
-  }
-
-  const data = await active.readFile(output);
+  ]);
+  const data = await ffmpeg.readFile(output);
   await downloadBlob(
     toBlob(data, "video/mp4"),
-    `${basename(file.name)}-no-watermark.mp4`,
+    `${basename(file.name)}-delogo.mp4`,
   );
   try {
-    await active.deleteFile(input);
-    await active.deleteFile(output);
-    for (const p of patches) await active.deleteFile(p.name);
+    await ffmpeg.deleteFile(input);
+    await ffmpeg.deleteFile(output);
   } catch {
     /* ignore */
   }
-}
-
-function clampLogoBox(
-  raw: { x: number; y: number; w: number; h: number },
-  vw: number,
-  vh: number,
-) {
-  let x = Math.round(raw.x);
-  let y = Math.round(raw.y);
-  let w = Math.round(raw.w);
-  let h = Math.round(raw.h);
-  // Tight box — avoid eating nearby subject pixels.
-  const inset = 0;
-  x += inset;
-  y += inset;
-  w = Math.max(4, w - inset * 2);
-  h = Math.max(4, h - inset * 2);
-  const margin = 1;
-  x = Math.max(margin, Math.min(vw - margin - 4, x));
-  y = Math.max(margin, Math.min(vh - margin - 4, y));
-  w = Math.max(4, Math.min(vw - x - margin, w));
-  h = Math.max(4, Math.min(vh - y - margin, h));
-  return { x, y, w, h };
-}
-
-async function buildFeatheredPatch(
-  frame: ImageData,
-  box: { x: number; y: number; w: number; h: number },
-  vw: number,
-  vh: number,
-  feather: number,
-): Promise<{ x: number; y: number; bytes: Uint8Array }> {
-  const pad = feather;
-  const ox = Math.max(0, box.x - pad);
-  const oy = Math.max(0, box.y - pad);
-  const ow = Math.min(vw - ox, box.w + 2 * pad);
-  const oh = Math.min(vh - oy, box.h + 2 * pad);
-
-  // Prefer cloning from the cleanest neighboring side; else solid median color.
-  const clone = pickCloneSource(frame, box, vw, vh);
-  const color = pickBackgroundColor(frame, box, vw, vh);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = ow;
-  canvas.height = oh;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("تعذّر إنشاء رقعة التنظيف");
-
-  if (clone) {
-    // Draw cloned region aligned so clone source maps onto the logo box.
-    const scaleX = frame.width / vw;
-    const scaleY = frame.height / vh;
-    const sx = clone.sx * scaleX;
-    const sy = clone.sy * scaleY;
-    const sw = box.w * scaleX;
-    const sh = box.h * scaleY;
-    // Fill whole patch with bg color first (for feather margins).
-    ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
-    ctx.fillRect(0, 0, ow, oh);
-    // Place clone over the inner logo rect.
-    const dx = box.x - ox;
-    const dy = box.y - oy;
-    ctx.drawImage(
-      imageDataToCanvas(frame),
-      sx,
-      sy,
-      sw,
-      sh,
-      dx,
-      dy,
-      box.w,
-      box.h,
-    );
-  } else {
-    ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
-    ctx.fillRect(0, 0, ow, oh);
-  }
-
-  // Soft alpha: opaque over the logo box, fade out across feather band.
-  const img = ctx.getImageData(0, 0, ow, oh);
-  const data = img.data;
-  const innerX0 = box.x - ox;
-  const innerY0 = box.y - oy;
-  const innerX1 = innerX0 + box.w;
-  const innerY1 = innerY0 + box.h;
-  for (let y = 0; y < oh; y++) {
-    for (let x = 0; x < ow; x++) {
-      const dx = x < innerX0 ? innerX0 - x : x >= innerX1 ? x - (innerX1 - 1) : 0;
-      const dy = y < innerY0 ? innerY0 - y : y >= innerY1 ? y - (innerY1 - 1) : 0;
-      const dist = Math.max(dx, dy);
-      let a = 1;
-      if (dist > 0) {
-        // smoothstep fade
-        const t = Math.min(1, dist / pad);
-        a = 1 - (t * t * (3 - 2 * t));
-      }
-      data[(y * ow + x) * 4 + 3] = Math.round(Math.max(0, Math.min(1, a)) * 255);
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("فشل إنشاء رقعة PNG"))),
-      "image/png",
-    );
-  });
-  const buf = new Uint8Array(await blob.arrayBuffer());
-  return { x: ox, y: oy, bytes: buf };
-}
-
-function imageDataToCanvas(imageData: ImageData) {
-  const c = document.createElement("canvas");
-  c.width = imageData.width;
-  c.height = imageData.height;
-  const ctx = c.getContext("2d");
-  if (!ctx) throw new Error("canvas");
-  ctx.putImageData(imageData, 0, 0);
-  return c;
-}
-
-function pickBackgroundColor(
-  frame: ImageData,
-  box: { x: number; y: number; w: number; h: number },
-  vw: number,
-  vh: number,
-): [number, number, number] {
-  // Sample farther from the logo (12–28px) to avoid glow / shoe contamination.
-  const bands = [12, 18, 28];
-  let best: { variance: number; median: [number, number, number] } | null = null;
-  for (const band of bands) {
-    for (const side of sideRects(box, vw, vh, band, 10)) {
-      const stats = sampleRectStats(frame, side.x, side.y, side.w, side.h, vw, vh);
-      if (stats.samples.length < 10) continue;
-      if (!best || stats.variance < best.variance) {
-        best = { variance: stats.variance, median: stats.median };
-      }
-    }
-  }
-  return best?.median || [0, 0, 0];
-}
-
-function pickCloneSource(
-  frame: ImageData,
-  box: { x: number; y: number; w: number; h: number },
-  vw: number,
-  vh: number,
-): { sx: number; sy: number } | null {
-  const candidates: Array<{ sx: number; sy: number; score: number }> = [];
-  const offsets: Array<[number, number]> = [
-    [-box.w - 4, 0],
-    [box.w + 4, 0],
-    [0, -box.h - 4],
-    [0, box.h + 4],
-    [-Math.round(box.w * 0.6), 0],
-    [Math.round(box.w * 0.6), 0],
-    [0, Math.round(box.h * 0.6)],
-    [0, -Math.round(box.h * 0.6)],
-  ];
-  for (const [dx, dy] of offsets) {
-    const sx = box.x + dx;
-    const sy = box.y + dy;
-    if (sx < 0 || sy < 0 || sx + box.w > vw || sy + box.h > vh) continue;
-    const stats = sampleRectStats(frame, sx, sy, box.w, box.h, vw, vh);
-    if (stats.samples.length < 10) continue;
-    candidates.push({ sx, sy, score: stats.variance });
-  }
-  candidates.sort((a, b) => a.score - b.score);
-  // Only clone if the source looks fairly uniform (floor/bg), otherwise solid fill+feather.
-  if (candidates[0] && candidates[0].score < 48) return candidates[0];
-  return null;
-}
-
-function sideRects(
-  box: { x: number; y: number; w: number; h: number },
-  vw: number,
-  vh: number,
-  gap: number,
-  thickness: number,
-) {
-  return [
-    { x: box.x, y: box.y - gap - thickness, w: box.w, h: thickness },
-    { x: box.x, y: box.y + box.h + gap, w: box.w, h: thickness },
-    { x: box.x - gap - thickness, y: box.y, w: thickness, h: box.h },
-    { x: box.x + box.w + gap, y: box.y, w: thickness, h: box.h },
-  ].map((r) => ({
-    x: Math.max(0, Math.min(vw - 1, r.x)),
-    y: Math.max(0, Math.min(vh - 1, r.y)),
-    w: Math.max(1, Math.min(vw - Math.max(0, r.x), r.w)),
-    h: Math.max(1, Math.min(vh - Math.max(0, r.y), r.h)),
-  }));
-}
-
-function sampleRectStats(
-  imageData: ImageData,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  vw: number,
-  vh: number,
-) {
-  const samples: Array<[number, number, number]> = [];
-  const { data, width } = imageData;
-  const step = Math.max(1, Math.floor(Math.min(w, h) / 14));
-  for (let py = y; py < y + h; py += step) {
-    for (let px = x; px < x + w; px += step) {
-      if (px < 0 || py < 0 || px >= vw || py >= vh) continue;
-      const sx = Math.min(width - 1, Math.round((px / vw) * width));
-      const sy = Math.min(
-        imageData.height - 1,
-        Math.round((py / vh) * imageData.height),
-      );
-      const i = (sy * width + sx) * 4;
-      samples.push([data[i], data[i + 1], data[i + 2]]);
-    }
-  }
-  const median = medianRgb(samples);
-  return { samples, median, variance: colorVariance(samples, median) };
-}
-
-function medianRgb(samples: Array<[number, number, number]>): [number, number, number] {
-  if (!samples.length) return [0, 0, 0];
-  const mid = Math.floor(samples.length / 2);
-  const r = [...samples].map((s) => s[0]).sort((a, b) => a - b)[mid];
-  const g = [...samples].map((s) => s[1]).sort((a, b) => a - b)[mid];
-  const b = [...samples].map((s) => s[2]).sort((a, b) => a - b)[mid];
-  return [r, g, b];
-}
-
-function colorVariance(
-  samples: Array<[number, number, number]>,
-  mean: [number, number, number],
-) {
-  if (!samples.length) return 999;
-  let acc = 0;
-  for (const s of samples) {
-    const dr = s[0] - mean[0];
-    const dg = s[1] - mean[1];
-    const db = s[2] - mean[2];
-    acc += dr * dr + dg * dg + db * db;
-  }
-  return Math.sqrt(acc / samples.length);
-}
-
-function grabVideoFrame(file: File): Promise<ImageData> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.preload = "auto";
-    video.muted = true;
-    video.playsInline = true;
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("تعذّر قراءة إطار الفيديو"));
-    };
-    video.onloadedmetadata = () => {
-      const t =
-        Number.isFinite(video.duration) && video.duration > 0.2
-          ? Math.min(0.12, video.duration * 0.02)
-          : 0.001;
-      const done = () => {
-        const w = video.videoWidth || 0;
-        const h = video.videoHeight || 0;
-        if (!w || !h) {
-          URL.revokeObjectURL(url);
-          reject(new Error("أبعاد الفيديو غير صالحة"));
-          return;
-        }
-        const maxW = Math.min(w, 1280);
-        const scale = Math.min(1, maxW / w);
-        const cw = Math.max(2, Math.round(w * scale));
-        const ch = Math.max(2, Math.round(h * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = cw;
-        canvas.height = ch;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) {
-          URL.revokeObjectURL(url);
-          reject(new Error("تعذّر إنشاء كانفاس المعاينة"));
-          return;
-        }
-        ctx.drawImage(video, 0, 0, cw, ch);
-        const data = ctx.getImageData(0, 0, cw, ch);
-        URL.revokeObjectURL(url);
-        resolve(data);
-      };
-      const onSeeked = () => {
-        video.removeEventListener("seeked", onSeeked);
-        done();
-      };
-      video.addEventListener("seeked", onSeeked);
-      try {
-        video.currentTime = t;
-      } catch {
-        void video
-          .play()
-          .then(() => {
-            video.pause();
-            done();
-          })
-          .catch(() => done());
-      }
-    };
-    video.src = url;
-    video.load();
-  });
 }
 
 function probeVideoSize(file: File): Promise<{ w: number; h: number }> {

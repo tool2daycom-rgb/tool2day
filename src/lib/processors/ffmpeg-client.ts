@@ -133,20 +133,15 @@ export function formatProcessError(err: unknown) {
       : typeof err === "string"
         ? err
         : "فشلت المعالجة";
-  const log = getLastFfmpegLog();
-  const combined = `${msg}\n${log || ""}`;
-
-  if (/abort|out of memory|oom|memory access/i.test(combined)) {
-    return "فشلت معالجة الفيديو (نفاد ذاكرة أو انقطاع) — جرّب فيديو أقصر أو أغلق تبويبات أخرى ثم أعد المحاولة";
-  }
-  if (/delogo|Invalid.*logo|outside/i.test(combined)) {
-    return "تعذّر حذف العلامة المائية — ارسم مربعاً أصغر داخل الإطار وبعيداً قليلاً عن الحافة ثم أعد المحاولة";
-  }
-  if (/subtitle|ass|drawtext|font/i.test(combined)) {
+  if (/abort/i.test(msg)) {
     return "تعذّر دمج الترجمة في الفيديو — أعد المحاولة أو اختر حجم خط أصغر";
   }
-  if (log && !msg.includes(log.slice(0, 40))) {
-    return `${msg} — ${log}`;
+  const log = getLastFfmpegLog();
+  if (log && /abort/i.test(log)) {
+    return "تعذّر دمج الترجمة في الفيديو — أعد المحاولة أو اختر حجم خط أصغر";
+  }
+  if (log && !msg.includes(log)) {
+    return `${msg}${log ? ` — ${log}` : ""}`;
   }
   return msg || "فشلت المعالجة";
 }

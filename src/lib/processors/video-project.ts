@@ -315,14 +315,11 @@ export async function exportVideoProject(
     );
   }
   if (removeLogo) {
-    const margin = 2;
-    let lx = Math.max(margin, Math.round(removeLogo.x) + 1);
-    let ly = Math.max(margin, Math.round(removeLogo.y) + 1);
-    let lw = Math.max(4, Math.round(removeLogo.w) - 2);
-    let lh = Math.max(4, Math.round(removeLogo.h) - 2);
-    prep.push(
-      `delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}:show=0`,
-    );
+    const lx = Math.max(0, Math.round(removeLogo.x));
+    const ly = Math.max(0, Math.round(removeLogo.y));
+    const lw = Math.max(8, Math.round(removeLogo.w));
+    const lh = Math.max(8, Math.round(removeLogo.h));
+    prep.push(`delogo=x=${lx}:y=${ly}:w=${lw}:h=${lh}`);
   }
   if (chromaKey?.enabled) {
     const hex = (chromaKey.color || "#00ff00").replace("#", "");
