@@ -6,6 +6,14 @@ export const metadata: Metadata = {
   title: "حذف بيانات المستخدم",
   description: "كيفية طلب حذف بياناتك من Tool2Day",
   alternates: sitePageAlternates("/data-deletion"),
+  openGraph: {
+    title: "حذف بيانات المستخدم | Tool2Day",
+    description: "تعليمات طلب حذف بيانات حسابك من Tool2Day.",
+    url: "https://www.tool2day.com/data-deletion",
+    siteName: "Tool2Day",
+    type: "website",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function DataDeletionPage() {

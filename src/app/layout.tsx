@@ -4,7 +4,7 @@ import { Cairo, Syne } from "next/font/google";
 import { CookieConsent } from "@/components/cookie-consent";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RatingGateModal } from "@/components/rating-gate-modal";
-import { getAllSiteKeywords, siteSeo } from "@/lib/seo-keywords";
+import { brandKeywords, siteSeo } from "@/lib/seo-keywords";
 import "./globals.css";
 
 const cairo = Cairo({
@@ -25,7 +25,10 @@ export const metadata: Metadata = {
     template: "%s | Tool2Day",
   },
   description: siteSeo.description,
-  keywords: getAllSiteKeywords(),
+  // Keep site-wide keywords short. Dumping every tool/locale keyword here
+  // bloated every HTML page (~300KB+) and hurt crawl/indexing for thin pages
+  // like /contact (GSC: Discovered – currently not indexed).
+  keywords: [...brandKeywords],
   metadataBase: new URL("https://www.tool2day.com"),
   // Do NOT set a site-wide canonical here — child pages inherit it and
   // Google treats them as "Alternate page with proper canonical tag".

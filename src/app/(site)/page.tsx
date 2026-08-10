@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { HomeDirectory } from "@/components/home-directory";
 import { JsonLd } from "@/components/json-ld";
 import { SiteRatingCard } from "@/components/star-rating";
-import { getAllSiteKeywords, siteSeo } from "@/lib/seo-keywords";
+import { brandKeywords, siteSeo } from "@/lib/seo-keywords";
 import {
   buildHomeJsonLd,
   buildLanguageAlternateMap,
@@ -12,7 +12,7 @@ import {
 export const metadata: Metadata = {
   title: siteSeo.title,
   description: siteSeo.description,
-  keywords: getAllSiteKeywords(),
+  keywords: [...brandKeywords],
   alternates: {
     canonical: "https://www.tool2day.com",
     languages: buildLanguageAlternateMap(""),
