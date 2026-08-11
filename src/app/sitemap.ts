@@ -1,11 +1,11 @@
 import type { MetadataRoute } from "next";
-import { tools } from "@/lib/tools";
+import { getPublicTools } from "@/lib/tools";
 
 const BASE = "https://www.tool2day.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
-  const toolEntries: MetadataRoute.Sitemap = tools.map((tool) => ({
+  const toolEntries: MetadataRoute.Sitemap = getPublicTools().map((tool) => ({
     url: `${BASE}/tools/${tool.slug}`,
     lastModified: now,
     changeFrequency: "weekly",

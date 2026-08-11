@@ -85,6 +85,8 @@ export type Tool = {
   category: ToolCategory;
   accept: string;
   icon: LucideIcon;
+  /** Hidden from nav, home, sitemap, and direct URLs (404). */
+  hidden?: boolean;
 };
 
 export const categoryMeta: Record<
@@ -234,6 +236,7 @@ export const tools: Tool[] = [
     category: "social-dev",
     accept: "text/plain",
     icon: ImageDown,
+    hidden: true,
   },
   {
     slug: "hashtag-generator",
@@ -453,6 +456,7 @@ export const tools: Tool[] = [
     category: "video",
     accept: "text/plain",
     icon: Download,
+    hidden: true,
   },
   {
     slug: "video-to-text",
@@ -510,6 +514,7 @@ export const tools: Tool[] = [
     category: "video",
     accept: "video/*",
     icon: WandSparkles,
+    hidden: true,
   },
   {
     slug: "crop-video",
@@ -886,6 +891,7 @@ export const tools: Tool[] = [
     category: "utilities",
     accept: "image/*",
     icon: WandSparkles,
+    hidden: true,
   },
   {
     slug: "qr-generator",
@@ -932,8 +938,16 @@ export function getTool(slug: string) {
   return tools.find((tool) => tool.slug === slug);
 }
 
+export function isToolHidden(slug: string) {
+  return Boolean(getTool(slug)?.hidden);
+}
+
+export function getPublicTools() {
+  return tools.filter((tool) => !tool.hidden);
+}
+
 export function getToolsByCategory(category: ToolCategory) {
-  return tools.filter((tool) => tool.category === category);
+  return tools.filter((tool) => tool.category === category && !tool.hidden);
 }
 
 /** Kept for older imports */

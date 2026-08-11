@@ -38,7 +38,7 @@ type Props = {
 
 export function generateStaticParams() {
   return tools
-    .filter((tool) => tool.slug !== "video-editor")
+    .filter((tool) => tool.slug !== "video-editor" && !tool.hidden)
     .map((tool) => ({ slug: tool.slug }));
 }
 
@@ -59,7 +59,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
   const tool = getTool(slug);
-  if (!tool) return {};
+  if (!tool || tool.hidden) {
+    return { robots: { index: false, follow: false } };
+  }
   const locale = await resolveRequestLocale();
   const displayTitle = getToolTitle(tool.slug, locale, tool.title);
   const seo = getToolSeoContent(tool, { locale, title: displayTitle });
@@ -104,7 +106,7 @@ export default async function ToolPage({ params }: Props) {
   }
 
   const tool = getTool(slug);
-  if (!tool) notFound();
+  if (!tool || tool.hidden) notFound();
 
   const locale = await resolveRequestLocale();
   const displayTitle = getToolTitle(tool.slug, locale, tool.title);

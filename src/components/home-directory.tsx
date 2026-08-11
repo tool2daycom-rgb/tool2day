@@ -39,7 +39,7 @@ function useDailyTools(): { tools: Tool[]; recentSlugs: Set<string> } {
     for (const slug of recentSlugs) {
       if (permanentSlugs.has(slug)) continue;
       const tool = getTool(slug);
-      if (tool) extras.push(tool);
+      if (tool && !tool.hidden) extras.push(tool);
     }
     return [...permanent, ...extras];
   }, [permanent, permanentSlugs, recentSlugs]);

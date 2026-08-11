@@ -424,55 +424,6 @@ const sections: FaqSection[] = [
         ),
       },
       {
-        id: "remove-logo",
-        question: "كيف أزيل شعاراً أو علامة مائية من فيديو؟",
-        answer: (
-          <>
-            <p>
-              استخدم أداة{" "}
-              <Link
-                href="/tools/remove-logo"
-                className="font-medium text-[#2563eb] hover:underline"
-              >
-                إزالة الشعار
-              </Link>{" "}
-              لطمس الشعارات أو العلامات المائية. تعمل بشكل أفضل على سطح المكتب؛ دعم الجوال
-              محدود حالياً.
-            </p>
-            <p className="mt-3 font-semibold">الخطوات:</p>
-            <ol className="mt-2 list-decimal space-y-2 ps-5">
-              <li>
-                افتح{" "}
-                <Link
-                  href="/tools/remove-logo"
-                  className="font-medium text-[#2563eb] hover:underline"
-                >
-                  إزالة الشعار من الفيديو
-                </Link>
-                .
-              </li>
-              <li>
-                اضغط <strong>اختيار ملف</strong> وارفع الفيديو.
-              </li>
-              <li>ارسم تحديداً فوق الشعار (يمكن تحديد أكثر من منطقة).</li>
-              <li>
-                اضغط <strong>تصدير</strong> عند الانتهاء.
-              </li>
-              <li>اختر الدقة والصيغة ثم نزّل النتيجة.</li>
-            </ol>
-          </>
-        ),
-      },
-      {
-        id: "remove-logo-mobile",
-        question: "هل تعمل أداة إزالة الشعار على الجوال؟",
-        answer: (
-          <p>
-            ليس بالكامل بعد — الأفضل على الكمبيوتر. نعمل على تحسين تجربة الجوال.
-          </p>
-        ),
-      },
-      {
         id: "mic-camera",
         question: 'كيف أفعّل الميكروفون أو الكاميرا بعد الضغط على "حظر"؟',
         answer: (

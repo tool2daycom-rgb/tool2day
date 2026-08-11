@@ -665,7 +665,9 @@ export function buildHomeJsonLd() {
       url: "https://www.tool2day.com",
       logo: "https://www.tool2day.com/icon-512.png",
     },
-    hasPart: tools.map((tool) => {
+    hasPart: tools
+      .filter((tool) => !tool.hidden)
+      .map((tool) => {
       const names = getToolTitlesAllLocales(tool.slug, tool.title);
       return {
         "@type": "WebApplication",

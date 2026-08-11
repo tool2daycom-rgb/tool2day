@@ -93,7 +93,7 @@ export function SiteHeader() {
     for (const slug of recentSlugs) {
       if (seen.has(slug)) continue;
       const tool = getTool(slug);
-      if (tool) {
+      if (tool && !tool.hidden) {
         seen.add(slug);
         extras.push(tool);
       }
