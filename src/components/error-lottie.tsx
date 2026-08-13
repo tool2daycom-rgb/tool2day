@@ -8,20 +8,14 @@ const LOTTIE_SRC =
 const SCRIPT_SRC =
   "https://unpkg.com/@lottiefiles/dotlottie-wc@0.9.4/dist/dotlottie-wc.js";
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      "dotlottie-wc": React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & {
-          src?: string;
-          autoplay?: boolean | string;
-          loop?: boolean | string;
-        },
-        HTMLElement
-      >;
-    }
-  }
-}
+type DotLottieWcProps = React.HTMLAttributes<HTMLElement> & {
+  src?: string;
+  autoplay?: boolean | string;
+  loop?: boolean | string;
+};
+
+const DotLottieWc =
+  "dotlottie-wc" as unknown as React.ElementType<DotLottieWcProps>;
 
 export function ErrorLottie({
   className = "",
@@ -33,11 +27,12 @@ export function ErrorLottie({
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (typeof customElements === "undefined") return;
     if (customElements.get("dotlottie-wc")) {
       setReady(true);
       return;
     }
-    customElements
+    void customElements
       .whenDefined("dotlottie-wc")
       .then(() => setReady(true))
       .catch(() => setReady(true));
@@ -56,11 +51,11 @@ export function ErrorLottie({
         onLoad={() => setReady(true)}
       />
       {ready ? (
-        <dotlottie-wc
+        <DotLottieWc
           src={LOTTIE_SRC}
           style={{ width: `${size}px`, height: `${size}px` }}
-          autoplay
-          loop
+          autoplay=""
+          loop=""
         />
       ) : (
         <div className="h-full w-full animate-pulse rounded-full bg-[#dfeee6]" />
