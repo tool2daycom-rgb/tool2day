@@ -117,6 +117,30 @@ export default function RootLayout({
               analytics_storage: 'denied',
               wait_for_update: 500
             });
+            try {
+              var raw = localStorage.getItem('tool2day-cookie-consent');
+              if (raw) {
+                var c = JSON.parse(raw);
+                gtag('consent', 'update', {
+                  analytics_storage: c.analytics ? 'granted' : 'denied',
+                  ad_storage: c.advertising ? 'granted' : 'denied',
+                  ad_user_data: c.advertising ? 'granted' : 'denied',
+                  ad_personalization: c.advertising ? 'granted' : 'denied'
+                });
+              }
+            } catch (e) {}
+          `}
+        </Script>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-44562PZWG4"
+          strategy="afterInteractive"
+        />
+        <Script id="ga-gtag" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-44562PZWG4');
           `}
         </Script>
         <Script id="locale-boot" strategy="beforeInteractive">

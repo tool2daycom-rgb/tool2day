@@ -1,3 +1,5 @@
+export const GA_MEASUREMENT_ID = "G-44562PZWG4";
+
 export const COOKIE_CONSENT_KEY = "tool2day-cookie-consent";
 export const COOKIE_SETTINGS_EVENT = "tool2day:cookie-settings";
 
