@@ -179,7 +179,10 @@ export async function wordToPdf(file: File) {
     doc.text(line, 48, y);
     y += 16;
   }
-  doc.save(`${basename(file.name)}.pdf`);
+  await downloadBlob(
+    doc.output("blob"),
+    `${basename(file.name)}.pdf`,
+  );
 }
 
 export async function excelToPdf(file: File) {
@@ -202,7 +205,10 @@ export async function excelToPdf(file: File) {
       y += 12;
     }
   }
-  doc.save(`${basename(file.name)}.pdf`);
+  await downloadBlob(
+    doc.output("blob"),
+    `${basename(file.name)}.pdf`,
+  );
 }
 
 export async function pptToPdf(file: File) {
@@ -227,7 +233,10 @@ export async function pptToPdf(file: File) {
       y += 18;
     }
   }
-  doc.save(`${basename(file.name)}.pdf`);
+  await downloadBlob(
+    doc.output("blob"),
+    `${basename(file.name)}.pdf`,
+  );
 }
 
 export async function documentToPdf(file: File) {
@@ -260,7 +269,10 @@ export async function documentToPdf(file: File) {
     doc.text(line, 48, y);
     y += 14;
   }
-  doc.save(`${basename(file.name)}.pdf`);
+  await downloadBlob(
+    doc.output("blob"),
+    `${basename(file.name)}.pdf`,
+  );
 }
 
 // re-export rotation helper already in pdf.ts via degrees usage check

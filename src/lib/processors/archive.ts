@@ -67,7 +67,10 @@ export async function ebookToPdfStub(file: File) {
       doc.text(line, 48, y);
       y += 14;
     }
-    doc.save(`${basename(file.name)}.pdf`);
+    await downloadBlob(
+      doc.output("blob"),
+      `${basename(file.name)}.pdf`,
+    );
     return;
   }
   throw new Error("الصيغة غير مدعومة حالياً (EPUB/PDF)");

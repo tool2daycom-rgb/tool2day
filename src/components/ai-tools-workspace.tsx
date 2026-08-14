@@ -131,6 +131,18 @@ async function downloadBlob(blob: Blob, name: string) {
   await dl(blob, name);
 }
 
+async function safeDownload(
+  blob: Blob,
+  name: string,
+  setError: (msg: string | null) => void,
+) {
+  try {
+    await downloadBlob(blob, name);
+  } catch (e) {
+    setError(e instanceof Error ? e.message : "فشل التنزيل");
+  }
+}
+
 /* ─── OCR ─── */
 
 function OcrPanel({
@@ -261,9 +273,10 @@ function OcrPanel({
               type="button"
               className={btnGhost}
               onClick={() =>
-                void downloadBlob(
+                void safeDownload(
                   new Blob([text], { type: "text/plain;charset=utf-8" }),
                   "ocr-tool2day.txt",
+                  setError,
                 )
               }
             >
@@ -487,7 +500,7 @@ function RemoveBgPanel({
             className={btnPrimary}
             onClick={() =>
               resultBlob &&
-              void downloadBlob(resultBlob, "no-bg-tool2day.png")
+              void safeDownload(resultBlob, "no-bg-tool2day.png", setError)
             }
           >
             تنزيل PNG شفاف
@@ -580,7 +593,7 @@ function UpscalePanel({
             className={btnPrimary}
             onClick={() =>
               resultBlob &&
-              void downloadBlob(resultBlob, "upscale-4k-tool2day.jpg")
+              void safeDownload(resultBlob, "upscale-4k-tool2day.jpg", setError)
             }
           >
             تنزيل الصورة
@@ -813,7 +826,8 @@ function ErasePanel({
             type="button"
             className={btnPrimary}
             onClick={() =>
-              resultBlob && void downloadBlob(resultBlob, "erased-tool2day.png")
+              resultBlob &&
+              void safeDownload(resultBlob, "erased-tool2day.png", setError)
             }
           >
             تنزيل النتيجة

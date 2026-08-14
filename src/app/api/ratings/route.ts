@@ -170,6 +170,7 @@ async function listReviews(
           typeof row.display_name === "string" ? row.display_name : "",
         ) || "مستخدم";
       if (displayName.toLowerCase() === "ahmad king") return null;
+      if (displayName.toLowerCase() === "my best") return null;
       if (!comment || comment.length < 3) return null;
       const avatarUrl =
         sanitizeAvatarUrl(

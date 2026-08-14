@@ -437,14 +437,29 @@ function QrPanel({
             className="h-56 w-56 rounded-lg border border-[#eee] bg-white p-2"
           />
           <div className="flex flex-wrap gap-2">
-            <a
-              href={dataUrl}
-              download="tool2day-qr.png"
+            <button
+              type="button"
               className={btnPrimary}
-              onClick={() => beginToolUse(slug)}
+              onClick={() => {
+                beginToolUse(slug);
+                void (async () => {
+                  try {
+                    const res = await fetch(dataUrl);
+                    const blob = await res.blob();
+                    const { downloadBlob } = await import(
+                      "@/lib/processors/ffmpeg-client"
+                    );
+                    await downloadBlob(blob, "tool2day-qr.png");
+                  } catch (e) {
+                    setError(
+                      e instanceof Error ? e.message : "فشل تنزيل رمز QR",
+                    );
+                  }
+                })();
+              }}
             >
               تنزيل PNG
-            </a>
+            </button>
             <button
               type="button"
               className={btnGhost}
