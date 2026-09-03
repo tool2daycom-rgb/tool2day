@@ -29,6 +29,8 @@ type MediaItem = {
   size?: number | null;
   hasAudio?: boolean;
   hasVideo?: boolean;
+  itag?: number;
+  videoId?: string;
 };
 
 const PLATFORMS: { id: PlatformId; label: string; hint: string }[] = [
@@ -339,79 +341,83 @@ export function VideoDownloaderWorkspace({
     try {
       beginToolUse(slug);
 
+      const {
+        hasRatedCurrentUse,
+        openRatingGate,
+        getCurrentUseId,
+        beginToolUse: startUse,
+      } = await import("@/lib/ratings");
+      if (!getCurrentUseId(slug)) startUse(slug);
+      if (!hasRatedCurrentUse(slug)) {
+        const ok = await openRatingGate(slug);
+        if (!ok) throw new Error("يجب تقييم الأداة قبل التنزيل");
+      }
+
+      // YouTube video/audio: refresh URL then open (Vercel can't proxy googlevideo)
+      const ytId =
+        item.videoId ||
+        (item.source.includes("youtube")
+          ? extractYoutubeId(url) || undefined
+          : undefined);
+      if (
+        (item.type === "video" || item.type === "audio") &&
+        (ytId || /googlevideo\.com/i.test(item.url))
+      ) {
+        let direct = item.url;
+        if (ytId && item.itag) {
+          const q = new URLSearchParams({
+            v: ytId,
+            kind: item.type === "audio" ? "audio" : "video",
+            itag: String(item.itag),
+          });
+          if (item.quality) q.set("quality", item.quality);
+          const res = await fetch(`/api/youtube-download?${q}`);
+          const data = (await res.json()) as { url?: string; error?: string };
+          if (!res.ok || !data.url) {
+            throw new Error(data.error || "فشل تجهيز رابط الفيديو");
+          }
+          direct = data.url;
+        }
+        window.open(direct, "_blank", "noopener,noreferrer");
+        setStatus(
+          "فُتح الفيديو — من تبويب المتصفح: ملف ← حفظ، أو زر التنزيل في المشغّل",
+        );
+        return;
+      }
+
+      if (item.url.startsWith("/api/youtube-download")) {
+        const res = await fetch(item.url);
+        const data = (await res.json()) as { url?: string; error?: string };
+        if (!res.ok || !data.url) {
+          throw new Error(data.error || "فشل تجهيز رابط الفيديو");
+        }
+        window.open(data.url, "_blank", "noopener,noreferrer");
+        setStatus("فُتح الفيديو في تبويب جديد للتنزيل");
+        return;
+      }
+
       const href = item.url.startsWith("/")
         ? item.url
         : `/api/media-proxy?url=${encodeURIComponent(item.url)}`;
 
-      // YouTube streaming download (same-origin) — تقييم ثم تنزيل عبر المتصفح
-      if (item.url.startsWith("/api/youtube-download")) {
-        const {
-          hasRatedCurrentUse,
-          openRatingGate,
-          getCurrentUseId,
-          beginToolUse: startUse,
-        } = await import("@/lib/ratings");
-        if (!getCurrentUseId(slug)) startUse(slug);
-        if (!hasRatedCurrentUse(slug)) {
-          const ok = await openRatingGate(slug);
-          if (!ok) throw new Error("يجب تقييم الأداة قبل التنزيل");
-        }
-        // تنزيل أصلي عبر المتصفح (بدون تحميل الملف كاملاً في الذاكرة)
-        const a = document.createElement("a");
-        a.href = item.url;
-        a.rel = "noopener";
-        a.download = "";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setStatus("بدأ تنزيل الفيديو…");
-        return;
-      }
-
-      const isGoogleVideo = /googlevideo\.com/i.test(item.url);
-      const large = (item.size || 0) > 70 * 1024 * 1024;
-
-      if (isGoogleVideo && large) {
-        window.open(item.url, "_blank", "noopener,noreferrer");
-        setStatus("فُتح رابط التنزيل المباشر — احفظه من المتصفح");
-        return;
-      }
-
       const res = await fetch(href);
       if (!res.ok) {
-        const direct = await fetch(item.url).catch(() => null);
-        if (!direct?.ok) {
-          window.open(item.url, "_blank", "noopener,noreferrer");
-          setStatus("فُتح الرابط — احفظه من المتصفح إن لزم");
-          return;
-        }
-        const blob = await direct.blob();
-        const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
-        const ext =
-          item.container?.toLowerCase() ||
-          (blob.type.includes("png")
-            ? "png"
-            : blob.type.includes("webp")
-              ? "webp"
-              : blob.type.includes("mp4")
-                ? "mp4"
-                : blob.type.includes("webm")
-                  ? "webm"
-                  : item.type === "audio"
-                    ? "m4a"
-                    : "jpg");
-        const safe = (pageTitle || item.title || "tool2day-media")
-          .replace(/[^\w\u0600-\u06FF-]+/g, "-")
-          .slice(0, 40);
-        await downloadBlob(blob, `${safe}.${ext}`);
-        setStatus("تم التنزيل");
+        window.open(item.url, "_blank", "noopener,noreferrer");
+        setStatus("فُتح الرابط — احفظه من المتصفح إن لزم");
         return;
       }
       const blob = await res.blob();
       const ext =
         item.container?.toLowerCase() ||
-        item.url.split(".").pop()?.split("?")[0] ||
-        "bin";
+        (blob.type.includes("png")
+          ? "png"
+          : blob.type.includes("webp")
+            ? "webp"
+            : blob.type.includes("mp4")
+              ? "mp4"
+              : item.type === "audio"
+                ? "m4a"
+                : "jpg");
       const safe = (pageTitle || item.title || "tool2day-media")
         .replace(/[^\w\u0600-\u06FF-]+/g, "-")
         .slice(0, 40);

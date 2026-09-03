@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
+import dns from "node:dns";
 import { isIP } from "node:net";
+import { NextResponse } from "next/server";
+
+dns.setDefaultResultOrder("ipv4first");
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
