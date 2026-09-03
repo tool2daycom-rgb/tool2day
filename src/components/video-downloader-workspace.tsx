@@ -130,27 +130,55 @@ function typeLabel(item: MediaItem): string {
   return "ملف";
 }
 
-function platformMetaForKey(key: string): { label: string; icon?: string } {
+function platformMetaForKey(key: string): {
+  label: string;
+  icon?: string;
+  tone: string;
+} {
   const value = key.toLowerCase();
   if (value.includes("youtube")) {
-    return { label: "YouTube", icon: "/platform-icons/youtube.png" };
+    return {
+      label: "YouTube",
+      icon: "/platform-icons/youtube.png",
+      tone: "bg-[#fff1f2] text-[#b91c1c]",
+    };
   }
   if (value.includes("tiktok")) {
-    return { label: "TikTok", icon: "/platform-icons/tiktok.png" };
+    return {
+      label: "TikTok",
+      icon: "/platform-icons/tiktok.png",
+      tone: "bg-[#f4f4f5] text-[#18181b]",
+    };
   }
   if (value.includes("instagram")) {
-    return { label: "Instagram", icon: "/platform-icons/instagram.png" };
+    return {
+      label: "Instagram",
+      icon: "/platform-icons/instagram.png",
+      tone: "bg-[#fdf2f8] text-[#be185d]",
+    };
   }
   if (value.includes("facebook") || value.includes("fb")) {
-    return { label: "Facebook", icon: "/platform-icons/facebook.png" };
+    return {
+      label: "Facebook",
+      icon: "/platform-icons/facebook.png",
+      tone: "bg-[#eff6ff] text-[#1d4ed8]",
+    };
   }
   if (value.includes("pinterest") || value.includes("pin")) {
-    return { label: "Pinterest", icon: "/platform-icons/pinterest.png" };
+    return {
+      label: "Pinterest",
+      icon: "/platform-icons/pinterest.png",
+      tone: "bg-[#fff1f2] text-[#be123c]",
+    };
   }
   if (value.includes("google") || value.includes("drive")) {
-    return { label: "Google", icon: "/platform-icons/google.png" };
+    return {
+      label: "Google",
+      icon: "/platform-icons/google.png",
+      tone: "bg-[#f0fdf4] text-[#15803d]",
+    };
   }
-  return { label: "Web" };
+  return { label: "Web", tone: "bg-[#f5f5f5] text-[#555]" };
 }
 
 function platformMetaForItem(item: MediaItem) {
@@ -591,7 +619,9 @@ export function VideoDownloaderWorkspace({
                     {(() => {
                       const meta = platformMetaForItem(item);
                       return (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[10px] font-semibold text-[#555]">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.tone}`}
+                        >
                           {meta.icon ? (
                             <Image
                               src={meta.icon}
@@ -810,7 +840,9 @@ export function VideoDownloaderWorkspace({
                           className="h-4.5 w-4.5 rounded-sm object-contain"
                         />
                       ) : null}
-                      <span className="text-xs font-bold text-[#666]">
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-bold ${meta.tone}`}
+                      >
                         {meta.label}
                       </span>
                     </>
