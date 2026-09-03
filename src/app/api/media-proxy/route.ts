@@ -5,8 +5,6 @@ import { isIP } from "node:net";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const UA =
-  "Mozilla/5.0 (compatible; Tool2DayMediaBot/1.0; +https://www.tool2day.com)";
 const MAX_BYTES = 80 * 1024 * 1024; // 80MB
 
 function isPrivateIp(ip: string): boolean {
