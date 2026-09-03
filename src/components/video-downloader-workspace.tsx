@@ -479,13 +479,17 @@ export function VideoDownloaderWorkspace({
         /^https?:\/\//i.test(item.url) &&
         (item.type === "video" || item.type === "audio") &&
         (/googlevideo\.com/i.test(item.url) ||
+          /savenow\.to|loader\.to/i.test(item.url) ||
           /cobalt/i.test(item.source) ||
           /tunnel/i.test(item.url) ||
           /fbcdn\.net|cdninstagram|tiktokcdn|pinimg|twimg/i.test(item.url));
 
       if (
         (item.type === "video" || item.type === "audio") &&
-        (ytId || isDirectStream || item.source.startsWith("cobalt"))
+        (ytId ||
+          isDirectStream ||
+          item.source.startsWith("cobalt") ||
+          item.source === "loader.to")
       ) {
         let direct = item.url;
         if (
@@ -507,11 +511,17 @@ export function VideoDownloaderWorkspace({
           }
           direct = data.url;
         }
-        window.open(direct, "_blank", "noopener,noreferrer");
+        const a = document.createElement("a");
+        a.href = direct;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         setStatus(
           item.hasAudio === false
-            ? "فُتح الفيديو (قد يكون بدون صوت) — احفظه من المتصفح"
-            : "فُتح الفيديو مع الصوت — احفظه من تبويب المتصفح",
+            ? "جارٍ فتح رابط التنزيل المباشر للفيديو"
+            : "جارٍ فتح رابط التنزيل المباشر مع الصوت",
         );
         return;
       }
@@ -783,10 +793,20 @@ export function VideoDownloaderWorkspace({
           >
             <span className="inline-flex items-center gap-2">
               {busy ? (
-                <span
-                  className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-current"
-                  aria-hidden="true"
-                />
+                <>
+                  <Image
+                    src="/icon-192.png"
+                    alt=""
+                    width={26}
+                    height={26}
+                    className="h-6.5 w-6.5 rounded-lg object-contain"
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-current"
+                    aria-hidden="true"
+                  />
+                </>
               ) : null}
               {status}
             </span>
