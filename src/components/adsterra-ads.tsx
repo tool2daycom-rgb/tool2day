@@ -11,7 +11,6 @@ import {
 } from "@/lib/adsterra";
 
 const WAIT_MIN_MS = 10_000;
-const CANONICAL_HOST = "www.tool2day.com";
 
 declare global {
   interface Window {
@@ -93,27 +92,6 @@ export function AdsterraGlobalScripts() {
     return () => window.clearTimeout(t);
   }, []);
   return null;
-}
-
-/** Wrong-host notice when opening *.vercel.app */
-export function AdsterraHostGuard() {
-  const [show, setShow] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.location.hostname.includes("vercel.app")) setShow(true);
-  }, []);
-  if (!show) return null;
-  return (
-    <div className="z-[100] bg-[#7f1d1d] px-3 py-2 text-center text-sm font-bold text-white">
-      Adsterra لا يعمل على vercel.app — افتح{" "}
-      <a
-        className="underline"
-        href={`https://${CANONICAL_HOST}${typeof window !== "undefined" ? window.location.pathname : ""}`}
-      >
-        www.tool2day.com
-      </a>
-    </div>
-  );
 }
 
 /**
