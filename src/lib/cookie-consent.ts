@@ -63,6 +63,7 @@ export function setStoredConsent(choice: Omit<CookieConsentChoice, "decidedAt">)
   if (payload.advertising) {
     loadAdSense();
   }
+  window.dispatchEvent(new Event("tool2day:consent"));
   return payload;
 }
 

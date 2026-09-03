@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BrandMarkAnimated } from "@/components/brand-mark-animated";
 import { useLocale } from "@/components/locale-provider";
+import { ADSTERRA_SMARTLINK } from "@/lib/adsterra";
 import { openCookieSettings } from "@/lib/cookie-consent";
 
 export function SiteFooter() {
@@ -66,6 +67,14 @@ export function SiteFooter() {
 
           <div className="flex w-full flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/55 sm:flex-row sm:text-sm">
             <p>© Tool2Day</p>
+            <a
+              href={ADSTERRA_SMARTLINK}
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              className="text-white/70 transition hover:text-white"
+            >
+              Offers
+            </a>
             <p>{localeDef.name}</p>
           </div>
         </div>

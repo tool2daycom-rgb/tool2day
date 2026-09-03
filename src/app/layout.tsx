@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Cairo, Syne } from "next/font/google";
+import { AdsterraGlobalScripts } from "@/components/adsterra-ads";
 import { CookieConsent } from "@/components/cookie-consent";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RatingGateModal } from "@/components/rating-gate-modal";
@@ -159,6 +160,7 @@ export default function RootLayout({
         </Script>
         <LocaleProvider>
           {children}
+          <AdsterraGlobalScripts />
           <CookieConsent />
           <RatingGateModal />
         </LocaleProvider>

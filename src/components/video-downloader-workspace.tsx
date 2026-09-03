@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { AdsterraWaitOverlay } from "@/components/adsterra-ads";
 import { LogoRemoveControls, type DelogoBox } from "@/components/logo-remove-controls";
 import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
@@ -925,6 +926,7 @@ export function VideoDownloaderWorkspace({
           </div>
         ) : null}
       </div>
+      <AdsterraWaitOverlay open={busy} label={status || "جارٍ فحص الرابط…"} />
     </div>
   );
 }
