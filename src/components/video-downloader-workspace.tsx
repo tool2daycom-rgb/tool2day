@@ -489,7 +489,9 @@ export function VideoDownloaderWorkspace({
         (ytId ||
           isDirectStream ||
           item.source.startsWith("cobalt") ||
-          item.source === "loader.to")
+          item.source === "loader.to" ||
+          item.source === "tiktok" ||
+          item.source === "ssstik")
       ) {
         let direct = item.url;
 

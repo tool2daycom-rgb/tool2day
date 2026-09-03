@@ -461,6 +461,34 @@ export async function POST(req: Request) {
       );
     }
 
+    // TikTok: MP4 without watermark + MP3 + cover
+    if (
+      !driveDirect &&
+      (platform === "tiktok" || detectPlatform(target.toString()) === "tiktok")
+    ) {
+      try {
+        const { extractTiktokMedia } = await import("@/lib/server/tiktok");
+        const got = await extractTiktokMedia(target.toString());
+        if (got) {
+          return NextResponse.json({
+            ok: true,
+            pageUrl: target.toString(),
+            title: got.title,
+            platform: "tiktok",
+            thumbnail: got.thumbnail,
+            items: got.items,
+            note:
+              got.note ||
+              (got.items.length
+                ? "تيك توك · MP4 بدون علامة + MP3 + الغلاف"
+                : "تعذّر استخراج فيديو تيك توك العام"),
+          });
+        }
+      } catch {
+        /* fall through to Cobalt / loader.to */
+      }
+    }
+
     // Social / web: Cobalt + loader.to (Vercel prefers loader — Cobalt often empty)
     if (
       !driveDirect &&
@@ -469,6 +497,7 @@ export async function POST(req: Request) {
     ) {
       const skipCobalt =
         platform === "instagram" || platform === "tiktok" || platform === "facebook";
+      let triedLoader = false;
       const mapLoaderItems = (
         got: {
           title?: string;
@@ -524,6 +553,7 @@ export async function POST(req: Request) {
 
       if (process.env.VERCEL) {
         try {
+          triedLoader = true;
           const { socialViaLoaderTo } = await import("@/lib/server/loader-to");
           const got = await socialViaLoaderTo(target.toString());
           if (got?.items.some((i) => i.type === "video" || i.type === "audio")) {
@@ -627,8 +657,8 @@ export async function POST(req: Request) {
         /* fall through */
       }
 
-      // loader.to fallback (Facebook often works when Cobalt is empty)
-      if (!skipCobalt) {
+      // loader.to fallback (also for TikTok/IG/FB when not already tried)
+      if (!triedLoader) {
         try {
           const { socialViaLoaderTo } = await import("@/lib/server/loader-to");
           const got = await socialViaLoaderTo(target.toString());
