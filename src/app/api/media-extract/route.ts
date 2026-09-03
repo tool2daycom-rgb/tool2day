@@ -628,14 +628,16 @@ export async function POST(req: Request) {
       }
 
       // loader.to fallback (Facebook often works when Cobalt is empty)
-      try {
-        const { socialViaLoaderTo } = await import("@/lib/server/loader-to");
-        const got = await socialViaLoaderTo(target.toString());
-        if (got?.items.length) {
-          return mapLoaderItems(got, `فيديو مع صوت · ${platform}`);
+      if (!skipCobalt) {
+        try {
+          const { socialViaLoaderTo } = await import("@/lib/server/loader-to");
+          const got = await socialViaLoaderTo(target.toString());
+          if (got?.items.length) {
+            return mapLoaderItems(got, `فيديو مع صوت · ${platform}`);
+          }
+        } catch {
+          /* fall through to HTML scrape */
         }
-      } catch {
-        /* fall through to HTML scrape */
       }
     }
 
