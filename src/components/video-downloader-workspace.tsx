@@ -283,6 +283,25 @@ export function VideoDownloaderWorkspace({
         return;
       }
 
+      // YouTube: extract in the browser (Vercel IP is often blocked by googlevideo)
+      const ytId = extractYoutubeId(raw);
+      if (
+        ytId &&
+        (platform === "all" || platform === "youtube")
+      ) {
+        setStatus("جارٍ جلب جودات يوتيوب من متصفحك…");
+        const { listYoutubeFormatsInBrowser } = await import(
+          "@/lib/client/youtube-formats"
+        );
+        const yt = await listYoutubeFormatsInBrowser(ytId);
+        setItems(yt.items);
+        setPageTitle(yt.title);
+        setPreviewThumb(yt.thumbnail);
+        setNote("جودات يوتيوب مع صوت عند التوفر + صورة maxres");
+        setStatus(`وُجد ${yt.items.length} خيار تنزيل`);
+        return;
+      }
+
       const res = await fetch("/api/media-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -327,6 +346,7 @@ export function VideoDownloaderWorkspace({
         }
       }
 
+      // If social returned no video, still show what we have
       setItems(next);
       setPageTitle(data.title || null);
       setPreviewThumb(
@@ -344,7 +364,7 @@ export function VideoDownloaderWorkspace({
       setStatus(
         next.length
           ? `وُجد ${next.length} خيار تنزيل`
-          : "لا نتائج عامة — جرّب تبويب الصور المصغّرة أو رابطاً عاماً",
+          : "لا نتائج عامة — جرّب رابط مشاركة عاماً أو يوتيوب/فيسبوك",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "فشل الاستخراج");
@@ -392,7 +412,12 @@ export function VideoDownloaderWorkspace({
         (ytId || isDirectStream || item.source.startsWith("cobalt"))
       ) {
         let direct = item.url;
-        if (ytId && item.itag && !item.source.startsWith("cobalt")) {
+        if (
+          ytId &&
+          item.itag &&
+          !item.source.startsWith("cobalt") &&
+          item.source !== "youtube-browser"
+        ) {
           const q = new URLSearchParams({
             v: ytId,
             kind: item.type === "audio" ? "audio" : "video",

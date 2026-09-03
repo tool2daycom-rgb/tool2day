@@ -10,7 +10,11 @@ const nextConfig: NextConfig = {
     "@huggingface/transformers",
     "youtubei.js",
   ],
-  transpilePackages: ["@imgly/background-removal", "tesseract.js"],
+  transpilePackages: [
+    "@imgly/background-removal",
+    "tesseract.js",
+    "youtubei.js",
+  ],
   // نفس الأصل لتجنّب CORS على نماذج إزالة الخلفية
   async rewrites() {
     return [
