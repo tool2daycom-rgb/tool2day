@@ -27,12 +27,12 @@ export function youtubeThumbnailUrls(id: string): {
   label: string;
   url: string;
 }[] {
+  // خانة واحدة فقط — أقصى جودة (maxres)
   return [
-    { label: "أقصى جودة (maxres)", url: `https://img.youtube.com/vi/${id}/maxresdefault.jpg` },
-    { label: "عالية (sd)", url: `https://img.youtube.com/vi/${id}/sddefault.jpg` },
-    { label: "متوسطة (hq)", url: `https://img.youtube.com/vi/${id}/hqdefault.jpg` },
-    { label: "صغيرة (mq)", url: `https://img.youtube.com/vi/${id}/mqdefault.jpg` },
-    { label: "افتراضية", url: `https://img.youtube.com/vi/${id}/default.jpg` },
+    {
+      label: "أقصى جودة (maxres)",
+      url: `https://img.youtube.com/vi/${id}/maxresdefault.jpg`,
+    },
   ];
 }
 

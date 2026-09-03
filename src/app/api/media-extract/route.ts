@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { extractYoutubeId } from "@/lib/processors/social-dev-tools";
+import { listYoutubeFormats } from "@/lib/server/youtube-formats";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const UA =
   "Mozilla/5.0 (compatible; Tool2DayMediaBot/1.0; +https://www.tool2day.com)";
@@ -66,6 +68,11 @@ export type MediaHit = {
   title?: string;
   thumbnail?: string;
   source: string;
+  quality?: string;
+  container?: string;
+  size?: number | null;
+  hasAudio?: boolean;
+  hasVideo?: boolean;
 };
 
 function isPrivateIp(ip: string): boolean {
@@ -266,7 +273,58 @@ export async function POST(req: Request) {
 
     const driveDirect = normalizeGoogleDriveUrl(raw);
     const target = await assertSafeUrl(driveDirect || raw);
-    const platform = (body.platform as PlatformHint) || detectPlatform(target.toString());
+    const platform =
+      (body.platform as PlatformHint) || detectPlatform(target.toString());
+
+    // YouTube: list qualities (دقات) via InnerTube
+    const ytId = extractYoutubeId(raw);
+    if (
+      ytId &&
+      (platform === "youtube" ||
+        platform === "all" ||
+        platform === "thumbnails" ||
+        detectPlatform(raw) === "youtube")
+    ) {
+      try {
+        const yt = await listYoutubeFormats(ytId);
+        const items =
+          platform === "thumbnails"
+            ? yt.items.filter((i) => i.type === "image")
+            : yt.items;
+        return NextResponse.json({
+          ok: true,
+          pageUrl: target.toString(),
+          title: yt.title,
+          platform: "youtube",
+          thumbnail: yt.thumbnail,
+          items,
+          note: "جودات يوتيوب — بدون علامة مائية من Tool2Day",
+        });
+      } catch (e) {
+        const message =
+          e instanceof Error ? e.message : "فشل استخراج جودات يوتيوب";
+        if (platform === "youtube" || detectPlatform(raw) === "youtube") {
+          return NextResponse.json({
+            ok: true,
+            pageUrl: target.toString(),
+            title: `YouTube ${ytId}`,
+            platform: "youtube",
+            items: [
+              {
+                url: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+                type: "image",
+                title: "صورة — أقصى جودة (maxres)",
+                thumbnail: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+                source: "youtube-thumb",
+                quality: "maxres",
+                container: "JPG",
+              } satisfies MediaHit,
+            ],
+            note: `تعذّر جلب الفيديو (${message}) — تتوفر الصورة المصغّرة`,
+          });
+        }
+      }
+    }
 
     // Direct media link — no HTML scrape needed
     if (isDirectMediaUrl(target.toString()) || driveDirect) {

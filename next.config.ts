@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     "@ffmpeg/ffmpeg",
     "@ffmpeg/util",
     "@huggingface/transformers",
+    "youtubei.js",
   ],
   transpilePackages: ["@imgly/background-removal", "tesseract.js"],
   // نفس الأصل لتجنّب CORS على نماذج إزالة الخلفية

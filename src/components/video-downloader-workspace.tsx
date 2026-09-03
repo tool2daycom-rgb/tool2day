@@ -4,10 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LogoRemoveControls, type DelogoBox } from "@/components/logo-remove-controls";
 import { useToolDisplay } from "@/hooks/use-tool-display";
 import { beginToolUse, setDownloadRatingContext } from "@/lib/ratings";
-import {
-  extractYoutubeId,
-  youtubeThumbnailUrls,
-} from "@/lib/processors/social-dev-tools";
+import { extractYoutubeId } from "@/lib/processors/social-dev-tools";
 
 type PlatformId =
   | "all"
@@ -27,6 +24,11 @@ type MediaItem = {
   title?: string;
   thumbnail?: string;
   source: string;
+  quality?: string;
+  container?: string;
+  size?: number | null;
+  hasAudio?: boolean;
+  hasVideo?: boolean;
 };
 
 const PLATFORMS: { id: PlatformId; label: string; hint: string }[] = [
@@ -37,7 +39,7 @@ const PLATFORMS: { id: PlatformId; label: string; hint: string }[] = [
   { id: "facebook", label: "Facebook", hint: "فيسبوك / Watch" },
   { id: "pinterest", label: "Pinterest", hint: "بينترست" },
   { id: "google", label: "Google", hint: "Drive / روابط جوجل" },
-  { id: "thumbnails", label: "صور مصغّرة", hint: "يوتيوب / انستغرام" },
+  { id: "thumbnails", label: "صور مصغّرة", hint: "يوتيوب maxres" },
   { id: "delogo-video", label: "إزالة شعار فيديو", hint: "بدون علامة مائية" },
   { id: "delogo-image", label: "إزالة شعار صورة", hint: "بدون علامة مائية" },
 ];
@@ -48,6 +50,27 @@ const btnPrimary =
   "inline-flex items-center justify-center rounded-xl bg-[#111] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#333] disabled:cursor-not-allowed disabled:bg-[#bbb]";
 const btnGhost =
   "inline-flex items-center justify-center rounded-lg border border-[#ddd] bg-white px-3 py-2 text-xs font-bold text-[#333] transition hover:bg-[#e8e8e8]";
+const btnDownload =
+  "inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#e11d48] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#be123c] disabled:cursor-not-allowed disabled:bg-[#f9a8b4]";
+
+function formatSize(n?: number | null): string {
+  if (n == null || !Number.isFinite(n) || n <= 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function typeLabel(item: MediaItem): string {
+  if (item.title) return item.title;
+  if (item.type === "image") return "صورة — أقصى جودة (maxres)";
+  if (item.type === "audio") return `${item.container || "M4A"} صوت`;
+  if (item.container && item.quality) {
+    return `${item.container} ${item.quality}`;
+  }
+  if (item.type === "video") return "فيديو";
+  return "ملف";
+}
 
 export function VideoDownloaderWorkspace({
   slug,
@@ -66,6 +89,8 @@ export function VideoDownloaderWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [items, setItems] = useState<MediaItem[]>([]);
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
+  const [previewThumb, setPreviewThumb] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [delogoBoxes, setDelogoBoxes] = useState<DelogoBox[]>([]);
@@ -82,6 +107,8 @@ export function VideoDownloaderWorkspace({
     setError(null);
     setNote("");
     setStatus(null);
+    setPageTitle(null);
+    setPreviewThumb(null);
   }, [platform]);
 
   const placeholder = useMemo(() => {
@@ -99,7 +126,7 @@ export function VideoDownloaderWorkspace({
       case "google":
         return "https://drive.google.com/file/d/… أو رابط جوجل";
       case "thumbnails":
-        return "رابط يوتيوب أو انستغرام للصورة المصغّرة";
+        return "رابط يوتيوب أو انستغرام للصورة المصغّرة (maxres)";
       default:
         return "الصق رابط يوتيوب، تيك توك، انستغرام، فيسبوك، بينترست أو جوجل…";
     }
@@ -107,20 +134,41 @@ export function VideoDownloaderWorkspace({
 
   const isDelogo = platform === "delogo-video" || platform === "delogo-image";
 
+  const videoRows = useMemo(
+    () => items.filter((i) => i.type === "video" || i.type === "audio"),
+    [items],
+  );
+  const imageRows = useMemo(
+    () => items.filter((i) => i.type === "image"),
+    [items],
+  );
+  const otherRows = useMemo(
+    () =>
+      items.filter(
+        (i) => i.type !== "video" && i.type !== "audio" && i.type !== "image",
+      ),
+    [items],
+  );
+
   async function runThumbnails(raw: string) {
     const yt = extractYoutubeId(raw);
     if (yt) {
-      const thumbs = youtubeThumbnailUrls(yt);
-      setItems(
-        thumbs.map((t) => ({
-          url: t.url,
+      const thumb = `https://img.youtube.com/vi/${yt}/maxresdefault.jpg`;
+      setItems([
+        {
+          url: thumb,
           type: "image",
-          title: t.label,
+          title: "صورة — أقصى جودة (maxres)",
+          thumbnail: thumb,
           source: "youtube-thumb",
-        })),
-      );
-      setNote("صور مصغّرة يوتيوب بجودات متعددة");
-      setStatus(`وُجدت ${thumbs.length} صور مصغّرة`);
+          quality: "maxres",
+          container: "JPG",
+        },
+      ]);
+      setPreviewThumb(thumb);
+      setPageTitle("YouTube thumbnail");
+      setNote("صورة مصغّرة بأقصى جودة فقط (maxres)");
+      setStatus("وُجدت صورة مصغّرة maxres");
       return;
     }
     const res = await fetch("/api/thumbnail", {
@@ -140,10 +188,14 @@ export function VideoDownloaderWorkspace({
       {
         url: data.thumbnail,
         type: "image",
-        title: data.title || "الصورة المصغّرة",
+        title: "صورة — أقصى جودة (maxres)",
+        thumbnail: data.thumbnail,
         source: "thumbnail-api",
+        quality: "maxres",
       },
     ]);
+    setPreviewThumb(data.thumbnail);
+    setPageTitle(data.title || "الصورة المصغّرة");
     setNote(data.title || "صورة مصغّرة");
     setStatus("وُجدت صورة مصغّرة");
   }
@@ -151,9 +203,7 @@ export function VideoDownloaderWorkspace({
   async function runDelogo() {
     if (!file) {
       setError(
-        platform === "delogo-image"
-          ? "اختر صورة أولاً"
-          : "اختر فيديو أولاً",
+        platform === "delogo-image" ? "اختر صورة أولاً" : "اختر فيديو أولاً",
       );
       return;
     }
@@ -202,6 +252,8 @@ export function VideoDownloaderWorkspace({
     setError(null);
     setNote("");
     setItems([]);
+    setPageTitle(null);
+    setPreviewThumb(null);
     setStatus("جارٍ فحص الرابط…");
     try {
       if (platform === "thumbnails") {
@@ -218,25 +270,49 @@ export function VideoDownloaderWorkspace({
         error?: string;
         note?: string;
         title?: string;
+        thumbnail?: string;
         platform?: string;
         items?: MediaItem[];
       };
       if (!res.ok) throw new Error(data.error || "فشل الاستخراج");
 
       let next = data.items || [];
-      const yt = extractYoutubeId(raw);
-      if (yt && (platform === "all" || platform === "youtube")) {
-        const thumbs = youtubeThumbnailUrls(yt).map((t) => ({
-          url: t.url,
-          type: "image",
-          title: t.label,
-          source: "youtube-thumb",
-        }));
-        const seen = new Set(next.map((p) => p.url));
-        next = [...next, ...thumbs.filter((t) => !seen.has(t.url))];
+
+      // Non-YouTube: keep at most one image row (prefer largest / first)
+      const isYt = Boolean(extractYoutubeId(raw));
+      if (!isYt) {
+        const imgs = next.filter((i) => i.type === "image");
+        const rest = next.filter((i) => i.type !== "image");
+        if (imgs.length > 1) {
+          const best = imgs[0]!;
+          next = [
+            ...rest,
+            {
+              ...best,
+              title: best.title?.includes("maxres")
+                ? best.title
+                : "صورة — أقصى جودة (maxres)",
+            },
+          ];
+        } else if (imgs.length === 1 && imgs[0]) {
+          next = [
+            ...rest,
+            {
+              ...imgs[0],
+              title: "صورة — أقصى جودة (maxres)",
+            },
+          ];
+        }
       }
 
       setItems(next);
+      setPageTitle(data.title || null);
+      setPreviewThumb(
+        data.thumbnail ||
+          next.find((i) => i.thumbnail)?.thumbnail ||
+          next.find((i) => i.type === "image")?.url ||
+          null,
+      );
       setNote(
         data.note ||
           (data.title
@@ -245,7 +321,7 @@ export function VideoDownloaderWorkspace({
       );
       setStatus(
         next.length
-          ? `وُجد ${next.length} وسيط/وسائط`
+          ? `وُجد ${next.length} خيار تنزيل`
           : "لا نتائج عامة — جرّب تبويب الصور المصغّرة أو رابطاً عاماً",
       );
     } catch (e) {
@@ -262,26 +338,41 @@ export function VideoDownloaderWorkspace({
     setStatus("جارٍ التحميل…");
     try {
       beginToolUse(slug);
+      const isGoogleVideo = /googlevideo\.com/i.test(item.url);
+      const large = (item.size || 0) > 70 * 1024 * 1024;
+
+      // Large YouTube streams: open direct URL (proxy capped ~80MB)
+      if (isGoogleVideo && large) {
+        window.open(item.url, "_blank", "noopener,noreferrer");
+        setStatus("فُتح رابط التنزيل المباشر — احفظه من المتصفح");
+        return;
+      }
+
       const href = `/api/media-proxy?url=${encodeURIComponent(item.url)}`;
       const res = await fetch(href);
       if (!res.ok) {
-        const direct = await fetch(item.url);
-        if (!direct.ok) {
-          const data = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(data.error || "فشل التحميل");
+        const direct = await fetch(item.url).catch(() => null);
+        if (!direct?.ok) {
+          window.open(item.url, "_blank", "noopener,noreferrer");
+          setStatus("فُتح الرابط — احفظه من المتصفح إن لزم");
+          return;
         }
         const blob = await direct.blob();
         const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
-        const ext = blob.type.includes("png")
-          ? "png"
-          : blob.type.includes("webp")
-            ? "webp"
-            : blob.type.includes("mp4")
-              ? "mp4"
-              : "jpg";
-        const safe = (item.title || "tool2day-media")
+        const ext =
+          item.container?.toLowerCase() ||
+          (blob.type.includes("png")
+            ? "png"
+            : blob.type.includes("webp")
+              ? "webp"
+              : blob.type.includes("mp4")
+                ? "mp4"
+                : blob.type.includes("webm")
+                  ? "webm"
+                  : item.type === "audio"
+                    ? "m4a"
+                    : "jpg");
+        const safe = (pageTitle || item.title || "tool2day-media")
           .replace(/[^\w\u0600-\u06FF-]+/g, "-")
           .slice(0, 40);
         await downloadBlob(blob, `${safe}.${ext}`);
@@ -289,11 +380,15 @@ export function VideoDownloaderWorkspace({
         return;
       }
       const blob = await res.blob();
-      const name =
-        item.url.split("/").pop()?.split("?")[0] ||
-        `tool2day-media-${Date.now()}`;
+      const ext =
+        item.container?.toLowerCase() ||
+        item.url.split(".").pop()?.split("?")[0] ||
+        "bin";
+      const safe = (pageTitle || item.title || "tool2day-media")
+        .replace(/[^\w\u0600-\u06FF-]+/g, "-")
+        .slice(0, 40);
       const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
-      await downloadBlob(blob, name);
+      await downloadBlob(blob, `${safe}.${ext}`);
       setStatus("تم التنزيل");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "فشل التحميل";
@@ -315,69 +410,127 @@ export function VideoDownloaderWorkspace({
     }
   }
 
-  return (
-    <div className="rounded-2xl border border-[#e8e8e8] bg-white p-5 shadow-sm sm:p-6">
-      <p className="text-lg font-semibold text-[#111]">{title}</p>
-      {description ? (
-        <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
-      ) : null}
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {PLATFORMS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => setPlatform(p.id)}
-            className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-              platform === p.id
-                ? "bg-[#111] text-white"
-                : "bg-[#f3f3f3] text-[#444] hover:bg-[#e8e8e8]"
-            }`}
-            title={p.hint}
-          >
-            {p.label}
-          </button>
-        ))}
+  function DownloadTable({
+    rows,
+    emptyHint,
+  }: {
+    rows: MediaItem[];
+    emptyHint?: string;
+  }) {
+    if (!rows.length) {
+      return emptyHint ? (
+        <p className="text-sm text-[#888]">{emptyHint}</p>
+      ) : null;
+    }
+    return (
+      <div className="overflow-x-auto rounded-xl border border-[#e5e5e5]">
+        <table className="w-full min-w-[320px] text-sm">
+          <thead>
+            <tr className="bg-[#f7f7f7] text-xs font-bold text-[#555]">
+              <th className="px-3 py-2 text-start">النوع / الدقة</th>
+              <th className="px-3 py-2 text-start">الحجم</th>
+              <th className="px-3 py-2 text-start">تنزيل</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item) => (
+              <tr
+                key={`${item.source}-${item.quality || ""}-${item.container || ""}-${item.url.slice(0, 64)}`}
+                className="border-t border-[#eee] bg-white"
+              >
+                <td className="px-3 py-2.5 font-bold text-[#111]">
+                  <span className="inline-flex items-center gap-1.5">
+                    {typeLabel(item)}
+                    {item.hasVideo && item.hasAudio === false ? (
+                      <span
+                        className="text-[10px] font-semibold text-[#e11d48]"
+                        title="بدون مسار صوت"
+                      >
+                        🔇
+                      </span>
+                    ) : null}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 text-[#666]" dir="ltr">
+                  {formatSize(item.size)}
+                </td>
+                <td className="px-3 py-2.5">
+                  <button
+                    type="button"
+                    className={btnDownload}
+                    disabled={busy}
+                    onClick={() => void downloadItem(item)}
+                  >
+                    ↓ تنزيل
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+    );
+  }
 
-      {isDelogo ? (
-        <div className="mt-4 space-y-4">
-          <label className="block text-sm font-bold text-[#222]">
-            {platform === "delogo-image" ? "الصورة" : "الفيديو"}
-            <input
-              className={`${field} file:me-3 file:rounded-lg file:border-0 file:bg-[#111] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white`}
-              type="file"
-              accept={platform === "delogo-image" ? "image/*" : "video/*"}
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <LogoRemoveControls file={file} onBoxesChange={setDelogoBoxes} />
-          {busy && progress > 0 ? (
-            <div className="h-2 overflow-hidden rounded-full bg-[#eee]">
-              <div
-                className="h-full bg-[#2563eb] transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          ) : null}
-          <button
-            type="button"
-            className={btnPrimary}
-            disabled={busy || !file}
-            onClick={() => void run()}
-          >
-            {busy ? "جارٍ الإزالة…" : "إزالة الشعار وتنزيل"}
-          </button>
-          <p className="text-xs leading-6 text-[#666]">
-            بدون علامة مائية من Tool2Day — ارسم مربعاً صغيراً على الشعار فقط.
-          </p>
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#e8e8e8] bg-white shadow-sm">
+      <div className="bg-gradient-to-b from-[#fce7f3] to-[#fff1f2] px-5 py-6 sm:px-6">
+        <p className="text-lg font-semibold text-[#111]">{title}</p>
+        {description ? (
+          <p className="mt-1 text-sm leading-7 text-[#666]">{description}</p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PLATFORMS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPlatform(p.id)}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                platform === p.id
+                  ? "bg-[#111] text-white"
+                  : "bg-white/80 text-[#444] hover:bg-white"
+              }`}
+              title={p.hint}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div className="mt-4 space-y-3">
-          <label className="block text-sm font-bold text-[#222]">
-            الرابط
+
+        {isDelogo ? (
+          <div className="mt-4 space-y-4 rounded-xl bg-white/90 p-4">
+            <label className="block text-sm font-bold text-[#222]">
+              {platform === "delogo-image" ? "الصورة" : "الفيديو"}
+              <input
+                className={`${field} file:me-3 file:rounded-lg file:border-0 file:bg-[#111] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white`}
+                type="file"
+                accept={platform === "delogo-image" ? "image/*" : "video/*"}
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </label>
+            <LogoRemoveControls file={file} onBoxesChange={setDelogoBoxes} />
+            {busy && progress > 0 ? (
+              <div className="h-2 overflow-hidden rounded-full bg-[#eee]">
+                <div
+                  className="h-full bg-[#2563eb] transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className={btnPrimary}
+              disabled={busy || !file}
+              onClick={() => void run()}
+            >
+              {busy ? "جارٍ الإزالة…" : "إزالة الشعار وتنزيل"}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-stretch">
             <input
-              className={field}
+              className={`${field} mt-0 flex-1 border-0 shadow-sm`}
               dir="ltr"
               type="url"
               placeholder={placeholder}
@@ -390,108 +543,98 @@ export function VideoDownloaderWorkspace({
                 }
               }}
             />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={btnGhost}
-              onClick={async () => {
-                try {
-                  const t = await navigator.clipboard.readText();
-                  if (t) setUrl(t.trim());
-                } catch {
-                  setError("تعذّر اللصق من الحافظة — الصق يدوياً");
-                }
-              }}
-            >
-              لصق
-            </button>
-            <button
-              type="button"
-              className={btnPrimary}
-              disabled={busy || !url.trim()}
-              onClick={() => void run()}
-            >
-              {busy ? "جارٍ المعالجة…" : "استخراج / تحميل"}
-            </button>
-          </div>
-          <p className="text-xs leading-6 text-[#666]">
-            يدعم يوتيوب، تيك توك، انستغرام، فيسبوك، بينترست، وروابط جوجل/الملفات
-            العامة، مع صور مصغّرة وإزالة الشعار — بدون علامة مائية من Tool2Day.
-            استخدمه للمحتوى الذي يحق لك حفظه.
-          </p>
-        </div>
-      )}
-
-      {status ? (
-        <p className="mt-4 text-sm font-semibold text-[#2563eb]">{status}</p>
-      ) : null}
-      {note ? (
-        <p className="mt-2 rounded-lg bg-[#f5f5f5] px-3 py-2 text-xs text-[#555]">
-          {note}
-        </p>
-      ) : null}
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-
-      {items.length > 0 ? (
-        <ul className="mt-5 space-y-2">
-          {items.map((item) => (
-            <li
-              key={`${item.source}-${item.url}`}
-              className="flex flex-col gap-2 rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                {item.thumbnail || item.type === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.thumbnail || item.url}
-                    alt=""
-                    className="h-14 w-14 shrink-0 rounded-lg object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : null}
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-[#111]">
-                    {item.type === "video"
-                      ? "فيديو"
-                      : item.type === "audio"
-                        ? "صوت"
-                        : item.type === "image"
-                          ? "صورة"
-                          : "ملف"}
-                    {item.title ? ` — ${item.title}` : ""}
-                  </p>
-                  <p
-                    className="mt-0.5 truncate text-[11px] text-[#888]"
-                    dir="ltr"
-                  >
-                    {item.url}
-                  </p>
-                </div>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <button
-                  type="button"
-                  className={btnGhost}
-                  onClick={() =>
-                    window.open(item.url, "_blank", "noopener,noreferrer")
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={async () => {
+                  try {
+                    const t = await navigator.clipboard.readText();
+                    if (t) setUrl(t.trim());
+                  } catch {
+                    setError("تعذّر اللصق من الحافظة — الصق يدوياً");
                   }
-                >
-                  فتح
-                </button>
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  disabled={busy}
-                  onClick={() => void downloadItem(item)}
-                >
-                  تنزيل
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+                }}
+              >
+                لصق
+              </button>
+              <button
+                type="button"
+                className={`${btnPrimary} bg-[#e11d48] hover:bg-[#be123c]`}
+                disabled={busy || !url.trim()}
+                onClick={() => void run()}
+              >
+                {busy ? "…" : "Start ›"}
+              </button>
+            </div>
+          </div>
+        )}
+        {!isDelogo ? (
+          <p className="mt-3 text-[11px] leading-5 text-[#777]">
+            استخدمه للمحتوى الذي يحق لك حفظه. التحميل بدون علامة مائية من
+            Tool2Day. الجودات العالية قد تكون بدون صوت (مثل يوتيوب).
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-4 px-5 py-5 sm:px-6">
+        {status ? (
+          <p className="text-sm font-semibold text-[#2563eb]">{status}</p>
+        ) : null}
+        {note ? (
+          <p className="rounded-lg bg-[#f5f5f5] px-3 py-2 text-xs text-[#555]">
+            {note}
+          </p>
+        ) : null}
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+        {items.length > 0 ? (
+          <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+            <div className="space-y-4">
+              {videoRows.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-sm font-bold text-[#111]">
+                    الفيديو / الصوت — اختر الدقة
+                  </p>
+                  <DownloadTable rows={videoRows} />
+                </div>
+              ) : null}
+              {imageRows.length > 0 ? (
+                <div>
+                  <p className="mb-2 text-sm font-bold text-[#111]">
+                    صورة — أقصى جودة (maxres)
+                  </p>
+                  <DownloadTable rows={imageRows.slice(0, 1)} />
+                </div>
+              ) : null}
+              {otherRows.length > 0 ? (
+                <DownloadTable rows={otherRows} />
+              ) : null}
+            </div>
+
+            <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-3">
+              {previewThumb ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewThumb}
+                  alt=""
+                  className="aspect-video w-full rounded-lg object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="flex aspect-video items-center justify-center rounded-lg bg-[#eee] text-xs text-[#888]">
+                  معاينة
+                </div>
+              )}
+              {pageTitle ? (
+                <p className="mt-3 text-sm font-bold leading-6 text-[#111]">
+                  {pageTitle}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

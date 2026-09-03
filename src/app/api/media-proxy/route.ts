@@ -76,14 +76,18 @@ export async function GET(req: Request) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 55_000);
     let res: Response;
+    const isYtCdn =
+      /googlevideo\.com|ytimg\.com|ggpht\.com/i.test(target.hostname);
     try {
       res = await fetch(target.toString(), {
         signal: controller.signal,
         redirect: "follow",
         headers: {
-          "User-Agent": UA,
+          "User-Agent":
+            "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36",
           Accept: "*/*",
-          Referer: target.origin + "/",
+          Referer: isYtCdn ? "https://www.youtube.com/" : target.origin + "/",
+          Origin: isYtCdn ? "https://www.youtube.com" : target.origin,
         },
       });
     } finally {
