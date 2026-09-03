@@ -55,6 +55,26 @@ const btnGhost =
 const btnDownload =
   "inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#e11d48] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#be123c] disabled:cursor-not-allowed disabled:bg-[#f9a8b4]";
 
+function decodeHtmlEntities(s: string): string {
+  if (typeof document !== "undefined") {
+    const el = document.createElement("textarea");
+    el.innerHTML = s;
+    return el.value;
+  }
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) =>
+      String.fromCodePoint(Number.parseInt(h, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, n) =>
+      String.fromCodePoint(Number.parseInt(n, 10)),
+    )
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
+}
+
 function formatSize(n?: number | null): string {
   if (n == null || !Number.isFinite(n) || n <= 0) return "—";
   if (n < 1024) return `${n} B`;
@@ -353,18 +373,26 @@ export function VideoDownloaderWorkspace({
         if (!ok) throw new Error("يجب تقييم الأداة قبل التنزيل");
       }
 
-      // YouTube video/audio: refresh URL then open (Vercel can't proxy googlevideo)
+      // YouTube video/audio OR Cobalt tunnels: refresh/open in browser
       const ytId =
         item.videoId ||
         (item.source.includes("youtube")
           ? extractYoutubeId(url) || undefined
           : undefined);
+      const isDirectStream =
+        /^https?:\/\//i.test(item.url) &&
+        (item.type === "video" || item.type === "audio") &&
+        (/googlevideo\.com/i.test(item.url) ||
+          /cobalt/i.test(item.source) ||
+          /tunnel/i.test(item.url) ||
+          /fbcdn\.net|cdninstagram|tiktokcdn|pinimg|twimg/i.test(item.url));
+
       if (
         (item.type === "video" || item.type === "audio") &&
-        (ytId || /googlevideo\.com/i.test(item.url))
+        (ytId || isDirectStream || item.source.startsWith("cobalt"))
       ) {
         let direct = item.url;
-        if (ytId && item.itag) {
+        if (ytId && item.itag && !item.source.startsWith("cobalt")) {
           const q = new URLSearchParams({
             v: ytId,
             kind: item.type === "audio" ? "audio" : "video",
@@ -380,7 +408,9 @@ export function VideoDownloaderWorkspace({
         }
         window.open(direct, "_blank", "noopener,noreferrer");
         setStatus(
-          "فُتح الفيديو — من تبويب المتصفح: ملف ← حفظ، أو زر التنزيل في المشغّل",
+          item.hasAudio === false
+            ? "فُتح الفيديو (قد يكون بدون صوت) — احفظه من المتصفح"
+            : "فُتح الفيديو مع الصوت — احفظه من تبويب المتصفح",
         );
         return;
       }
@@ -628,7 +658,7 @@ export function VideoDownloaderWorkspace({
               {videoRows.length > 0 ? (
                 <div>
                   <p className="mb-2 text-sm font-bold text-[#111]">
-                    الفيديو / الصوت — اختر الدقة
+                    الفيديو / الصوت — مع صوت عند التوفر
                   </p>
                   <DownloadTable rows={videoRows} />
                 </div>
@@ -662,7 +692,7 @@ export function VideoDownloaderWorkspace({
               )}
               {pageTitle ? (
                 <p className="mt-3 text-sm font-bold leading-6 text-[#111]">
-                  {pageTitle}
+                  {decodeHtmlEntities(pageTitle)}
                 </p>
               ) : null}
             </div>

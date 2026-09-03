@@ -1,5 +1,6 @@
 import dns from "node:dns";
 import { ClientType, Innertube, Platform } from "youtubei.js";
+import { youtubeWithAudioViaCobalt } from "@/lib/server/cobalt";
 
 // Vercel/Node often prefers IPv6; googlevideo can fail with "fetch failed"
 dns.setDefaultResultOrder("ipv4first");
@@ -113,7 +114,9 @@ export async function listYoutubeFormats(videoId: string): Promise<{
       const row: Row = {
         url: f.url,
         type: "video",
-        title: `${container} ${quality}`,
+        title: hasAudio
+          ? `${container} ${quality} · مع صوت`
+          : `${container} ${quality} · بدون صوت`,
         thumbnail,
         source: "youtube-android-vr",
         quality,
@@ -176,16 +179,67 @@ export async function listYoutubeFormats(videoId: string): Promise<{
     }
   }
 
-  const videos = [...videoByHeight.values()]
-    .sort(
-      (a, b) =>
+  // Prefer with-audio rows first, then higher quality
+  let videos = [...videoByHeight.values()]
+    .sort((a, b) => {
+      if (a.hasAudio !== b.hasAudio) return a.hasAudio ? -1 : 1;
+      return (
         (Number.parseInt(b.quality || "0", 10) || 0) -
-        (Number.parseInt(a.quality || "0", 10) || 0),
-    )
+        (Number.parseInt(a.quality || "0", 10) || 0)
+      );
+    })
     .map(({ score: _s, ...rest }) => {
       void _s;
       return rest;
     });
+
+  // Try Cobalt for muxed (video+audio) higher qualities when available
+  try {
+    const pageUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const mutedQualities = videos
+      .filter((v) => !v.hasAudio)
+      .map((v) => v.quality || "")
+      .filter(Boolean)
+      .slice(0, 4);
+    const want = [
+      ...new Set(["720", "480", "360", "1080", ...mutedQualities]),
+    ].slice(0, 5);
+    const cobaltRows = await youtubeWithAudioViaCobalt(pageUrl, want);
+    if (cobaltRows.length) {
+      const byQ = new Map(videos.map((v) => [v.quality || "", v]));
+      for (const c of cobaltRows) {
+        if (c.type === "audio") continue;
+        const q = c.quality || "";
+        byQ.set(q, {
+          url: c.url,
+          type: "video",
+          title: `MP4 ${q} · مع صوت`,
+          thumbnail,
+          source: c.source,
+          quality: q,
+          container: c.container || "MP4",
+          size: c.size ?? null,
+          hasAudio: true,
+          hasVideo: true,
+          videoId,
+        });
+      }
+      videos = [...byQ.values()].sort((a, b) => {
+        if (a.hasAudio !== b.hasAudio) return a.hasAudio ? -1 : 1;
+        return (
+          (Number.parseInt(b.quality || "0", 10) || 0) -
+          (Number.parseInt(a.quality || "0", 10) || 0)
+        );
+      });
+      // Prefer showing with-audio only when cobalt filled several
+      const withAudio = videos.filter((v) => v.hasAudio);
+      if (withAudio.length >= 2) {
+        videos = withAudio;
+      }
+    }
+  } catch {
+    /* cobalt optional */
+  }
 
   const items: YoutubeFormatHit[] = [...videos];
   if (bestAudio) {

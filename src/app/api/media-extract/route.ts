@@ -73,6 +73,8 @@ export type MediaHit = {
   size?: number | null;
   hasAudio?: boolean;
   hasVideo?: boolean;
+  itag?: number;
+  videoId?: string;
 };
 
 function isPrivateIp(ip: string): boolean {
@@ -251,6 +253,14 @@ function extractFromHtml(pageUrl: string, html: string): MediaHit[] {
   const out: MediaHit[] = [];
   for (const h of hits) {
     if (seen.has(h.url)) continue;
+    // Skip static site chrome assets (icons/css), not real post media
+    if (
+      /static\.cdninstagram\.com\/rsrc\.php/i.test(h.url) ||
+      /fbcdn\.net\/rsrc\.php/i.test(h.url) ||
+      /\/rsrc\.php\//i.test(h.url)
+    ) {
+      continue;
+    }
     seen.add(h.url);
     out.push(h);
   }
@@ -323,6 +333,104 @@ export async function POST(req: Request) {
             note: `تعذّر جلب الفيديو (${message}) — تتوفر الصورة المصغّرة`,
           });
         }
+      }
+    }
+
+    // Social / web: Cobalt first (video+audio when possible)
+    if (
+      !driveDirect &&
+      !isDirectMediaUrl(target.toString()) &&
+      platform !== "thumbnails"
+    ) {
+      try {
+        const { extractWithCobalt } = await import("@/lib/server/cobalt");
+        const cobalt = await extractWithCobalt(target.toString(), {
+          downloadMode: "auto",
+          videoQuality: "1080",
+        });
+        if (cobalt?.items.length) {
+          const items: MediaHit[] = cobalt.items.map((i) => ({
+            url: i.url,
+            type: i.type,
+            title: i.title,
+            thumbnail: i.thumbnail,
+            source: i.source,
+            quality: i.quality,
+            container: i.container,
+            hasAudio: i.hasAudio,
+            hasVideo: i.hasVideo,
+            size: i.size ?? null,
+          }));
+
+          // Ensure one maxres/thumbnail image when cobalt returned video only
+          const hasImage = items.some((i) => i.type === "image");
+          if (!hasImage) {
+            // light og:image probe
+            try {
+              const pageRes = await fetch(target.toString(), {
+                headers: {
+                  "User-Agent": userAgentFor(platform),
+                  Accept: "text/html",
+                },
+                signal: AbortSignal.timeout(8_000),
+              });
+              if (pageRes.ok) {
+                const html = (await pageRes.text()).slice(0, 400_000);
+                const img =
+                  metaContent(html, "og:image:secure_url") ||
+                  metaContent(html, "og:image") ||
+                  metaContent(html, "twitter:image");
+                const abs = absUrl(target.toString(), img || undefined);
+                if (abs) {
+                  items.push({
+                    url: abs,
+                    type: "image",
+                    title: "صورة — أقصى جودة (maxres)",
+                    thumbnail: abs,
+                    source: "og:image",
+                    quality: "maxres",
+                    container: "JPG",
+                  });
+                }
+              }
+            } catch {
+              /* optional thumb */
+            }
+          }
+
+          // Also offer audio-only when video present
+          if (
+            items.some((i) => i.type === "video") &&
+            !items.some((i) => i.type === "audio")
+          ) {
+            const audioOnly = await extractWithCobalt(target.toString(), {
+              downloadMode: "audio",
+            });
+            if (audioOnly?.items[0]) {
+              items.push({
+                url: audioOnly.items[0].url,
+                type: "audio",
+                title: audioOnly.items[0].title || "صوت",
+                source: audioOnly.items[0].source,
+                container: audioOnly.items[0].container || "MP3",
+                hasAudio: true,
+                hasVideo: false,
+              });
+            }
+          }
+
+          return NextResponse.json({
+            ok: true,
+            pageUrl: target.toString(),
+            title: cobalt.title || undefined,
+            platform,
+            thumbnail: items.find((i) => i.thumbnail)?.thumbnail,
+            items,
+            note: `فيديو مع صوت + صورة عند التوفر · ${platform}`,
+          });
+        }
+      } catch {
+        /* fall through to HTML scrape */
       }
     }
 
@@ -407,28 +515,58 @@ export async function POST(req: Request) {
       return NextResponse.json({
         ok: true,
         pageUrl: res.url || target.toString(),
-        title: pageTitle,
+        title: pageTitle ? decodeHtml(pageTitle) : pageTitle,
         platform,
         items: [],
         note:
-          "لم يُعثر على وسائط عامة في الصفحة. بعض المنصات (يوتيوب/تيك توك…) قد تخفي الرابط المباشر — جرّب الصور المصغّرة أو رابط مشاركة عاماً.",
+          "لم يُعثر على فيديو عام مع صوت. جرّب رابط مشاركة عاماً، أو يوتيوب، أو فيسبوك Watch.",
       });
     }
 
-    // Prefer video hits first for downloader UX
+    // Prefer video first; keep a single maxres image
     items.sort((a, b) => {
       const rank = (t: string) =>
         t === "video" ? 0 : t === "audio" ? 1 : t === "image" ? 2 : 3;
       return rank(a.type) - rank(b.type);
     });
 
+    const videos = items
+      .filter((i) => i.type === "video")
+      .map((i) => ({
+        ...i,
+        title: i.title
+          ? `${decodeHtml(i.title)} · مع صوت`
+          : "فيديو · مع صوت",
+        hasAudio: true,
+        hasVideo: true,
+        container: i.container || "MP4",
+      }));
+    const audios = items.filter((i) => i.type === "audio");
+    const images = items.filter((i) => i.type === "image");
+    const bestImage = images[0]
+      ? {
+          ...images[0],
+          title: "صورة — أقصى جودة (maxres)",
+          quality: "maxres",
+        }
+      : null;
+
+    const normalized = [
+      ...videos,
+      ...audios,
+      ...(bestImage ? [bestImage] : []),
+    ];
+
     return NextResponse.json({
       ok: true,
       pageUrl: res.url || target.toString(),
-      title: pageTitle,
+      title: pageTitle ? decodeHtml(pageTitle) : pageTitle,
       platform,
-      items,
-      note: `تم الاستخراج من وسائط عامة · ${platform}`,
+      thumbnail: bestImage?.url || videos[0]?.thumbnail,
+      items: normalized,
+      note: videos.length
+        ? `فيديو مع صوت + صورة · ${platform}`
+        : `تم الاستخراج من وسائط عامة · ${platform}`,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "فشل الاستخراج";
