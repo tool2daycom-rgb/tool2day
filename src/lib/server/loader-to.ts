@@ -42,6 +42,12 @@ function okFlag(v: unknown): boolean {
   return v === true || v === 1 || v === "1" || v === "true";
 }
 
+function cleanThumbnail(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (/logo\.clearbit\.com/i.test(url)) return undefined;
+  return url;
+}
+
 function qualityFromFormat(format?: string, fallback?: string): string | undefined {
   const m = (format || "").match(/(\d{3,4})\s*p/i);
   if (m) return m[1];
@@ -123,7 +129,7 @@ export async function extractOneWithLoaderTo(
     title: isAudio
       ? `${container} صوت`
       : `${container}${quality ? ` ${quality}` : ""} · مع صوت`,
-    thumbnail: done.thumbnail_url || start.thumbnail_url,
+    thumbnail: cleanThumbnail(done.thumbnail_url || start.thumbnail_url),
     source: "loader.to",
     quality: isAudio ? undefined : quality,
     container,
