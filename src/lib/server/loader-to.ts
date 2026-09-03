@@ -81,7 +81,7 @@ async function fetchJson<T>(
 
 async function pollDownload(
   progressUrl: string,
-  opts?: { maxMs?: number; intervalMs?: number },
+  opts?: { maxMs?: number; intervalMs?: number; fetchTimeoutMs?: number },
 ): Promise<ProgressResponse | null> {
   const maxMs = opts?.maxMs ?? 25_000;
   const intervalMs = opts?.intervalMs ?? 2_000;
@@ -89,7 +89,9 @@ async function pollDownload(
   let last: ProgressResponse | null = null;
 
   while (Date.now() - started < maxMs) {
-    last = await fetchJson<ProgressResponse>(progressUrl);
+    last = await fetchJson<ProgressResponse>(progressUrl, {
+      timeoutMs: opts?.fetchTimeoutMs,
+    });
     if (okFlag(last.success) && last.download_url) return last;
     const text = (last.text || "").toLowerCase();
     if (text === "failed" || text.includes("error")) return null;
@@ -122,7 +124,10 @@ export async function extractOneWithLoaderTo(
 
   if (!okFlag(start.success) || !start.progress_url) return null;
 
-  const done = await pollDownload(start.progress_url, { maxMs: opts?.maxMs });
+  const done = await pollDownload(start.progress_url, {
+    maxMs: opts?.maxMs,
+    fetchTimeoutMs: opts?.fetchTimeoutMs,
+  });
   if (!done?.download_url) return null;
 
   const isAudio = format === "mp3" || /mp3|audio/i.test(done.format || format);
