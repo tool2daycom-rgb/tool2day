@@ -338,17 +338,45 @@ export function VideoDownloaderWorkspace({
     setStatus("جارٍ التحميل…");
     try {
       beginToolUse(slug);
+
+      const href = item.url.startsWith("/")
+        ? item.url
+        : `/api/media-proxy?url=${encodeURIComponent(item.url)}`;
+
+      // YouTube streaming download (same-origin) — تقييم ثم تنزيل عبر المتصفح
+      if (item.url.startsWith("/api/youtube-download")) {
+        const {
+          hasRatedCurrentUse,
+          openRatingGate,
+          getCurrentUseId,
+          beginToolUse: startUse,
+        } = await import("@/lib/ratings");
+        if (!getCurrentUseId(slug)) startUse(slug);
+        if (!hasRatedCurrentUse(slug)) {
+          const ok = await openRatingGate(slug);
+          if (!ok) throw new Error("يجب تقييم الأداة قبل التنزيل");
+        }
+        // تنزيل أصلي عبر المتصفح (بدون تحميل الملف كاملاً في الذاكرة)
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.rel = "noopener";
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setStatus("بدأ تنزيل الفيديو…");
+        return;
+      }
+
       const isGoogleVideo = /googlevideo\.com/i.test(item.url);
       const large = (item.size || 0) > 70 * 1024 * 1024;
 
-      // Large YouTube streams: open direct URL (proxy capped ~80MB)
       if (isGoogleVideo && large) {
         window.open(item.url, "_blank", "noopener,noreferrer");
         setStatus("فُتح رابط التنزيل المباشر — احفظه من المتصفح");
         return;
       }
 
-      const href = `/api/media-proxy?url=${encodeURIComponent(item.url)}`;
       const res = await fetch(href);
       if (!res.ok) {
         const direct = await fetch(item.url).catch(() => null);
