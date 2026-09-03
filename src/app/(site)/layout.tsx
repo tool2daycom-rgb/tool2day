@@ -10,33 +10,35 @@ export default function SiteLayout({
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
-      <div className="hidden justify-center bg-[#f7f7f7] py-2 sm:flex">
+      {/* Top leaderboard — desktop */}
+      <div className="hidden w-full justify-center border-b border-[#eee] bg-[#f7f7f7] py-3 sm:flex">
         <AdsterraBanner size="728x90" />
       </div>
-      <div className="flex justify-center bg-[#f7f7f7] py-2 sm:hidden">
+      {/* Top mobile banner */}
+      <div className="flex w-full justify-center border-b border-[#eee] bg-[#f7f7f7] py-2 sm:hidden">
         <AdsterraBanner size="320x50" />
       </div>
-      <div className="flex flex-1">
-        <aside className="hidden shrink-0 px-2 py-6 xl:block" aria-hidden>
+
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1">
+        <aside className="hidden w-[180px] shrink-0 px-2 py-6 xl:block">
           <div className="sticky top-24">
             <AdsterraBanner size="160x600" />
           </div>
         </aside>
         <main className="min-w-0 flex-1">{children}</main>
-        <aside className="hidden shrink-0 px-2 py-6 lg:block xl:hidden" aria-hidden>
-          <div className="sticky top-24">
-            <AdsterraBanner size="160x300" />
-          </div>
-        </aside>
-        <aside className="hidden shrink-0 px-2 py-6 xl:block" aria-hidden>
+        <aside className="hidden w-[180px] shrink-0 px-2 py-6 lg:block">
           <div className="sticky top-24">
             <AdsterraBanner size="160x300" />
           </div>
         </aside>
       </div>
+
       <AdsterraNative />
-      <div className="flex justify-center bg-[#f7f7f7] py-3">
+      <div className="flex w-full justify-center border-t border-[#eee] bg-[#f7f7f7] py-3">
         <AdsterraBanner size="468x60" />
+      </div>
+      <div className="flex w-full justify-center bg-[#f7f7f7] pb-3 sm:hidden">
+        <AdsterraBanner size="320x50" />
       </div>
       <SiteFooter />
     </div>

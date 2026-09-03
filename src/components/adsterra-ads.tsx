@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   ADSTERRA_BANNERS,
   ADSTERRA_NATIVE,
@@ -52,28 +52,24 @@ export function AdsterraBanner({
   className?: string;
 }) {
   const unit = ADSTERRA_BANNERS[size];
-  const srcDoc = useMemo(
-    () =>
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}</style></head><body>
-<script>atOptions={key:'${unit.key}',format:'iframe',height:${unit.height},width:${unit.width},params:{}};</script>
-<script src="https://www.highperformanceformat.com/${unit.key}/invoke.js"><\/script>
-</body></html>`,
-    [unit.key, unit.height, unit.width],
-  );
+  const uid = useId().replace(/:/g, "");
 
   return (
     <div
-      className={`flex justify-center overflow-hidden ${className}`}
+      className={`flex items-center justify-center overflow-hidden bg-[#f3f3f3] ${className}`}
+      style={{ minHeight: unit.height, minWidth: Math.min(unit.width, 320) }}
       aria-label="Advertisement"
+      data-ad={size}
     >
       <iframe
-        title="Advertisement"
+        id={`adsterra-${size}-${uid}`}
+        title={`Advertisement ${size}`}
+        src={`/ads/${size}.html`}
         width={unit.width}
         height={unit.height}
-        srcDoc={srcDoc}
         className="max-w-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
         loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
       />
     </div>
   );
@@ -101,7 +97,7 @@ export function AdsterraNative({ className = "" }: { className?: string }) {
   );
 }
 
-/** Center-screen 300×250 while a download/extract is in progress. */
+/** Center-screen 300×250 while waiting — closes when done, or via X. */
 export function AdsterraWaitOverlay({
   open,
   label,
@@ -109,14 +105,36 @@ export function AdsterraWaitOverlay({
   open: boolean;
   label?: string;
 }) {
-  if (!open) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (open) setDismissed(false);
+  }, [open]);
+
+  if (!open || dismissed) return null;
+
   return (
     <div
       className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0a0a0a]/55 p-4 backdrop-blur-[2px]"
-      role="status"
-      aria-live="polite"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label || "جارٍ التحميل…"}
     >
-      <div className="flex w-full max-w-[340px] flex-col items-center rounded-2xl border border-white/15 bg-white px-4 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="إغلاق الإعلان"
+        onClick={() => setDismissed(true)}
+      />
+      <div className="relative z-[1] flex w-full max-w-[340px] flex-col items-center rounded-2xl border border-white/15 bg-white px-4 pb-4 pt-10 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="absolute end-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-[#111] text-lg font-bold leading-none text-white transition hover:bg-[#333]"
+          aria-label="إغلاق"
+        >
+          ×
+        </button>
         <p className="mb-3 text-center text-sm font-bold text-[#111]">
           {label || "جارٍ التحميل…"}
         </p>
@@ -124,6 +142,13 @@ export function AdsterraWaitOverlay({
         <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-[#999]">
           Ad
         </p>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="mt-3 text-xs font-semibold text-[#2563eb] hover:underline"
+        >
+          إغلاق والمتابعة
+        </button>
       </div>
     </div>
   );
