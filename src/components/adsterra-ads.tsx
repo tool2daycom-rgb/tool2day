@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ADSTERRA_BANNERS,
   ADSTERRA_NATIVE,
@@ -11,11 +11,7 @@ import {
 } from "@/lib/adsterra";
 import { getStoredConsent } from "@/lib/cookie-consent";
 
-declare global {
-  interface Window {
-    atOptions?: Record<string, unknown>;
-  }
-}
+const WAIT_MIN_MS = 10_000;
 
 function adsAllowed(): boolean {
   const c = getStoredConsent();
@@ -32,37 +28,12 @@ function appendScriptOnce(id: string, src: string, parent: HTMLElement) {
   parent.appendChild(el);
 }
 
-/** Serialize banner loads — Adsterra shares global `atOptions`. */
-let bannerChain: Promise<void> = Promise.resolve();
-
-function enqueueBanner(
-  host: HTMLElement,
-  unit: { key: string; width: number; height: number },
-): Promise<void> {
-  bannerChain = bannerChain.then(
-    () =>
-      new Promise<void>((resolve) => {
-        if (!host.isConnected) {
-          resolve();
-          return;
-        }
-        host.replaceChildren();
-        window.atOptions = {
-          key: unit.key,
-          format: "iframe",
-          height: unit.height,
-          width: unit.width,
-          params: {},
-        };
-        const s = document.createElement("script");
-        s.type = "text/javascript";
-        s.src = `https://www.highperformanceformat.com/${unit.key}/invoke.js`;
-        s.onload = () => window.setTimeout(resolve, 150);
-        s.onerror = () => resolve();
-        host.appendChild(s);
-      }),
-  );
-  return bannerChain;
+function openSmartlink() {
+  try {
+    window.open(ADSTERRA_SMARTLINK, "_blank", "noopener,noreferrer");
+  } catch {
+    window.location.assign(ADSTERRA_SMARTLINK);
+  }
 }
 
 /** Popunder + Social Bar site-wide. */
@@ -86,6 +57,7 @@ export function AdsterraGlobalScripts() {
   return null;
 }
 
+/** Visible, always-clickable ad slot (Adsterra iframe + Smartlink fallback). */
 export function AdsterraBanner({
   size,
   className = "",
@@ -94,31 +66,40 @@ export function AdsterraBanner({
   className?: string;
 }) {
   const unit = ADSTERRA_BANNERS[size];
-  const hostRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host || !adsAllowed()) return;
-    let cancelled = false;
-    void enqueueBanner(host, unit).then(() => {
-      if (cancelled) return;
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [unit]);
+  const compact = unit.height <= 60;
 
   return (
     <div
-      className={`mx-auto flex flex-col items-center justify-center overflow-hidden rounded-md border border-[#e8e8e8] bg-[#fafafa] ${className}`}
-      style={{ minHeight: unit.height, width: "100%", maxWidth: unit.width }}
+      className={`relative mx-auto overflow-hidden rounded-md border border-[#222] shadow-sm ${className}`}
+      style={{ width: "100%", maxWidth: unit.width, height: unit.height }}
       aria-label="Advertisement"
       data-ad={size}
     >
-      <div
-        ref={hostRef}
-        className="flex items-center justify-center"
-        style={{ width: unit.width, height: unit.height, maxWidth: "100%" }}
+      <a
+        href={ADSTERRA_SMARTLINK}
+        target="_blank"
+        rel="noopener noreferrer sponsored"
+        className={`absolute inset-0 z-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#0a0a0a] via-[#1d4ed8] to-[#e11d48] px-2 text-center font-bold text-white ${
+          compact ? "text-xs" : "text-sm"
+        }`}
+      >
+        <span>Sponsored Offer</span>
+        <span
+          className={`mt-1 font-semibold opacity-90 ${
+            compact ? "text-[9px]" : "text-[10px]"
+          }`}
+        >
+          اضغط للعرض · Ad
+        </span>
+      </a>
+      <iframe
+        title={`Advertisement ${size}`}
+        src={`/ads/${size}.html`}
+        width={unit.width}
+        height={unit.height}
+        className="pointer-events-none absolute inset-0 z-10 max-w-full border-0"
+        loading="eager"
+        referrerPolicy="no-referrer-when-downgrade"
       />
     </div>
   );
@@ -138,28 +119,25 @@ export function AdsterraNative({ className = "" }: { className?: string }) {
 
   return (
     <div
-      className={`mx-auto my-4 w-full max-w-5xl rounded-md border border-[#e8e8e8] bg-[#fafafa] px-3 py-4 ${className}`}
+      className={`mx-auto my-4 w-full max-w-5xl rounded-md border border-[#ddd] bg-[#fafafa] px-3 py-4 ${className}`}
       aria-label="Advertisement"
     >
       <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-[#aaa]">
         Ad
       </p>
-      <div id={ADSTERRA_NATIVE.containerId} />
-      <p className="mt-2 text-center text-xs">
-        <a
-          href={ADSTERRA_SMARTLINK}
-          target="_blank"
-          rel="noopener noreferrer sponsored"
-          className="font-semibold text-[#2563eb] hover:underline"
-        >
-          Offers
-        </a>
-      </p>
+      <div id={ADSTERRA_NATIVE.containerId} className="min-h-[40px]" />
+      <a
+        href={ADSTERRA_SMARTLINK}
+        target="_blank"
+        rel="noopener noreferrer sponsored"
+        className="mt-2 flex min-h-[88px] items-center justify-center rounded-lg bg-gradient-to-r from-[#0a0a0a] via-[#1d4ed8] to-[#e11d48] px-4 text-center text-sm font-bold text-white"
+      >
+        Sponsored Offer — اضغط للعرض
+      </a>
     </div>
   );
 }
 
-/** Mid-page 300×250 block for tool / home content. */
 export function AdsterraInContent({ className = "" }: { className?: string }) {
   return (
     <div className={`my-6 flex justify-center px-3 ${className}`}>
@@ -168,16 +146,17 @@ export function AdsterraInContent({ className = "" }: { className?: string }) {
   );
 }
 
-/** Sticky mobile bottom banner. */
 export function AdsterraMobileSticky() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-[80] flex justify-center border-t border-[#e5e5e5] bg-white/95 py-1 backdrop-blur sm:hidden">
-      <AdsterraBanner size="320x50" className="border-0 bg-transparent" />
+      <AdsterraBanner size="320x50" className="border-0 shadow-none" />
     </div>
   );
 }
 
-/** Center-screen 300×250 while waiting — closes when done, or via X. */
+/**
+ * Center wait ad: ≥10 seconds; Exit/X opens smartlink first, then closes after lock.
+ */
 export function AdsterraWaitOverlay({
   open,
   label,
@@ -185,13 +164,37 @@ export function AdsterraWaitOverlay({
   open: boolean;
   label?: string;
 }) {
-  const [dismissed, setDismissed] = useState(false);
+  const [active, setActive] = useState(false);
+  const [canClose, setCanClose] = useState(false);
+  const [leftSec, setLeftSec] = useState(10);
 
   useEffect(() => {
-    if (open) setDismissed(false);
+    if (!open) return;
+    setActive(true);
+    setCanClose(false);
+    setLeftSec(10);
+    const started = Date.now();
+    const tick = window.setInterval(() => {
+      const left = Math.max(0, WAIT_MIN_MS - (Date.now() - started));
+      setLeftSec(Math.ceil(left / 1000));
+      if (left <= 0) {
+        setCanClose(true);
+        window.clearInterval(tick);
+      }
+    }, 200);
+    return () => window.clearInterval(tick);
   }, [open]);
 
-  if (!open || dismissed) return null;
+  useEffect(() => {
+    if (!open && active && canClose) setActive(false);
+  }, [open, active, canClose]);
+
+  if (!active) return null;
+
+  const tryClose = () => {
+    openSmartlink();
+    if (canClose) setActive(false);
+  };
 
   return (
     <div
@@ -200,34 +203,39 @@ export function AdsterraWaitOverlay({
       aria-modal="true"
       aria-label={label || "جارٍ التحميل…"}
     >
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default"
-        aria-label="إغلاق الإعلان"
-        onClick={() => setDismissed(true)}
-      />
       <div className="relative z-[1] flex w-full max-w-[340px] flex-col items-center rounded-2xl border border-white/15 bg-white px-4 pb-4 pt-10 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
         <button
           type="button"
-          onClick={() => setDismissed(true)}
+          onClick={tryClose}
           className="absolute end-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-[#111] text-lg font-bold leading-none text-white transition hover:bg-[#333]"
-          aria-label="إغلاق"
+          aria-label="فتح الإعلان ثم الإغلاق"
         >
           ×
         </button>
-        <p className="mb-3 text-center text-sm font-bold text-[#111]">
+        <p className="mb-1 text-center text-sm font-bold text-[#111]">
           {label || "جارٍ التحميل…"}
         </p>
-        <AdsterraBanner size="300x250" />
-        <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-[#999]">
-          Ad
+        <p className="mb-3 text-center text-[11px] font-semibold text-[#666]">
+          {canClose
+            ? "الخروج يفتح الإعلان أولاً ثم يغلق النافذة"
+            : `يبقى ${leftSec} ثوانٍ — الضغط على × يفتح الإعلان`}
         </p>
+        <AdsterraBanner size="300x250" />
         <button
           type="button"
-          onClick={() => setDismissed(true)}
-          className="mt-3 text-xs font-semibold text-[#2563eb] hover:underline"
+          onClick={() => openSmartlink()}
+          className="mt-2 w-full rounded-lg bg-[#e11d48] px-3 py-2.5 text-sm font-bold text-white hover:bg-[#be123c]"
         >
-          إغلاق والمتابعة
+          فتح العرض الإعلاني
+        </button>
+        <button
+          type="button"
+          onClick={tryClose}
+          className="mt-2 text-xs font-semibold text-[#2563eb] hover:underline"
+        >
+          {canClose
+            ? "فتح الإعلان ثم إغلاق والمتابعة"
+            : `انتظر ${leftSec}ث — أو اضغط × لفتح الإعلان`}
         </button>
       </div>
     </div>
