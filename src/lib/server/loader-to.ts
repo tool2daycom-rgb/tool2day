@@ -62,13 +62,17 @@ function containerOf(format?: string, isAudio?: boolean): string {
   return "MP4";
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  opts?: { timeoutMs?: number },
+): Promise<T> {
+  const timeoutMs = opts?.timeoutMs ?? 12_000;
   const res = await fetch(url, {
     headers: {
       Accept: "application/json, text/javascript, */*",
       "User-Agent": UA,
     },
-    signal: AbortSignal.timeout(12_000),
+    signal: AbortSignal.timeout(timeoutMs),
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`loader.to HTTP ${res.status}`);
@@ -101,7 +105,7 @@ async function pollDownload(
 export async function extractOneWithLoaderTo(
   pageUrl: string,
   format: string,
-  opts?: { maxMs?: number },
+  opts?: { maxMs?: number; fetchTimeoutMs?: number },
 ): Promise<LoaderToHit | null> {
   const startUrl =
     `https://loader.to/ajax/download.php?format=${encodeURIComponent(format)}` +
@@ -109,7 +113,9 @@ export async function extractOneWithLoaderTo(
 
   let start: StartResponse;
   try {
-    start = await fetchJson<StartResponse>(startUrl);
+    start = await fetchJson<StartResponse>(startUrl, {
+      timeoutMs: opts?.fetchTimeoutMs,
+    });
   } catch {
     return null;
   }
@@ -186,11 +192,25 @@ export async function socialViaLoaderTo(
   pageUrl: string,
 ): Promise<{ title?: string; thumbnail?: string; items: LoaderToHit[] } | null> {
   // Sequential to avoid function timeouts on some social pages.
-  const hit720 = await extractOneWithLoaderTo(pageUrl, "720", { maxMs: 14_000 });
+  const hit720 = await extractOneWithLoaderTo(pageUrl, "720", {
+    maxMs: 10_000,
+    fetchTimeoutMs: 7_000,
+  });
   const hit360 = hit720
     ? null
-    : await extractOneWithLoaderTo(pageUrl, "360", { maxMs: 12_000 });
-  const hit = hit720 || hit360 || null;
+    : await extractOneWithLoaderTo(pageUrl, "360", {
+        maxMs: 8_000,
+        fetchTimeoutMs: 6_000,
+      });
+  const hitMp4 =
+    hit720 || hit360
+      ? null
+      : await extractOneWithLoaderTo(pageUrl, "mp4", {
+          maxMs: 8_000,
+          fetchTimeoutMs: 6_000,
+        });
+
+  const hit = hit720 || hit360 || hitMp4 || null;
   if (!hit) return null;
 
   const items: LoaderToHit[] = [hit];

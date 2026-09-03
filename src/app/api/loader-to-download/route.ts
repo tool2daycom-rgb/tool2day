@@ -19,7 +19,8 @@ export async function POST(req: Request) {
     }
 
     const hit = await extractOneWithLoaderTo(pageUrl, format, {
-      maxMs: 15_000,
+      maxMs: 12_000,
+      fetchTimeoutMs: 8_000,
     });
 
     if (!hit?.url) {
