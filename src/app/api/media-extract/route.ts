@@ -467,6 +467,8 @@ export async function POST(req: Request) {
       !isDirectMediaUrl(target.toString()) &&
       platform !== "thumbnails"
     ) {
+      const skipCobalt =
+        platform === "instagram" || platform === "tiktok" || platform === "facebook";
       const mapLoaderItems = (
         got: {
           title?: string;
@@ -533,91 +535,93 @@ export async function POST(req: Request) {
       }
 
       try {
-        const { extractWithCobalt } = await import("@/lib/server/cobalt");
-        const cobalt = await extractWithCobalt(target.toString(), {
-          downloadMode: "auto",
-          videoQuality: "1080",
-        });
-        if (cobalt?.items.length) {
-          const items: MediaHit[] = cobalt.items.map((i) => ({
-            url: i.url,
-            type: i.type,
-            title: i.title,
-            thumbnail: i.thumbnail,
-            source: i.source,
-            quality: i.quality,
-            container: i.container,
-            hasAudio: i.hasAudio,
-            hasVideo: i.hasVideo,
-            size: i.size ?? null,
-          }));
-
-          // Ensure one maxres/thumbnail image when cobalt returned video only
-          const hasImage = items.some((i) => i.type === "image");
-          if (!hasImage) {
-            // light og:image probe
-            try {
-              const pageRes = await fetch(target.toString(), {
-                headers: {
-                  "User-Agent": userAgentFor(platform),
-                  Accept: "text/html",
-                },
-                signal: AbortSignal.timeout(8_000),
-              });
-              if (pageRes.ok) {
-                const html = (await pageRes.text()).slice(0, 400_000);
-                const img =
-                  metaContent(html, "og:image:secure_url") ||
-                  metaContent(html, "og:image") ||
-                  metaContent(html, "twitter:image");
-                const abs = absUrl(target.toString(), img || undefined);
-                if (abs) {
-                  items.push({
-                    url: abs,
-                    type: "image",
-                    title: "صورة — أقصى جودة (maxres)",
-                    thumbnail: abs,
-                    source: "og:image",
-                    quality: "maxres",
-                    container: "JPG",
-                  });
-                }
-              }
-            } catch {
-              /* optional thumb */
-            }
-          }
-
-          // Also offer audio-only when video present
-          if (
-            items.some((i) => i.type === "video") &&
-            !items.some((i) => i.type === "audio")
-          ) {
-            const audioOnly = await extractWithCobalt(target.toString(), {
-              downloadMode: "audio",
-            });
-            if (audioOnly?.items[0]) {
-              items.push({
-                url: audioOnly.items[0].url,
-                type: "audio",
-                title: audioOnly.items[0].title || "صوت",
-                source: audioOnly.items[0].source,
-                container: audioOnly.items[0].container || "MP3",
-                hasAudio: true,
-                hasVideo: false,
-              });
-            }
-          }
-
-          return NextResponse.json({
-            ok: true,
-            pageUrl: target.toString(),
-            title: cobalt.title || undefined,
-            platform,
-            thumbnail: items.find((i) => i.thumbnail)?.thumbnail,
-            items,
-            note: `فيديو مع صوت + صورة عند التوفر · ${platform}`,
+        if (!skipCobalt) {
+          const { extractWithCobalt } = await import("@/lib/server/cobalt");
+          const cobalt = await extractWithCobalt(target.toString(), {
+            downloadMode: "auto",
+            videoQuality: "1080",
           });
+          if (cobalt?.items.length) {
+            const items: MediaHit[] = cobalt.items.map((i) => ({
+              url: i.url,
+              type: i.type,
+              title: i.title,
+              thumbnail: i.thumbnail,
+              source: i.source,
+              quality: i.quality,
+              container: i.container,
+              hasAudio: i.hasAudio,
+              hasVideo: i.hasVideo,
+              size: i.size ?? null,
+            }));
+
+            // Ensure one maxres/thumbnail image when cobalt returned video only
+            const hasImage = items.some((i) => i.type === "image");
+            if (!hasImage) {
+              // light og:image probe
+              try {
+                const pageRes = await fetch(target.toString(), {
+                  headers: {
+                    "User-Agent": userAgentFor(platform),
+                    Accept: "text/html",
+                  },
+                  signal: AbortSignal.timeout(8_000),
+                });
+                if (pageRes.ok) {
+                  const html = (await pageRes.text()).slice(0, 400_000);
+                  const img =
+                    metaContent(html, "og:image:secure_url") ||
+                    metaContent(html, "og:image") ||
+                    metaContent(html, "twitter:image");
+                  const abs = absUrl(target.toString(), img || undefined);
+                  if (abs) {
+                    items.push({
+                      url: abs,
+                      type: "image",
+                      title: "صورة — أقصى جودة (maxres)",
+                      thumbnail: abs,
+                      source: "og:image",
+                      quality: "maxres",
+                      container: "JPG",
+                    });
+                  }
+                }
+              } catch {
+                /* optional thumb */
+              }
+            }
+
+            // Also offer audio-only when video present
+            if (
+              items.some((i) => i.type === "video") &&
+              !items.some((i) => i.type === "audio")
+            ) {
+              const audioOnly = await extractWithCobalt(target.toString(), {
+                downloadMode: "audio",
+              });
+              if (audioOnly?.items[0]) {
+                items.push({
+                  url: audioOnly.items[0].url,
+                  type: "audio",
+                  title: audioOnly.items[0].title || "صوت",
+                  source: audioOnly.items[0].source,
+                  container: audioOnly.items[0].container || "MP3",
+                  hasAudio: true,
+                  hasVideo: false,
+                });
+              }
+            }
+
+            return NextResponse.json({
+              ok: true,
+              pageUrl: target.toString(),
+              title: cobalt.title || undefined,
+              platform,
+              thumbnail: items.find((i) => i.thumbnail)?.thumbnail,
+              items,
+              note: `فيديو مع صوت + صورة عند التوفر · ${platform}`,
+            });
+          }
         }
       } catch {
         /* fall through */
