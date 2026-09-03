@@ -11,6 +11,23 @@ const nextConfig: NextConfig = {
     "youtubei.js",
   ],
   transpilePackages: ["@imgly/background-removal", "tesseract.js"],
+  async redirects() {
+    return [
+      // Adsterra units are approved for tool2day.com only — never serve ads on *.vercel.app
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "tool2day.vercel.app" }],
+        destination: "https://www.tool2day.com/:path*",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "tool2day-o8np.vercel.app" }],
+        destination: "https://www.tool2day.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   // نفس الأصل لتجنّب CORS على نماذج إزالة الخلفية
   async rewrites() {
     return [

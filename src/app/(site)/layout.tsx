@@ -1,5 +1,6 @@
 import {
   AdsterraBanner,
+  AdsterraHostGuard,
   AdsterraNative,
 } from "@/components/adsterra-ads";
 import { SiteFooter } from "@/components/site-footer";
@@ -12,6 +13,7 @@ export default function SiteLayout({
 }>) {
   return (
     <div className="flex min-h-full flex-col">
+      <AdsterraHostGuard />
       <SiteHeader />
 
       {/* Unique Adsterra keys only — never reuse the same unit twice */}

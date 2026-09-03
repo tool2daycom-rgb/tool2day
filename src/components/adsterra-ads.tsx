@@ -9,21 +9,15 @@ import {
   ADSTERRA_SOCIAL_BAR,
   type AdsterraBannerSize,
 } from "@/lib/adsterra";
-import { getStoredConsent } from "@/lib/cookie-consent";
 
 const WAIT_MIN_MS = 10_000;
+const CANONICAL_HOST = "www.tool2day.com";
 
 declare global {
   interface Window {
     atOptions?: Record<string, unknown>;
     __adsterraQueue?: Promise<void>;
   }
-}
-
-function adsAllowed(): boolean {
-  const c = getStoredConsent();
-  if (!c) return true;
-  return c.advertising;
 }
 
 function appendScriptOnce(id: string, src: string, parent: HTMLElement) {
@@ -41,6 +35,12 @@ function openSmartlink() {
   } catch {
     window.location.assign(ADSTERRA_SMARTLINK);
   }
+}
+
+function isApprovedHost(): boolean {
+  if (typeof window === "undefined") return true;
+  const h = window.location.hostname.replace(/^www\./, "");
+  return h === "tool2day.com" || h === "localhost" || h === "127.0.0.1";
 }
 
 /** Serialize direct page injections (shared atOptions). */
@@ -70,7 +70,7 @@ function enqueueDirectBanner(
         const inv = document.createElement("script");
         inv.type = "text/javascript";
         inv.src = `https://www.highperformanceformat.com/${unit.key}/invoke.js`;
-        inv.onload = () => window.setTimeout(resolve, 300);
+        inv.onload = () => window.setTimeout(resolve, 400);
         inv.onerror = () => resolve();
         host.appendChild(conf);
         host.appendChild(inv);
@@ -80,82 +80,72 @@ function enqueueDirectBanner(
   return next;
 }
 
-/** Popunder + Social Bar on the real page origin. */
+/** Popunder + Social Bar — only on approved production host. */
 export function AdsterraGlobalScripts() {
   useEffect(() => {
+    if (!isApprovedHost()) return;
     const apply = () => {
-      // Always attempt Adsterra — units are approved; cookie gate only for AdSense/gtag
       appendScriptOnce("adsterra-popunder", ADSTERRA_POPUNDER, document.head);
       appendScriptOnce("adsterra-socialbar", ADSTERRA_SOCIAL_BAR, document.body);
     };
     apply();
     const t = window.setTimeout(apply, 800);
-    window.addEventListener("storage", apply);
-    window.addEventListener("tool2day:consent", apply);
-    return () => {
-      window.clearTimeout(t);
-      window.removeEventListener("storage", apply);
-      window.removeEventListener("tool2day:consent", apply);
-    };
+    return () => window.clearTimeout(t);
   }, []);
   return null;
 }
 
+/** Wrong-host notice when opening *.vercel.app */
+export function AdsterraHostGuard() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hostname.includes("vercel.app")) setShow(true);
+  }, []);
+  if (!show) return null;
+  return (
+    <div className="z-[100] bg-[#7f1d1d] px-3 py-2 text-center text-sm font-bold text-white">
+      Adsterra لا يعمل على vercel.app — افتح{" "}
+      <a
+        className="underline"
+        href={`https://${CANONICAL_HOST}${typeof window !== "undefined" ? window.location.pathname : ""}`}
+      >
+        www.tool2day.com
+      </a>
+    </div>
+  );
+}
+
 /**
- * Real Adsterra banner.
- * Prefer same-origin /ads/*.html iframe (Adsterra sees tool2day.com).
- * Also keep a direct-inject mode for the wait overlay.
+ * Real Adsterra banner injected directly into the page (sees tool2day.com).
  */
 export function AdsterraBanner({
   size,
   className = "",
-  mode = "iframe",
 }: {
   size: AdsterraBannerSize;
   className?: string;
-  mode?: "iframe" | "direct";
 }) {
   const unit = ADSTERRA_BANNERS[size];
-  const hostRef = useId().replace(/:/g, "");
-  const [directHost, setDirectHost] = useState<HTMLDivElement | null>(null);
+  const uid = useId().replace(/:/g, "");
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (mode !== "direct" || !directHost) return;
-    void enqueueDirectBanner(directHost, unit);
-  }, [mode, directHost, unit]);
-
-  if (mode === "direct") {
-    return (
-      <div
-        className={`mx-auto overflow-hidden bg-[#f5f5f5] ${className}`}
-        style={{ width: unit.width, maxWidth: "100%", minHeight: unit.height }}
-        aria-label="Advertisement"
-        data-ad={size}
-      >
-        <div
-          ref={setDirectHost}
-          id={`adsterra-direct-${hostRef}`}
-          style={{ width: unit.width, height: unit.height, maxWidth: "100%" }}
-        />
-      </div>
-    );
-  }
+    if (!host || !isApprovedHost()) return;
+    void enqueueDirectBanner(host, unit);
+  }, [host, unit]);
 
   return (
     <div
       className={`mx-auto overflow-hidden bg-[#f5f5f5] ${className}`}
-      style={{ width: unit.width, maxWidth: "100%", height: unit.height }}
+      style={{ width: unit.width, maxWidth: "100%", minHeight: unit.height }}
       aria-label="Advertisement"
       data-ad={size}
     >
-      <iframe
-        title={`Adsterra ${size}`}
-        src={`/ads/${size}.html`}
-        width={unit.width}
-        height={unit.height}
-        className="max-w-full border-0"
-        scrolling="no"
-        loading="eager"
+      <div
+        ref={setHost}
+        id={`adsterra-${size}-${uid}`}
+        style={{ width: unit.width, height: unit.height, maxWidth: "100%" }}
       />
     </div>
   );
@@ -163,6 +153,7 @@ export function AdsterraBanner({
 
 export function AdsterraNative({ className = "" }: { className?: string }) {
   useEffect(() => {
+    if (!isApprovedHost()) return;
     const run = () => {
       if (document.getElementById("adsterra-native-invoke")) return;
       if (!document.getElementById(ADSTERRA_NATIVE.containerId)) return;
@@ -197,7 +188,7 @@ export function AdsterraInContent({ className = "" }: { className?: string }) {
 }
 
 /**
- * Center wait ad: real 300×250 (direct inject on page).
+ * Center wait ad: isolated /ads iframe so it doesn't clash with page banners.
  * ≥10s lock; Exit/X opens Smartlink first.
  */
 export function AdsterraWaitOverlay({
@@ -263,7 +254,19 @@ export function AdsterraWaitOverlay({
             ? "الخروج يفتح الإعلان أولاً ثم يغلق النافذة"
             : `يبقى ${leftSec} ثوانٍ — × يفتح الإعلان`}
         </p>
-        <AdsterraBanner size="300x250" mode="direct" />
+        <div
+          className="overflow-hidden bg-[#f5f5f5]"
+          style={{ width: 300, height: 250, maxWidth: "100%" }}
+        >
+          <iframe
+            title="Adsterra 300x250"
+            src="/ads/300x250.html"
+            width={300}
+            height={250}
+            className="max-w-full border-0"
+            scrolling="no"
+          />
+        </div>
         <button
           type="button"
           onClick={tryClose}
