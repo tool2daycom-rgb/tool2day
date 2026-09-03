@@ -7,8 +7,58 @@ export const maxDuration = 30;
 
 const UA =
   "Mozilla/5.0 (compatible; Tool2DayMediaBot/1.0; +https://www.tool2day.com)";
+const MOBILE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 const MAX_HTML_BYTES = 2_500_000;
 const FETCH_TIMEOUT_MS = 18_000;
+
+type PlatformHint =
+  | "all"
+  | "youtube"
+  | "tiktok"
+  | "instagram"
+  | "facebook"
+  | "pinterest"
+  | "google"
+  | string;
+
+function detectPlatform(url: string): PlatformHint {
+  const h = url.toLowerCase();
+  if (/youtube\.com|youtu\.be|youtube-nocookie\.com/.test(h)) return "youtube";
+  if (/tiktok\.com|vm\.tiktok\.com/.test(h)) return "tiktok";
+  if (/instagram\.com|instagr\.am/.test(h)) return "instagram";
+  if (/facebook\.com|fb\.watch|fb\.com/.test(h)) return "facebook";
+  if (/pinterest\.com|pin\.it/.test(h)) return "pinterest";
+  if (/drive\.google\.com|docs\.google\.com|googleusercontent\.com/.test(h))
+    return "google";
+  return "all";
+}
+
+function normalizeGoogleDriveUrl(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    if (!/drive\.google\.com|docs\.google\.com/.test(u.hostname)) return null;
+    const fileId =
+      u.pathname.match(/\/file\/d\/([^/]+)/)?.[1] ||
+      u.searchParams.get("id");
+    if (!fileId) return null;
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  } catch {
+    return null;
+  }
+}
+
+function userAgentFor(platform: PlatformHint): string {
+  if (
+    platform === "tiktok" ||
+    platform === "instagram" ||
+    platform === "facebook" ||
+    platform === "pinterest"
+  ) {
+    return MOBILE_UA;
+  }
+  return UA;
+}
 
 export type MediaHit = {
   url: string;
@@ -208,29 +258,34 @@ function isDirectMediaUrl(url: string): boolean {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { url?: string };
+    const body = (await req.json()) as { url?: string; platform?: string };
     const raw = (body.url || "").trim();
     if (!raw) {
       return NextResponse.json({ error: "الصق رابطاً أولاً" }, { status: 400 });
     }
 
-    const target = await assertSafeUrl(raw);
+    const driveDirect = normalizeGoogleDriveUrl(raw);
+    const target = await assertSafeUrl(driveDirect || raw);
+    const platform = (body.platform as PlatformHint) || detectPlatform(target.toString());
 
     // Direct media link — no HTML scrape needed
-    if (isDirectMediaUrl(target.toString())) {
+    if (isDirectMediaUrl(target.toString()) || driveDirect) {
       return NextResponse.json({
         ok: true,
         pageUrl: target.toString(),
         title: target.pathname.split("/").pop() || "ملف",
+        platform,
         items: [
           {
             url: target.toString(),
             type: guessType(target.toString()),
             title: target.pathname.split("/").pop(),
-            source: "direct",
+            source: driveDirect ? "google-drive" : "direct",
           } satisfies MediaHit,
         ],
-        note: "رابط ملف مباشر",
+        note: driveDirect
+          ? "رابط Google Drive مباشر للتنزيل"
+          : "رابط ملف مباشر",
       });
     }
 
@@ -242,9 +297,11 @@ export async function POST(req: Request) {
         signal: controller.signal,
         redirect: "follow",
         headers: {
-          "User-Agent": UA,
-          Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
+          "User-Agent": userAgentFor(platform),
+          Accept:
+            "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
           "Accept-Language": "ar,en;q=0.8",
+          Referer: target.origin + "/",
         },
       });
     } finally {
@@ -264,6 +321,7 @@ export async function POST(req: Request) {
         ok: true,
         pageUrl: target.toString(),
         title: target.pathname.split("/").pop() || "ملف",
+        platform,
         items: [
           {
             url: target.toString(),
@@ -292,17 +350,27 @@ export async function POST(req: Request) {
         ok: true,
         pageUrl: res.url || target.toString(),
         title: pageTitle,
+        platform,
         items: [],
         note:
-          "لم يُعثر على وسائط عامة في الصفحة. بعض المنصات تخفي الروابط أو تتطلب تطبيقاً خاصاً.",
+          "لم يُعثر على وسائط عامة في الصفحة. بعض المنصات (يوتيوب/تيك توك…) قد تخفي الرابط المباشر — جرّب الصور المصغّرة أو رابط مشاركة عاماً.",
       });
     }
+
+    // Prefer video hits first for downloader UX
+    items.sort((a, b) => {
+      const rank = (t: string) =>
+        t === "video" ? 0 : t === "audio" ? 1 : t === "image" ? 2 : 3;
+      return rank(a.type) - rank(b.type);
+    });
 
     return NextResponse.json({
       ok: true,
       pageUrl: res.url || target.toString(),
       title: pageTitle,
+      platform,
       items,
+      note: `تم الاستخراج من وسائط عامة · ${platform}`,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "فشل الاستخراج";

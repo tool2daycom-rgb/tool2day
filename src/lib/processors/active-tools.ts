@@ -48,6 +48,7 @@ export type ActiveToolKind =
   | "video-recorder"
   | "tts"
   | "media-downloader"
+  | "video-downloader"
   | "video-to-text"
   | "text-tools"
   | "error-detector"
@@ -112,6 +113,7 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "video-recorder": "video-recorder",
   "text-to-speech": "tts",
   "media-downloader": "media-downloader",
+  "video-downloader": "video-downloader",
   "video-to-text": "video-to-text",
   "text-tools": "text-tools",
   "error-detector": "error-detector",

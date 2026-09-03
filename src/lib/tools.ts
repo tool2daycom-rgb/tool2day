@@ -72,6 +72,7 @@ export type ToolCategory =
   | "calculators"
   | "ai"
   | "social-dev"
+  | "downloaders"
   | "video"
   | "audio"
   | "pdf"
@@ -113,6 +114,11 @@ export const categoryMeta: Record<
     sectionTitle: "أدوات المطورين والسوشيال ميديا",
     anchor: "social-dev",
   },
+  downloaders: {
+    label: "تحميل فيديوهات",
+    sectionTitle: "أداة تحميل فيديوهات",
+    anchor: "downloaders",
+  },
   video: {
     label: "الفيديو",
     sectionTitle: "أدوات الفيديو",
@@ -145,6 +151,7 @@ export const navCategories: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
+  "downloaders",
   "social-dev",
   "converters",
   "pdf",
@@ -233,10 +240,9 @@ export const tools: Tool[] = [
     title: "تحميل صور مصغّرة يوتيوب وانستغرام",
     description:
       "استخرج ونزّل صور الغلاف المصغّرة من روابط يوتيوب أو انستغرام بجودة عالية.",
-    category: "social-dev",
+    category: "downloaders",
     accept: "text/plain",
     icon: ImageDown,
-    hidden: true,
   },
   {
     slug: "hashtag-generator",
@@ -453,10 +459,18 @@ export const tools: Tool[] = [
     title: "تحميل الوسائط من رابط",
     description:
       "الصق رابط صفحة أو ملف واستخرج فيديو/صورة/صوت عاماً للتنزيل — مجاناً وبدون علامة مائية.",
-    category: "video",
+    category: "downloaders",
     accept: "text/plain",
     icon: Download,
-    hidden: true,
+  },
+  {
+    slug: "video-downloader",
+    title: "تحميل فيديوهات",
+    description:
+      "أداة واحدة لتحميل فيديوهات وصور من يوتيوب، تيك توك، انستغرام، فيسبوك، بينترست، وروابط جوجل — بدون علامة مائية، مع صور مصغّرة وإزالة الشعار.",
+    category: "downloaders",
+    accept: "text/plain",
+    icon: Download,
   },
   {
     slug: "video-to-text",
@@ -510,11 +524,10 @@ export const tools: Tool[] = [
   {
     slug: "remove-logo",
     title: "إزالة الشعار من الفيديو",
-    description: "أخفِ الشعارات والعناصر غير المرغوبة.",
-    category: "video",
+    description: "أخفِ الشعارات والعلامات المائية من الفيديو بدون غبش سميك.",
+    category: "downloaders",
     accept: "video/*",
     icon: WandSparkles,
-    hidden: true,
   },
   {
     slug: "crop-video",
@@ -889,10 +902,9 @@ export const tools: Tool[] = [
     title: "إزالة الشعار من صورة",
     description:
       "أخفِ الشعارات والعلامات المائية من الصور بنفس نظام إزالة شعار الفيديو — بدون غبش سميك.",
-    category: "utilities",
+    category: "downloaders",
     accept: "image/*",
     icon: WandSparkles,
-    hidden: true,
   },
   {
     slug: "qr-generator",
@@ -928,6 +940,7 @@ export const categoryOrder: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
+  "downloaders",
   "social-dev",
   "video",
   "audio",

@@ -16,6 +16,7 @@ import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import { VideoSubtitlesWorkspace } from "@/components/video-subtitles-workspace";
 import { KineticCaptionsWorkspace } from "@/components/kinetic-captions-workspace";
 import { PngLibraryWorkspace } from "@/components/png-library-workspace";
+import { VideoDownloaderWorkspace } from "@/components/video-downloader-workspace";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
 import { JsonLd } from "@/components/json-ld";
 import { resolveRequestLocale } from "@/lib/request-locale";
@@ -173,6 +174,7 @@ export default async function ToolPage({ params }: Props) {
   const isVideoSubtitles = kind === "video-subtitles";
   const isKineticCaptions = kind === "kinetic-captions";
   const isPngLibrary = kind === "png-library";
+  const isVideoDownloader = kind === "video-downloader";
   const isImageConverter = slug === "image-converter";
   const isWide =
     isPdf ||
@@ -183,6 +185,7 @@ export default async function ToolPage({ params }: Props) {
     isVideoSubtitles ||
     isKineticCaptions ||
     isPngLibrary ||
+    isVideoDownloader ||
     kind === "video-content-ideas";
 
   return (
@@ -320,6 +323,12 @@ export default async function ToolPage({ params }: Props) {
           />
         ) : isPngLibrary ? (
           <PngLibraryWorkspace
+            slug={tool.slug}
+            arTitle={tool.title}
+            arDescription={tool.description}
+          />
+        ) : isVideoDownloader ? (
+          <VideoDownloaderWorkspace
             slug={tool.slug}
             arTitle={tool.title}
             arDescription={tool.description}
