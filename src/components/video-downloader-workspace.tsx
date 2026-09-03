@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { LogoRemoveControls, type DelogoBox } from "@/components/logo-remove-controls";
 import { useToolDisplay } from "@/hooks/use-tool-display";
@@ -33,14 +34,49 @@ type MediaItem = {
   videoId?: string;
 };
 
-const PLATFORMS: { id: PlatformId; label: string; hint: string }[] = [
+const PLATFORMS: {
+  id: PlatformId;
+  label: string;
+  hint: string;
+  icon?: string;
+}[] = [
   { id: "all", label: "الكل", hint: "أي رابط عام" },
-  { id: "youtube", label: "YouTube", hint: "يوتيوب / Shorts" },
-  { id: "tiktok", label: "TikTok", hint: "تيك توك" },
-  { id: "instagram", label: "Instagram", hint: "ريلز / بوست" },
-  { id: "facebook", label: "Facebook", hint: "فيسبوك / Watch" },
-  { id: "pinterest", label: "Pinterest", hint: "بينترست" },
-  { id: "google", label: "Google", hint: "Drive / روابط جوجل" },
+  {
+    id: "youtube",
+    label: "YouTube",
+    hint: "يوتيوب / Shorts",
+    icon: "/platform-icons/youtube.png",
+  },
+  {
+    id: "tiktok",
+    label: "TikTok",
+    hint: "تيك توك",
+    icon: "/platform-icons/tiktok.png",
+  },
+  {
+    id: "instagram",
+    label: "Instagram",
+    hint: "ريلز / بوست",
+    icon: "/platform-icons/instagram.png",
+  },
+  {
+    id: "facebook",
+    label: "Facebook",
+    hint: "فيسبوك / Watch",
+    icon: "/platform-icons/facebook.png",
+  },
+  {
+    id: "pinterest",
+    label: "Pinterest",
+    hint: "بينترست",
+    icon: "/platform-icons/pinterest.png",
+  },
+  {
+    id: "google",
+    label: "Google",
+    hint: "Drive / روابط جوجل",
+    icon: "/platform-icons/google.png",
+  },
   { id: "thumbnails", label: "صور مصغّرة", hint: "يوتيوب maxres" },
   { id: "delogo-video", label: "إزالة شعار فيديو", hint: "بدون علامة مائية" },
   { id: "delogo-image", label: "إزالة شعار صورة", hint: "بدون علامة مائية" },
@@ -560,13 +596,22 @@ export function VideoDownloaderWorkspace({
               key={p.id}
               type="button"
               onClick={() => setPlatform(p.id)}
-              className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
                 platform === p.id
                   ? "bg-[#111] text-white"
                   : "bg-white/80 text-[#444] hover:bg-white"
               }`}
               title={p.hint}
             >
+              {p.icon ? (
+                <Image
+                  src={p.icon}
+                  alt=""
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 rounded-sm object-contain"
+                />
+              ) : null}
               {p.label}
             </button>
           ))}
