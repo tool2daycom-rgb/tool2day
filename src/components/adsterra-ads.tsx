@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ADSTERRA_BANNERS,
   ADSTERRA_NATIVE,
@@ -11,13 +11,6 @@ import {
 } from "@/lib/adsterra";
 
 const WAIT_MIN_MS = 10_000;
-
-declare global {
-  interface Window {
-    atOptions?: Record<string, unknown>;
-    __adsterraQueue?: Promise<void>;
-  }
-}
 
 function appendScriptOnce(id: string, src: string, parent: HTMLElement) {
   if (document.getElementById(id)) return;
@@ -42,44 +35,38 @@ function isApprovedHost(): boolean {
   return h === "tool2day.com" || h === "localhost" || h === "127.0.0.1";
 }
 
-/** Serialize direct page injections (shared atOptions). */
-function enqueueDirectBanner(
-  host: HTMLElement,
-  unit: { key: string; width: number; height: number },
-): Promise<void> {
-  const prev = window.__adsterraQueue ?? Promise.resolve();
-  const next = prev.then(
-    () =>
-      new Promise<void>((resolve) => {
-        if (!host.isConnected) {
-          resolve();
-          return;
-        }
-        host.replaceChildren();
-        window.atOptions = {
-          key: unit.key,
-          format: "iframe",
-          height: unit.height,
-          width: unit.width,
-          params: {},
-        };
-        const conf = document.createElement("script");
-        conf.type = "text/javascript";
-        conf.text = `atOptions = ${JSON.stringify(window.atOptions)};`;
-        const inv = document.createElement("script");
-        inv.type = "text/javascript";
-        inv.src = `https://www.highperformanceformat.com/${unit.key}/invoke.js`;
-        inv.onload = () => window.setTimeout(resolve, 400);
-        inv.onerror = () => resolve();
-        host.appendChild(conf);
-        host.appendChild(inv);
-      }),
+/** Official Adsterra unit via same-origin /ads page (www.tool2day.com). */
+export function AdsterraBanner({
+  size,
+  className = "",
+}: {
+  size: AdsterraBannerSize;
+  className?: string;
+}) {
+  const unit = ADSTERRA_BANNERS[size];
+
+  return (
+    <div
+      className={`mx-auto overflow-hidden bg-[#f5f5f5] ${className}`}
+      style={{ width: unit.width, maxWidth: "100%", minHeight: unit.height }}
+      aria-label="Advertisement"
+      data-ad={size}
+    >
+      <iframe
+        title={`Adsterra ${size}`}
+        src={`/ads/${size}.html`}
+        width={unit.width}
+        height={unit.height}
+        className="max-w-full border-0"
+        scrolling="no"
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    </div>
   );
-  window.__adsterraQueue = next.catch(() => undefined);
-  return next;
 }
 
-/** Popunder + Social Bar — only on approved production host. */
+/** Popunder + Social Bar on approved host only. */
 export function AdsterraGlobalScripts() {
   useEffect(() => {
     if (!isApprovedHost()) return;
@@ -92,41 +79,6 @@ export function AdsterraGlobalScripts() {
     return () => window.clearTimeout(t);
   }, []);
   return null;
-}
-
-/**
- * Real Adsterra banner injected directly into the page (sees tool2day.com).
- */
-export function AdsterraBanner({
-  size,
-  className = "",
-}: {
-  size: AdsterraBannerSize;
-  className?: string;
-}) {
-  const unit = ADSTERRA_BANNERS[size];
-  const uid = useId().replace(/:/g, "");
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!host || !isApprovedHost()) return;
-    void enqueueDirectBanner(host, unit);
-  }, [host, unit]);
-
-  return (
-    <div
-      className={`mx-auto overflow-hidden bg-[#f5f5f5] ${className}`}
-      style={{ width: unit.width, maxWidth: "100%", minHeight: unit.height }}
-      aria-label="Advertisement"
-      data-ad={size}
-    >
-      <div
-        ref={setHost}
-        id={`adsterra-${size}-${uid}`}
-        style={{ width: unit.width, height: unit.height, maxWidth: "100%" }}
-      />
-    </div>
-  );
 }
 
 export function AdsterraNative({ className = "" }: { className?: string }) {
@@ -166,7 +118,7 @@ export function AdsterraInContent({ className = "" }: { className?: string }) {
 }
 
 /**
- * Center wait ad: isolated /ads iframe so it doesn't clash with page banners.
+ * Center wait ad during downloads.
  * ≥10s lock; Exit/X opens Smartlink first.
  */
 export function AdsterraWaitOverlay({
@@ -243,6 +195,7 @@ export function AdsterraWaitOverlay({
             height={250}
             className="max-w-full border-0"
             scrolling="no"
+            referrerPolicy="no-referrer-when-downgrade"
           />
         </div>
         <button
