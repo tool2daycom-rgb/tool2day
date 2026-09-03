@@ -130,6 +130,33 @@ function typeLabel(item: MediaItem): string {
   return "ملف";
 }
 
+function platformMetaForKey(key: string): { label: string; icon?: string } {
+  const value = key.toLowerCase();
+  if (value.includes("youtube")) {
+    return { label: "YouTube", icon: "/platform-icons/youtube.png" };
+  }
+  if (value.includes("tiktok")) {
+    return { label: "TikTok", icon: "/platform-icons/tiktok.png" };
+  }
+  if (value.includes("instagram")) {
+    return { label: "Instagram", icon: "/platform-icons/instagram.png" };
+  }
+  if (value.includes("facebook") || value.includes("fb")) {
+    return { label: "Facebook", icon: "/platform-icons/facebook.png" };
+  }
+  if (value.includes("pinterest") || value.includes("pin")) {
+    return { label: "Pinterest", icon: "/platform-icons/pinterest.png" };
+  }
+  if (value.includes("google") || value.includes("drive")) {
+    return { label: "Google", icon: "/platform-icons/google.png" };
+  }
+  return { label: "Web" };
+}
+
+function platformMetaForItem(item: MediaItem) {
+  return platformMetaForKey(`${item.source} ${item.url} ${item.title || ""}`);
+}
+
 export function VideoDownloaderWorkspace({
   slug,
   arTitle,
@@ -549,17 +576,36 @@ export function VideoDownloaderWorkspace({
                 className="border-t border-[#eee] bg-white"
               >
                 <td className="px-3 py-2.5 font-bold text-[#111]">
-                  <span className="inline-flex items-center gap-1.5">
-                    {typeLabel(item)}
-                    {item.hasVideo && item.hasAudio === false ? (
-                      <span
-                        className="text-[10px] font-semibold text-[#e11d48]"
-                        title="بدون مسار صوت"
-                      >
-                        🔇
-                      </span>
-                    ) : null}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5">
+                      {typeLabel(item)}
+                      {item.hasVideo && item.hasAudio === false ? (
+                        <span
+                          className="text-[10px] font-semibold text-[#e11d48]"
+                          title="بدون مسار صوت"
+                        >
+                          🔇
+                        </span>
+                      ) : null}
+                    </span>
+                    {(() => {
+                      const meta = platformMetaForItem(item);
+                      return (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[10px] font-semibold text-[#555]">
+                          {meta.icon ? (
+                            <Image
+                              src={meta.icon}
+                              alt=""
+                              width={12}
+                              height={12}
+                              className="h-3 w-3 rounded-sm object-contain"
+                            />
+                          ) : null}
+                          {meta.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </td>
                 <td className="px-3 py-2.5 text-[#666]" dir="ltr">
                   {formatSize(item.size)}
@@ -748,6 +794,29 @@ export function VideoDownloaderWorkspace({
             </div>
 
             <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-3">
+              <div className="mb-3 flex items-center gap-2">
+                {(() => {
+                  const meta = platformMetaForKey(
+                    platform !== "all" ? platform : `${url} ${pageTitle || ""}`,
+                  );
+                  return (
+                    <>
+                      {meta.icon ? (
+                        <Image
+                          src={meta.icon}
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="h-4.5 w-4.5 rounded-sm object-contain"
+                        />
+                      ) : null}
+                      <span className="text-xs font-bold text-[#666]">
+                        {meta.label}
+                      </span>
+                    </>
+                  );
+                })()}
+              </div>
               {previewThumb ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
