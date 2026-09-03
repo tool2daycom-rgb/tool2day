@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ADSTERRA_BANNERS,
   ADSTERRA_NATIVE,
@@ -36,7 +36,18 @@ function openSmartlink() {
   }
 }
 
-/** Popunder + Social Bar site-wide. */
+function bannerSrcDoc(key: string, width: number, height: number): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;overflow:hidden;width:${width}px;height:${height}px;background:transparent}
+</style></head><body>
+<script type="text/javascript">
+atOptions={key:'${key}',format:'iframe',height:${height},width:${width},params:{}};
+</script>
+<script type="text/javascript" src="https://www.highperformanceformat.com/${key}/invoke.js"><\/script>
+</body></html>`;
+}
+
+/** Popunder + Social Bar — real Adsterra scripts. */
 export function AdsterraGlobalScripts() {
   useEffect(() => {
     const apply = () => {
@@ -45,7 +56,7 @@ export function AdsterraGlobalScripts() {
       appendScriptOnce("adsterra-socialbar", ADSTERRA_SOCIAL_BAR, document.body);
     };
     apply();
-    const t = window.setTimeout(apply, 1200);
+    const t = window.setTimeout(apply, 1500);
     window.addEventListener("storage", apply);
     window.addEventListener("tool2day:consent", apply);
     return () => {
@@ -57,7 +68,7 @@ export function AdsterraGlobalScripts() {
   return null;
 }
 
-/** Visible, always-clickable ad slot (Adsterra iframe + Smartlink fallback). */
+/** Real Adsterra banner via isolated iframe (official invoke.js). */
 export function AdsterraBanner({
   size,
   className = "",
@@ -66,40 +77,38 @@ export function AdsterraBanner({
   className?: string;
 }) {
   const unit = ADSTERRA_BANNERS[size];
-  const compact = unit.height <= 60;
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const html = useMemo(
+    () => bannerSrcDoc(unit.key, unit.width, unit.height),
+    [unit.key, unit.width, unit.height],
+  );
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    // Blob URL isolates atOptions better than srcDoc in some browsers
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    iframe.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [html]);
 
   return (
     <div
-      className={`relative mx-auto overflow-hidden rounded-md border border-[#222] shadow-sm ${className}`}
-      style={{ width: "100%", maxWidth: unit.width, height: unit.height }}
+      className={`mx-auto overflow-hidden ${className}`}
+      style={{ width: unit.width, maxWidth: "100%", height: unit.height }}
       aria-label="Advertisement"
       data-ad={size}
     >
-      <a
-        href={ADSTERRA_SMARTLINK}
-        target="_blank"
-        rel="noopener noreferrer sponsored"
-        className={`absolute inset-0 z-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#0a0a0a] via-[#1d4ed8] to-[#e11d48] px-2 text-center font-bold text-white ${
-          compact ? "text-xs" : "text-sm"
-        }`}
-      >
-        <span>Sponsored Offer</span>
-        <span
-          className={`mt-1 font-semibold opacity-90 ${
-            compact ? "text-[9px]" : "text-[10px]"
-          }`}
-        >
-          اضغط للعرض · Ad
-        </span>
-      </a>
       <iframe
-        title={`Advertisement ${size}`}
-        src={`/ads/${size}.html`}
+        ref={iframeRef}
+        title={`Adsterra ${size}`}
         width={unit.width}
         height={unit.height}
-        className="pointer-events-none absolute inset-0 z-10 max-w-full border-0"
-        loading="eager"
+        className="max-w-full border-0"
+        scrolling="no"
         referrerPolicy="no-referrer-when-downgrade"
+        allow="attribution-reporting"
       />
     </div>
   );
@@ -119,21 +128,10 @@ export function AdsterraNative({ className = "" }: { className?: string }) {
 
   return (
     <div
-      className={`mx-auto my-4 w-full max-w-5xl rounded-md border border-[#ddd] bg-[#fafafa] px-3 py-4 ${className}`}
+      className={`mx-auto my-4 w-full max-w-5xl px-3 py-2 ${className}`}
       aria-label="Advertisement"
     >
-      <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-[#aaa]">
-        Ad
-      </p>
-      <div id={ADSTERRA_NATIVE.containerId} className="min-h-[40px]" />
-      <a
-        href={ADSTERRA_SMARTLINK}
-        target="_blank"
-        rel="noopener noreferrer sponsored"
-        className="mt-2 flex min-h-[88px] items-center justify-center rounded-lg bg-gradient-to-r from-[#0a0a0a] via-[#1d4ed8] to-[#e11d48] px-4 text-center text-sm font-bold text-white"
-      >
-        Sponsored Offer — اضغط للعرض
-      </a>
+      <div id={ADSTERRA_NATIVE.containerId} />
     </div>
   );
 }
@@ -149,13 +147,14 @@ export function AdsterraInContent({ className = "" }: { className?: string }) {
 export function AdsterraMobileSticky() {
   return (
     <div className="fixed inset-x-0 bottom-0 z-[80] flex justify-center border-t border-[#e5e5e5] bg-white/95 py-1 backdrop-blur sm:hidden">
-      <AdsterraBanner size="320x50" className="border-0 shadow-none" />
+      <AdsterraBanner size="320x50" />
     </div>
   );
 }
 
 /**
- * Center wait ad: ≥10 seconds; Exit/X opens smartlink first, then closes after lock.
+ * Center wait ad with real 300×250 unit.
+ * Stays ≥10s; Exit/X opens Smartlink first, then closes after lock.
  */
 export function AdsterraWaitOverlay({
   open,
@@ -218,20 +217,13 @@ export function AdsterraWaitOverlay({
         <p className="mb-3 text-center text-[11px] font-semibold text-[#666]">
           {canClose
             ? "الخروج يفتح الإعلان أولاً ثم يغلق النافذة"
-            : `يبقى ${leftSec} ثوانٍ — الضغط على × يفتح الإعلان`}
+            : `يبقى ${leftSec} ثوانٍ — × يفتح الإعلان`}
         </p>
         <AdsterraBanner size="300x250" />
         <button
           type="button"
-          onClick={() => openSmartlink()}
-          className="mt-2 w-full rounded-lg bg-[#e11d48] px-3 py-2.5 text-sm font-bold text-white hover:bg-[#be123c]"
-        >
-          فتح العرض الإعلاني
-        </button>
-        <button
-          type="button"
           onClick={tryClose}
-          className="mt-2 text-xs font-semibold text-[#2563eb] hover:underline"
+          className="mt-3 text-xs font-semibold text-[#2563eb] hover:underline"
         >
           {canClose
             ? "فتح الإعلان ثم إغلاق والمتابعة"

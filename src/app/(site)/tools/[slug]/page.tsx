@@ -352,7 +352,6 @@ export default async function ToolPage({ params }: Props) {
 
       <AdsterraInContent />
       <ToolSeoSections toolSlug={tool.slug} arTitle={tool.title} />
-      <AdsterraInContent />
     </div>
   );
 }
