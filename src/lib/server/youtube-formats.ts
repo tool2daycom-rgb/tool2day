@@ -1,6 +1,5 @@
 import dns from "node:dns";
 import { ClientType, Innertube, Platform } from "youtubei.js";
-import { youtubeWithAudioViaCobalt } from "@/lib/server/cobalt";
 
 // Vercel/Node often prefers IPv6; googlevideo can fail with "fetch failed"
 dns.setDefaultResultOrder("ipv4first");
@@ -164,7 +163,9 @@ export async function listYoutubeFormats(videoId: string): Promise<{
       videoByHeight.set(quality, {
         url: f.url,
         type: "video",
-        title: `${container} ${quality}`,
+        title: f.has_audio
+          ? `${container} ${quality} · مع صوت`
+          : `${container} ${quality} · بدون صوت`,
         thumbnail,
         source: "youtube-android",
         quality,
@@ -179,8 +180,81 @@ export async function listYoutubeFormats(videoId: string): Promise<{
     }
   }
 
+  // Fallback: MWEB + decipher (full quality ladder)
+  if (videoByHeight.size === 0) {
+    const mweb = await createTube(ClientType.MWEB);
+    const mInfo = await mweb.getBasicInfo(videoId);
+    const rawM = [
+      ...(mInfo.streaming_data?.formats || []),
+      ...(mInfo.streaming_data?.adaptive_formats || []),
+    ] as TubeFormat[];
+    for (const f of rawM) {
+      try {
+        let url = f.url;
+        if (!url && mweb.session.player) {
+          const cipher = f.signature_cipher || f.cipher;
+          if (cipher) url = await mweb.session.player.decipher(cipher);
+        }
+        if (!url) continue;
+        const hasVideo = Boolean(f.has_video);
+        const hasAudio = Boolean(f.has_audio);
+        if (!hasVideo && !hasAudio) continue;
+        const container = containerOf(f.mime_type);
+        const size = f.content_length ? Number(f.content_length) : null;
+        if (hasVideo) {
+          const quality = heightOf(f);
+          const score =
+            (hasAudio ? 100_000 : 0) +
+            (container === "MP4" ? 10_000 : 0) +
+            Math.min(size || 0, 1e12) / 1e9;
+          const row: Row = {
+            url,
+            type: "video",
+            title: hasAudio
+              ? `${container} ${quality} · مع صوت`
+              : `${container} ${quality} · بدون صوت`,
+            thumbnail,
+            source: "youtube-mweb",
+            quality,
+            container,
+            size,
+            hasAudio,
+            hasVideo: true,
+            itag: f.itag,
+            videoId,
+            score,
+          };
+          const prev = videoByHeight.get(quality);
+          if (!prev || score > prev.score) videoByHeight.set(quality, row);
+        } else if (hasAudio) {
+          const score =
+            (container === "M4A" || container === "MP4" ? 1e15 : 0) +
+            (size || 0);
+          const row: Row = {
+            url,
+            type: "audio",
+            title: `${container === "MP4" ? "M4A" : container} صوت`,
+            thumbnail,
+            source: "youtube-mweb",
+            quality: "audio",
+            container: container === "MP4" ? "M4A" : container,
+            size,
+            hasAudio: true,
+            hasVideo: false,
+            itag: f.itag,
+            videoId,
+            score,
+          };
+          if (!bestAudio || score > bestAudio.score) bestAudio = row;
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+
   // Prefer with-audio rows first, then higher quality
-  let videos = [...videoByHeight.values()]
+  const videos = [...videoByHeight.values()]
     .sort((a, b) => {
       if (a.hasAudio !== b.hasAudio) return a.hasAudio ? -1 : 1;
       return (
@@ -192,54 +266,6 @@ export async function listYoutubeFormats(videoId: string): Promise<{
       void _s;
       return rest;
     });
-
-  // Try Cobalt for muxed (video+audio) higher qualities when available
-  try {
-    const pageUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const mutedQualities = videos
-      .filter((v) => !v.hasAudio)
-      .map((v) => v.quality || "")
-      .filter(Boolean)
-      .slice(0, 4);
-    const want = [
-      ...new Set(["720", "480", "360", "1080", ...mutedQualities]),
-    ].slice(0, 5);
-    const cobaltRows = await youtubeWithAudioViaCobalt(pageUrl, want);
-    if (cobaltRows.length) {
-      const byQ = new Map(videos.map((v) => [v.quality || "", v]));
-      for (const c of cobaltRows) {
-        if (c.type === "audio") continue;
-        const q = c.quality || "";
-        byQ.set(q, {
-          url: c.url,
-          type: "video",
-          title: `MP4 ${q} · مع صوت`,
-          thumbnail,
-          source: c.source,
-          quality: q,
-          container: c.container || "MP4",
-          size: c.size ?? null,
-          hasAudio: true,
-          hasVideo: true,
-          videoId,
-        });
-      }
-      videos = [...byQ.values()].sort((a, b) => {
-        if (a.hasAudio !== b.hasAudio) return a.hasAudio ? -1 : 1;
-        return (
-          (Number.parseInt(b.quality || "0", 10) || 0) -
-          (Number.parseInt(a.quality || "0", 10) || 0)
-        );
-      });
-      // Prefer showing with-audio only when cobalt filled several
-      const withAudio = videos.filter((v) => v.hasAudio);
-      if (withAudio.length >= 2) {
-        videos = withAudio;
-      }
-    }
-  } catch {
-    /* cobalt optional */
-  }
 
   const items: YoutubeFormatHit[] = [...videos];
   if (bestAudio) {
