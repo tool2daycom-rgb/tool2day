@@ -24,26 +24,25 @@ export default function SiteLayout({
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1700px] flex-1 gap-2 px-1">
-        <aside className="hidden w-[170px] shrink-0 py-4 md:block">
-          <div className="sticky top-20 space-y-3">
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-3 px-2">
+        <aside className="hidden w-[168px] shrink-0 py-4 lg:block">
+          <div className="sticky top-20">
             <AdsterraBanner size="160x600" />
           </div>
         </aside>
 
         <main className="min-w-0 flex-1">{children}</main>
 
-        <aside className="hidden w-[170px] shrink-0 py-4 md:block">
-          <div className="sticky top-20 space-y-3">
-            <AdsterraBanner size="160x300" />
+        <aside className="hidden w-[168px] shrink-0 py-4 md:block lg:hidden">
+          <div className="sticky top-20">
             <AdsterraBanner size="160x300" />
           </div>
         </aside>
 
-        <aside className="hidden w-[310px] shrink-0 py-4 xl:block">
-          <div className="sticky top-20 space-y-3">
+        <aside className="hidden w-[308px] shrink-0 py-4 lg:block">
+          <div className="sticky top-20 space-y-4">
             <AdsterraBanner size="300x250" />
-            <AdsterraBanner size="300x250" />
+            <AdsterraBanner size="160x300" />
           </div>
         </aside>
       </div>
