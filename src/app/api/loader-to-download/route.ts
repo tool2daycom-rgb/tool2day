@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     }
 
     const hit = await extractOneWithLoaderTo(pageUrl, format, {
-      maxMs: 20_000,
+      maxMs: 15_000,
     });
 
     if (!hit?.url) {

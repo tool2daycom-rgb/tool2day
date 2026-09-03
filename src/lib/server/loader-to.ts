@@ -68,7 +68,7 @@ async function fetchJson<T>(url: string): Promise<T> {
       Accept: "application/json, text/javascript, */*",
       "User-Agent": UA,
     },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(12_000),
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`loader.to HTTP ${res.status}`);
@@ -186,8 +186,10 @@ export async function socialViaLoaderTo(
   pageUrl: string,
 ): Promise<{ title?: string; thumbnail?: string; items: LoaderToHit[] } | null> {
   // Sequential to avoid function timeouts on some social pages.
-  const hit720 = await extractOneWithLoaderTo(pageUrl, "720", { maxMs: 18_000 });
-  const hit360 = hit720 ? null : await extractOneWithLoaderTo(pageUrl, "360", { maxMs: 18_000 });
+  const hit720 = await extractOneWithLoaderTo(pageUrl, "720", { maxMs: 14_000 });
+  const hit360 = hit720
+    ? null
+    : await extractOneWithLoaderTo(pageUrl, "360", { maxMs: 12_000 });
   const hit = hit720 || hit360 || null;
   if (!hit) return null;
 
