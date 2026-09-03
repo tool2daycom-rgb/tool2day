@@ -283,25 +283,7 @@ export function VideoDownloaderWorkspace({
         return;
       }
 
-      // YouTube: extract in the browser (Vercel IP is often blocked by googlevideo)
-      const ytId = extractYoutubeId(raw);
-      if (
-        ytId &&
-        (platform === "all" || platform === "youtube")
-      ) {
-        setStatus("جارٍ جلب جودات يوتيوب من متصفحك…");
-        const { listYoutubeFormatsInBrowser } = await import(
-          "@/lib/client/youtube-formats"
-        );
-        const yt = await listYoutubeFormatsInBrowser(ytId);
-        setItems(yt.items);
-        setPageTitle(yt.title);
-        setPreviewThumb(yt.thumbnail);
-        setNote("جودات يوتيوب مع صوت عند التوفر + صورة maxres");
-        setStatus(`وُجد ${yt.items.length} خيار تنزيل`);
-        return;
-      }
-
+      // YouTube goes through API (server ANDROID/MWEB). Browser youtubei hits CORS.
       const res = await fetch("/api/media-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

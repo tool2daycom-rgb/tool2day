@@ -286,7 +286,7 @@ export async function POST(req: Request) {
     const platform =
       (body.platform as PlatformHint) || detectPlatform(target.toString());
 
-    // YouTube: list qualities (دقات) via InnerTube
+    // YouTube: list qualities via InnerTube (ANDROID progressive + MWEB)
     const ytId = extractYoutubeId(raw);
     if (
       ytId &&
@@ -308,9 +308,72 @@ export async function POST(req: Request) {
           platform: "youtube",
           thumbnail: yt.thumbnail,
           items,
-          note: "جودات يوتيوب — بدون علامة مائية من Tool2Day",
+          note: "جودات يوتيوب — مع صوت عند التوفر + صورة maxres",
         });
       } catch (e) {
+        // Cobalt fallback for YouTube (muxed with audio)
+        try {
+          const { extractWithCobalt } = await import("@/lib/server/cobalt");
+          const page = `https://www.youtube.com/watch?v=${ytId}`;
+          const qualities = ["720", "480", "360", "1080"];
+          const items: MediaHit[] = [];
+          for (const q of qualities) {
+            const got = await extractWithCobalt(page, {
+              videoQuality: q,
+              downloadMode: "auto",
+            });
+            const vid = got?.items.find((i) => i.type === "video");
+            if (!vid) continue;
+            if (items.some((i) => i.quality === q)) continue;
+            items.push({
+              url: vid.url,
+              type: "video",
+              title: `MP4 ${q} · مع صوت`,
+              source: vid.source,
+              quality: q,
+              container: "MP4",
+              hasAudio: true,
+              hasVideo: true,
+              videoId: ytId,
+            });
+          }
+          const audio = await extractWithCobalt(page, { downloadMode: "audio" });
+          if (audio?.items[0]) {
+            items.push({
+              url: audio.items[0].url,
+              type: "audio",
+              title: "MP3 صوت",
+              source: audio.items[0].source,
+              container: "MP3",
+              hasAudio: true,
+              hasVideo: false,
+              videoId: ytId,
+            });
+          }
+          items.push({
+            url: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+            type: "image",
+            title: "صورة — أقصى جودة (maxres)",
+            thumbnail: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+            source: "youtube-thumb",
+            quality: "maxres",
+            container: "JPG",
+          });
+          if (items.some((i) => i.type === "video")) {
+            return NextResponse.json({
+              ok: true,
+              pageUrl: target.toString(),
+              title: `YouTube ${ytId}`,
+              platform: "youtube",
+              thumbnail: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+              items,
+              note: "فيديو يوتيوب مع صوت عبر Cobalt + صورة maxres",
+            });
+          }
+        } catch {
+          /* ignore */
+        }
+
         const message =
           e instanceof Error ? e.message : "فشل استخراج جودات يوتيوب";
         if (platform === "youtube" || detectPlatform(raw) === "youtube") {

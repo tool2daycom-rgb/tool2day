@@ -28,6 +28,8 @@ type CobaltResponse = {
 const DEFAULT_INSTANCES = [
   process.env.COBALT_API_URL,
   "https://cobaltapi.cjs.nz",
+  "https://capi.3kh0.net",
+  "https://cobalt-backend.canine.tools",
 ].filter(Boolean) as string[];
 
 function authHeaders(): Record<string, string> {

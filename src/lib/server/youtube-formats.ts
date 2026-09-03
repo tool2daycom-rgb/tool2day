@@ -1,7 +1,6 @@
 import dns from "node:dns";
 import { ClientType, Innertube, Platform } from "youtubei.js";
 
-// Vercel/Node often prefers IPv6; googlevideo can fail with "fetch failed"
 dns.setDefaultResultOrder("ipv4first");
 
 export type YoutubeFormatHit = {
@@ -68,192 +67,167 @@ type TubeFormat = {
   cipher?: string;
 };
 
+type Row = YoutubeFormatHit & { score: number };
+
+async function ingestFormats(
+  raw: TubeFormat[],
+  opts: {
+    videoId: string;
+    thumbnail: string;
+    source: string;
+    videoByHeight: Map<string, Row>;
+    getBestAudio: () => Row | null;
+    setBestAudio: (r: Row) => void;
+    decipherUrl?: (f: TubeFormat) => Promise<string | undefined>;
+  },
+) {
+  for (const f of raw) {
+    try {
+      let url = f.url;
+      if (!url && opts.decipherUrl) {
+        url = await opts.decipherUrl(f);
+      }
+      if (!url || !/^https?:\/\//i.test(url)) continue;
+
+      const hasVideo = Boolean(f.has_video);
+      const hasAudio = Boolean(f.has_audio);
+      if (!hasVideo && !hasAudio) continue;
+
+      const container = containerOf(f.mime_type);
+      const size = f.content_length ? Number(f.content_length) : null;
+      const itag = f.itag;
+
+      if (hasVideo) {
+        const quality = heightOf(f);
+        const score =
+          (hasAudio ? 100_000 : 0) +
+          (container === "MP4" ? 10_000 : 0) +
+          (f.url ? 500 : 0) +
+          Math.min(size || 0, 1e12) / 1e9;
+        const row: Row = {
+          url,
+          type: "video",
+          title: hasAudio
+            ? `${container} ${quality} · مع صوت`
+            : `${container} ${quality} · بدون صوت`,
+          thumbnail: opts.thumbnail,
+          source: opts.source,
+          quality,
+          container,
+          size,
+          hasAudio,
+          hasVideo: true,
+          itag,
+          videoId: opts.videoId,
+          score,
+        };
+        const prev = opts.videoByHeight.get(quality);
+        if (!prev || score > prev.score) opts.videoByHeight.set(quality, row);
+        continue;
+      }
+
+      const score =
+        (container === "M4A" || container === "MP4" ? 1e15 : 0) + (size || 0);
+      const row: Row = {
+        url,
+        type: "audio",
+        title: `${container === "MP4" ? "M4A" : container} صوت`,
+        thumbnail: opts.thumbnail,
+        source: opts.source,
+        quality: "audio",
+        container: container === "MP4" ? "M4A" : container,
+        size,
+        hasAudio: true,
+        hasVideo: false,
+        itag,
+        videoId: opts.videoId,
+        score,
+      };
+      const prevA = opts.getBestAudio();
+      if (!prevA || score > prevA.score) opts.setBestAudio(row);
+    } catch {
+      /* skip */
+    }
+  }
+}
+
 /**
- * List YouTube download options using ANDROID_VR (plain googlevideo URLs).
- * Browser can open these URLs; Vercel often cannot proxy googlevideo.
+ * List YouTube download options. Prefer ANDROID (progressive + audio),
+ * then MWEB decipher for more qualities.
  */
 export async function listYoutubeFormats(videoId: string): Promise<{
   title: string;
   thumbnail: string;
   items: YoutubeFormatHit[];
 }> {
-  const yt = await createTube(ClientType.ANDROID_VR);
-  const info = await yt.getBasicInfo(videoId);
+  installEvalShim();
 
-  const title = info.basic_info?.title || `YouTube ${videoId}`;
-  const thumbnail =
-    info.basic_info?.thumbnail?.slice(-1)?.[0]?.url ||
-    `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
-
-  const raw = [
-    ...(info.streaming_data?.formats || []),
-    ...(info.streaming_data?.adaptive_formats || []),
-  ] as TubeFormat[];
-
-  type Row = YoutubeFormatHit & { score: number };
   const videoByHeight = new Map<string, Row>();
   let bestAudio: Row | null = null;
+  let title = `YouTube ${videoId}`;
+  let thumbnail = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
 
-  for (const f of raw) {
-    const hasVideo = Boolean(f.has_video);
-    const hasAudio = Boolean(f.has_audio);
-    if (!hasVideo && !hasAudio) continue;
-    if (!f.url || !/^https?:\/\//i.test(f.url)) continue;
-
-    const container = containerOf(f.mime_type);
-    const size = f.content_length ? Number(f.content_length) : null;
-    const itag = f.itag;
-
-    if (hasVideo) {
-      const quality = heightOf(f);
-      const score =
-        (hasAudio ? 100_000 : 0) +
-        (container === "MP4" ? 10_000 : 0) +
-        Math.min(size || 0, 1e12) / 1e9;
-      const row: Row = {
-        url: f.url,
-        type: "video",
-        title: hasAudio
-          ? `${container} ${quality} · مع صوت`
-          : `${container} ${quality} · بدون صوت`,
-        thumbnail,
-        source: "youtube-android-vr",
-        quality,
-        container,
-        size,
-        hasAudio,
-        hasVideo: true,
-        itag,
-        videoId,
-        score,
-      };
-      const prev = videoByHeight.get(quality);
-      if (!prev || score > prev.score) videoByHeight.set(quality, row);
-      continue;
-    }
-
-    const score =
-      (container === "M4A" || container === "MP4" ? 1e15 : 0) + (size || 0);
-    const row: Row = {
-      url: f.url,
-      type: "audio",
-      title: `${container === "MP4" ? "M4A" : container} صوت`,
-      thumbnail,
+  const clients: Array<{
+    client: (typeof ClientType)[keyof typeof ClientType];
+    source: string;
+    decipher: boolean;
+  }> = [
+    { client: ClientType.ANDROID, source: "youtube-android", decipher: false },
+    { client: ClientType.MWEB, source: "youtube-mweb", decipher: true },
+    {
+      client: ClientType.ANDROID_VR,
       source: "youtube-android-vr",
-      quality: "audio",
-      container: container === "MP4" ? "M4A" : container,
-      size,
-      hasAudio: true,
-      hasVideo: false,
-      itag,
-      videoId,
-      score,
-    };
-    if (!bestAudio || score > bestAudio.score) bestAudio = row;
-  }
+      decipher: false,
+    },
+  ];
 
-  // Fallback: ANDROID progressive only
-  if (videoByHeight.size === 0) {
-    const android = await createTube(ClientType.ANDROID);
-    const aInfo = await android.getBasicInfo(videoId);
-    for (const f of (aInfo.streaming_data?.formats || []) as TubeFormat[]) {
-      if (!f.url || !f.has_video) continue;
-      const quality = heightOf(f);
-      const container = containerOf(f.mime_type);
-      videoByHeight.set(quality, {
-        url: f.url,
-        type: "video",
-        title: f.has_audio
-          ? `${container} ${quality} · مع صوت`
-          : `${container} ${quality} · بدون صوت`,
-        thumbnail,
-        source: "youtube-android",
-        quality,
-        container,
-        size: f.content_length ? Number(f.content_length) : null,
-        hasAudio: Boolean(f.has_audio),
-        hasVideo: true,
-        itag: f.itag,
+  for (const { client, source, decipher } of clients) {
+    try {
+      const yt = await createTube(client);
+      const info = await yt.getBasicInfo(videoId);
+      if (info.basic_info?.title) title = info.basic_info.title;
+      const thumb = info.basic_info?.thumbnail?.slice(-1)?.[0]?.url;
+      if (thumb) thumbnail = thumb;
+
+      const status = info.playability_status?.status;
+      if (status && status !== "OK") continue;
+
+      const raw = [
+        ...(info.streaming_data?.formats || []),
+        ...(info.streaming_data?.adaptive_formats || []),
+      ] as TubeFormat[];
+
+      await ingestFormats(raw, {
         videoId,
-        score: 1,
+        thumbnail,
+        source,
+        videoByHeight,
+        getBestAudio: () => bestAudio,
+        setBestAudio: (r) => {
+          bestAudio = r;
+        },
+        decipherUrl: decipher
+          ? async (f) => {
+              if (!yt.session.player) return undefined;
+              const cipher = f.signature_cipher || f.cipher;
+              if (!cipher) return undefined;
+              return yt.session.player.decipher(cipher);
+            }
+          : undefined,
       });
-    }
-  }
 
-  // Fallback: MWEB + decipher (full quality ladder)
-  if (videoByHeight.size === 0) {
-    const mweb = await createTube(ClientType.MWEB);
-    const mInfo = await mweb.getBasicInfo(videoId);
-    const rawM = [
-      ...(mInfo.streaming_data?.formats || []),
-      ...(mInfo.streaming_data?.adaptive_formats || []),
-    ] as TubeFormat[];
-    for (const f of rawM) {
-      try {
-        let url = f.url;
-        if (!url && mweb.session.player) {
-          const cipher = f.signature_cipher || f.cipher;
-          if (cipher) url = await mweb.session.player.decipher(cipher);
-        }
-        if (!url) continue;
-        const hasVideo = Boolean(f.has_video);
-        const hasAudio = Boolean(f.has_audio);
-        if (!hasVideo && !hasAudio) continue;
-        const container = containerOf(f.mime_type);
-        const size = f.content_length ? Number(f.content_length) : null;
-        if (hasVideo) {
-          const quality = heightOf(f);
-          const score =
-            (hasAudio ? 100_000 : 0) +
-            (container === "MP4" ? 10_000 : 0) +
-            Math.min(size || 0, 1e12) / 1e9;
-          const row: Row = {
-            url,
-            type: "video",
-            title: hasAudio
-              ? `${container} ${quality} · مع صوت`
-              : `${container} ${quality} · بدون صوت`,
-            thumbnail,
-            source: "youtube-mweb",
-            quality,
-            container,
-            size,
-            hasAudio,
-            hasVideo: true,
-            itag: f.itag,
-            videoId,
-            score,
-          };
-          const prev = videoByHeight.get(quality);
-          if (!prev || score > prev.score) videoByHeight.set(quality, row);
-        } else if (hasAudio) {
-          const score =
-            (container === "M4A" || container === "MP4" ? 1e15 : 0) +
-            (size || 0);
-          const row: Row = {
-            url,
-            type: "audio",
-            title: `${container === "MP4" ? "M4A" : container} صوت`,
-            thumbnail,
-            source: "youtube-mweb",
-            quality: "audio",
-            container: container === "MP4" ? "M4A" : container,
-            size,
-            hasAudio: true,
-            hasVideo: false,
-            itag: f.itag,
-            videoId,
-            score,
-          };
-          if (!bestAudio || score > bestAudio.score) bestAudio = row;
-        }
-      } catch {
-        /* skip */
+      // ANDROID progressive is enough to show something useful
+      if (
+        source === "youtube-android" &&
+        [...videoByHeight.values()].some((v) => v.hasAudio)
+      ) {
+        // still try MWEB for more qualities, but we already have audio video
       }
+    } catch {
+      /* try next client */
     }
   }
 
-  // Prefer with-audio rows first, then higher quality
   const videos = [...videoByHeight.values()]
     .sort((a, b) => {
       if (a.hasAudio !== b.hasAudio) return a.hasAudio ? -1 : 1;
@@ -269,13 +243,15 @@ export async function listYoutubeFormats(videoId: string): Promise<{
 
   const items: YoutubeFormatHit[] = [...videos];
   if (bestAudio) {
-    const { score: _s, ...rest } = bestAudio;
+    const { score: _s, ...rest } = bestAudio as Row;
     void _s;
     items.push(rest);
   }
 
   items.push({
-    url: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+    url: thumbnail.includes("maxresdefault")
+      ? thumbnail
+      : `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
     type: "image",
     title: "صورة — أقصى جودة (maxres)",
     thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
@@ -306,58 +282,40 @@ export async function resolveYoutubeStreamUrl(opts: {
   contentType: string;
   size?: number | null;
 }> {
-  const yt = await createTube(ClientType.ANDROID_VR);
-  const info = await yt.getBasicInfo(opts.videoId);
-  const all = [
-    ...(info.streaming_data?.formats || []),
-    ...(info.streaming_data?.adaptive_formats || []),
-  ] as TubeFormat[];
-
-  let format: TubeFormat | undefined;
-  if (opts.itag) {
-    format = all.find((f) => f.itag === opts.itag);
-  } else if (opts.kind === "audio") {
-    format = all
-      .filter((f) => f.has_audio && !f.has_video && f.url)
-      .sort((a, b) => Number(b.content_length || 0) - Number(a.content_length || 0))[0];
-  } else if (opts.quality) {
-    const q = opts.quality.replace(/p$/i, "");
-    format = all.find(
-      (f) =>
-        f.url &&
-        f.has_video &&
-        heightOf(f) === q &&
-        (f.mime_type || "").includes("mp4"),
-    );
+  const listed = await listYoutubeFormats(opts.videoId);
+  let hit = listed.items.find(
+    (i) =>
+      opts.itag
+        ? i.itag === opts.itag
+        : opts.kind === "audio"
+          ? i.type === "audio"
+          : i.type === "video" &&
+            (opts.quality
+              ? i.quality === opts.quality.replace(/p$/i, "")
+              : i.hasAudio),
+  );
+  if (!hit || hit.type === "image") {
+    hit = listed.items.find((i) => i.type === "video" && i.hasAudio);
   }
-  if (!format?.url) {
-    // ANDROID progressive fallback
-    const android = await createTube(ClientType.ANDROID);
-    const aInfo = await android.getBasicInfo(opts.videoId);
-    format = ((aInfo.streaming_data?.formats || []) as TubeFormat[]).find(
-      (f) => f.url && f.has_video && f.has_audio,
-    );
-  }
-  if (!format?.url) {
+  if (!hit?.url) {
     throw new Error("تعذّر إيجاد رابط التنزيل");
   }
 
-  const container = containerOf(format.mime_type);
-  const quality = heightOf(format);
   const ext =
-    opts.kind === "audio" || (!format.has_video && format.has_audio)
+    hit.type === "audio"
       ? "m4a"
-      : container === "WEBM"
+      : hit.container === "WEBM"
         ? "webm"
         : "mp4";
-  const mime =
-    format.mime_type?.split(";")[0] ||
-    (ext === "m4a" ? "audio/mp4" : ext === "webm" ? "video/webm" : "video/mp4");
-
   return {
-    url: format.url,
-    filename: `youtube-${opts.videoId}-${quality}.${ext}`,
-    contentType: mime,
-    size: format.content_length ? Number(format.content_length) : null,
+    url: hit.url,
+    filename: `youtube-${opts.videoId}-${hit.quality || "media"}.${ext}`,
+    contentType:
+      hit.type === "audio"
+        ? "audio/mp4"
+        : ext === "webm"
+          ? "video/webm"
+          : "video/mp4",
+    size: hit.size ?? null,
   };
 }
