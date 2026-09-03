@@ -79,7 +79,7 @@ async function pollDownload(
   progressUrl: string,
   opts?: { maxMs?: number; intervalMs?: number },
 ): Promise<ProgressResponse | null> {
-  const maxMs = opts?.maxMs ?? 35_000;
+  const maxMs = opts?.maxMs ?? 25_000;
   const intervalMs = opts?.intervalMs ?? 2_000;
   const started = Date.now();
   let last: ProgressResponse | null = null;
@@ -101,6 +101,7 @@ async function pollDownload(
 export async function extractOneWithLoaderTo(
   pageUrl: string,
   format: string,
+  opts?: { maxMs?: number },
 ): Promise<LoaderToHit | null> {
   const startUrl =
     `https://loader.to/ajax/download.php?format=${encodeURIComponent(format)}` +
@@ -115,7 +116,7 @@ export async function extractOneWithLoaderTo(
 
   if (!okFlag(start.success) || !start.progress_url) return null;
 
-  const done = await pollDownload(start.progress_url);
+  const done = await pollDownload(start.progress_url, { maxMs: opts?.maxMs });
   if (!done?.download_url) return null;
 
   const isAudio = format === "mp3" || /mp3|audio/i.test(done.format || format);
@@ -184,12 +185,10 @@ export async function youtubeViaLoaderTo(
 export async function socialViaLoaderTo(
   pageUrl: string,
 ): Promise<{ title?: string; thumbnail?: string; items: LoaderToHit[] } | null> {
-  // Try a couple formats in parallel; first success wins.
-  const candidates = await Promise.all([
-    extractOneWithLoaderTo(pageUrl, "720"),
-    extractOneWithLoaderTo(pageUrl, "360"),
-  ]);
-  const hit = candidates.find(Boolean) || null;
+  // Sequential to avoid function timeouts on some social pages.
+  const hit720 = await extractOneWithLoaderTo(pageUrl, "720", { maxMs: 18_000 });
+  const hit360 = hit720 ? null : await extractOneWithLoaderTo(pageUrl, "360", { maxMs: 18_000 });
+  const hit = hit720 || hit360 || null;
   if (!hit) return null;
 
   const items: LoaderToHit[] = [hit];

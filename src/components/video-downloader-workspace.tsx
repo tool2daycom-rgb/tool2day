@@ -492,6 +492,30 @@ export function VideoDownloaderWorkspace({
           item.source === "loader.to")
       ) {
         let direct = item.url;
+
+        // loader.to sometimes returns short-lived URLs; refresh on click.
+        if (item.source === "loader.to") {
+          try {
+            const pageUrl = url.trim();
+            const format =
+              item.type === "audio" ? "mp3" : item.quality || "720";
+            if (pageUrl && format) {
+              const res = await fetch("/api/loader-to-download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: pageUrl, format }),
+              });
+              const data = (await res.json()) as {
+                ok?: boolean;
+                url?: string;
+              };
+              if (res.ok && data.url) direct = data.url;
+            }
+          } catch {
+            /* fallback to existing item.url */
+          }
+        }
+
         if (
           ytId &&
           item.itag &&
@@ -797,9 +821,9 @@ export function VideoDownloaderWorkspace({
                   <Image
                     src="/icon-192.png"
                     alt=""
-                    width={26}
-                    height={26}
-                    className="h-6.5 w-6.5 rounded-lg object-contain"
+                    width={40}
+                    height={40}
+                    className="h-10 w-10 rounded-lg object-contain"
                     aria-hidden="true"
                   />
                   <span
