@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   ADSTERRA_BANNERS,
   ADSTERRA_NATIVE,
@@ -12,6 +12,13 @@ import {
 import { getStoredConsent } from "@/lib/cookie-consent";
 
 const WAIT_MIN_MS = 10_000;
+
+declare global {
+  interface Window {
+    atOptions?: Record<string, unknown>;
+    __adsterraQueue?: Promise<void>;
+  }
+}
 
 function adsAllowed(): boolean {
   const c = getStoredConsent();
@@ -36,27 +43,53 @@ function openSmartlink() {
   }
 }
 
-function bannerSrcDoc(key: string, width: number, height: number): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;padding:0;overflow:hidden;width:${width}px;height:${height}px;background:transparent}
-</style></head><body>
-<script type="text/javascript">
-atOptions={key:'${key}',format:'iframe',height:${height},width:${width},params:{}};
-</script>
-<script type="text/javascript" src="https://www.highperformanceformat.com/${key}/invoke.js"><\/script>
-</body></html>`;
+/** Serialize direct page injections (shared atOptions). */
+function enqueueDirectBanner(
+  host: HTMLElement,
+  unit: { key: string; width: number; height: number },
+): Promise<void> {
+  const prev = window.__adsterraQueue ?? Promise.resolve();
+  const next = prev.then(
+    () =>
+      new Promise<void>((resolve) => {
+        if (!host.isConnected) {
+          resolve();
+          return;
+        }
+        host.replaceChildren();
+        window.atOptions = {
+          key: unit.key,
+          format: "iframe",
+          height: unit.height,
+          width: unit.width,
+          params: {},
+        };
+        const conf = document.createElement("script");
+        conf.type = "text/javascript";
+        conf.text = `atOptions = ${JSON.stringify(window.atOptions)};`;
+        const inv = document.createElement("script");
+        inv.type = "text/javascript";
+        inv.src = `https://www.highperformanceformat.com/${unit.key}/invoke.js`;
+        inv.onload = () => window.setTimeout(resolve, 300);
+        inv.onerror = () => resolve();
+        host.appendChild(conf);
+        host.appendChild(inv);
+      }),
+  );
+  window.__adsterraQueue = next.catch(() => undefined);
+  return next;
 }
 
-/** Popunder + Social Bar — real Adsterra scripts. */
+/** Popunder + Social Bar on the real page origin. */
 export function AdsterraGlobalScripts() {
   useEffect(() => {
     const apply = () => {
-      if (!adsAllowed()) return;
+      // Always attempt Adsterra — units are approved; cookie gate only for AdSense/gtag
       appendScriptOnce("adsterra-popunder", ADSTERRA_POPUNDER, document.head);
       appendScriptOnce("adsterra-socialbar", ADSTERRA_SOCIAL_BAR, document.body);
     };
     apply();
-    const t = window.setTimeout(apply, 1500);
+    const t = window.setTimeout(apply, 800);
     window.addEventListener("storage", apply);
     window.addEventListener("tool2day:consent", apply);
     return () => {
@@ -68,47 +101,61 @@ export function AdsterraGlobalScripts() {
   return null;
 }
 
-/** Real Adsterra banner via isolated iframe (official invoke.js). */
+/**
+ * Real Adsterra banner.
+ * Prefer same-origin /ads/*.html iframe (Adsterra sees tool2day.com).
+ * Also keep a direct-inject mode for the wait overlay.
+ */
 export function AdsterraBanner({
   size,
   className = "",
+  mode = "iframe",
 }: {
   size: AdsterraBannerSize;
   className?: string;
+  mode?: "iframe" | "direct";
 }) {
   const unit = ADSTERRA_BANNERS[size];
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const html = useMemo(
-    () => bannerSrcDoc(unit.key, unit.width, unit.height),
-    [unit.key, unit.width, unit.height],
-  );
+  const hostRef = useId().replace(/:/g, "");
+  const [directHost, setDirectHost] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    // Blob URL isolates atOptions better than srcDoc in some browsers
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    iframe.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [html]);
+    if (mode !== "direct" || !directHost) return;
+    void enqueueDirectBanner(directHost, unit);
+  }, [mode, directHost, unit]);
+
+  if (mode === "direct") {
+    return (
+      <div
+        className={`mx-auto overflow-hidden bg-[#f5f5f5] ${className}`}
+        style={{ width: unit.width, maxWidth: "100%", minHeight: unit.height }}
+        aria-label="Advertisement"
+        data-ad={size}
+      >
+        <div
+          ref={setDirectHost}
+          id={`adsterra-direct-${hostRef}`}
+          style={{ width: unit.width, height: unit.height, maxWidth: "100%" }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
-      className={`mx-auto overflow-hidden ${className}`}
+      className={`mx-auto overflow-hidden bg-[#f5f5f5] ${className}`}
       style={{ width: unit.width, maxWidth: "100%", height: unit.height }}
       aria-label="Advertisement"
       data-ad={size}
     >
       <iframe
-        ref={iframeRef}
         title={`Adsterra ${size}`}
+        src={`/ads/${size}.html`}
         width={unit.width}
         height={unit.height}
         className="max-w-full border-0"
         scrolling="no"
-        referrerPolicy="no-referrer-when-downgrade"
-        allow="attribution-reporting"
+        loading="eager"
       />
     </div>
   );
@@ -116,14 +163,19 @@ export function AdsterraBanner({
 
 export function AdsterraNative({ className = "" }: { className?: string }) {
   useEffect(() => {
-    if (!adsAllowed()) return;
-    if (document.getElementById("adsterra-native-invoke")) return;
-    const s = document.createElement("script");
-    s.id = "adsterra-native-invoke";
-    s.async = true;
-    s.dataset.cfasync = "false";
-    s.src = ADSTERRA_NATIVE.script;
-    document.body.appendChild(s);
+    const run = () => {
+      if (document.getElementById("adsterra-native-invoke")) return;
+      if (!document.getElementById(ADSTERRA_NATIVE.containerId)) return;
+      const s = document.createElement("script");
+      s.id = "adsterra-native-invoke";
+      s.async = true;
+      s.dataset.cfasync = "false";
+      s.src = ADSTERRA_NATIVE.script;
+      document.body.appendChild(s);
+    };
+    run();
+    const t = window.setTimeout(run, 500);
+    return () => window.clearTimeout(t);
   }, []);
 
   return (
@@ -144,17 +196,9 @@ export function AdsterraInContent({ className = "" }: { className?: string }) {
   );
 }
 
-export function AdsterraMobileSticky() {
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-[80] flex justify-center border-t border-[#e5e5e5] bg-white/95 py-1 backdrop-blur sm:hidden">
-      <AdsterraBanner size="320x50" />
-    </div>
-  );
-}
-
 /**
- * Center wait ad with real 300×250 unit.
- * Stays ≥10s; Exit/X opens Smartlink first, then closes after lock.
+ * Center wait ad: real 300×250 (direct inject on page).
+ * ≥10s lock; Exit/X opens Smartlink first.
  */
 export function AdsterraWaitOverlay({
   open,
@@ -219,7 +263,7 @@ export function AdsterraWaitOverlay({
             ? "الخروج يفتح الإعلان أولاً ثم يغلق النافذة"
             : `يبقى ${leftSec} ثوانٍ — × يفتح الإعلان`}
         </p>
-        <AdsterraBanner size="300x250" />
+        <AdsterraBanner size="300x250" mode="direct" />
         <button
           type="button"
           onClick={tryClose}
