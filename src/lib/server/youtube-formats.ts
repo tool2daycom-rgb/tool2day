@@ -31,9 +31,11 @@ async function createTube(
   client: (typeof ClientType)[keyof typeof ClientType],
 ) {
   installEvalShim();
+  const cookie = process.env.YOUTUBE_COOKIES?.trim() || undefined;
   return Innertube.create({
     client_type: client,
     generate_session_locally: true,
+    ...(cookie ? { cookie } : {}),
   });
 }
 
@@ -172,6 +174,8 @@ export async function listYoutubeFormats(videoId: string): Promise<{
     source: string;
     decipher: boolean;
   }> = [
+    // iOS often still returns plain CDN URLs when other clients hit LOGIN_REQUIRED
+    { client: ClientType.IOS, source: "youtube-ios", decipher: false },
     { client: ClientType.ANDROID, source: "youtube-android", decipher: false },
     { client: ClientType.MWEB, source: "youtube-mweb", decipher: true },
     {
@@ -241,6 +245,20 @@ export async function listYoutubeFormats(videoId: string): Promise<{
       return rest;
     });
 
+  // If we only have video-only + audio (common on iOS), keep both so user can download sound
+  const hasMuxed = videos.some((v) => v.hasAudio);
+  if (!hasMuxed && bestAudio) {
+    for (let i = 0; i < videos.length; i++) {
+      const v = videos[i]!;
+      if (!v.hasAudio) {
+        videos[i] = {
+          ...v,
+          title: `${v.container} ${v.quality} · فيديو (حمّل الصوت منفصلاً)`,
+        };
+      }
+    }
+  }
+
   const items: YoutubeFormatHit[] = [...videos];
   if (bestAudio) {
     const { score: _s, ...rest } = bestAudio as Row;
@@ -249,9 +267,7 @@ export async function listYoutubeFormats(videoId: string): Promise<{
   }
 
   items.push({
-    url: thumbnail.includes("maxresdefault")
-      ? thumbnail
-      : `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+    url: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
     type: "image",
     title: "صورة — أقصى جودة (maxres)",
     thumbnail: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
