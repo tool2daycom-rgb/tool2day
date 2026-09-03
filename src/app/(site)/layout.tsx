@@ -1,4 +1,8 @@
-import { AdsterraBanner, AdsterraNative } from "@/components/adsterra-ads";
+import {
+  AdsterraBanner,
+  AdsterraMobileSticky,
+  AdsterraNative,
+} from "@/components/adsterra-ads";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
@@ -8,39 +12,59 @@ export default function SiteLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-full flex-col pb-14 sm:pb-0">
       <SiteHeader />
-      {/* Top leaderboard — desktop */}
-      <div className="hidden w-full justify-center border-b border-[#eee] bg-[#f7f7f7] py-3 sm:flex">
-        <AdsterraBanner size="728x90" />
-      </div>
-      {/* Top mobile banner */}
-      <div className="flex w-full justify-center border-b border-[#eee] bg-[#f7f7f7] py-2 sm:hidden">
-        <AdsterraBanner size="320x50" />
+
+      <div className="flex w-full justify-center border-b border-[#eee] bg-[#f0f0f0] py-3">
+        <div className="hidden sm:block">
+          <AdsterraBanner size="728x90" />
+        </div>
+        <div className="sm:hidden">
+          <AdsterraBanner size="320x50" />
+        </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1">
-        <aside className="hidden w-[180px] shrink-0 px-2 py-6 xl:block">
-          <div className="sticky top-24">
+      <div className="mx-auto flex w-full max-w-[1700px] flex-1 gap-2 px-1">
+        <aside className="hidden w-[170px] shrink-0 py-4 md:block">
+          <div className="sticky top-20 space-y-3">
             <AdsterraBanner size="160x600" />
           </div>
         </aside>
+
         <main className="min-w-0 flex-1">{children}</main>
-        <aside className="hidden w-[180px] shrink-0 px-2 py-6 lg:block">
-          <div className="sticky top-24">
+
+        <aside className="hidden w-[170px] shrink-0 py-4 md:block">
+          <div className="sticky top-20 space-y-3">
             <AdsterraBanner size="160x300" />
+            <AdsterraBanner size="160x300" />
+          </div>
+        </aside>
+
+        <aside className="hidden w-[310px] shrink-0 py-4 xl:block">
+          <div className="sticky top-20 space-y-3">
+            <AdsterraBanner size="300x250" />
+            <AdsterraBanner size="300x250" />
           </div>
         </aside>
       </div>
 
-      <AdsterraNative />
-      <div className="flex w-full justify-center border-t border-[#eee] bg-[#f7f7f7] py-3">
+      <div className="flex w-full justify-center border-t border-[#eee] bg-[#f0f0f0] py-3">
         <AdsterraBanner size="468x60" />
       </div>
-      <div className="flex w-full justify-center bg-[#f7f7f7] pb-3 sm:hidden">
-        <AdsterraBanner size="320x50" />
+
+      <AdsterraNative />
+
+      <div className="flex w-full justify-center bg-[#f0f0f0] py-3">
+        <div className="hidden sm:block">
+          <AdsterraBanner size="728x90" />
+        </div>
+        <div className="sm:hidden">
+          <AdsterraBanner size="320x50" />
+        </div>
       </div>
+
       <SiteFooter />
+      <AdsterraMobileSticky />
     </div>
   );
 }

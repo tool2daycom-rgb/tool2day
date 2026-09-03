@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ADSTERRA_BANNERS,
   ADSTERRA_NATIVE,
   ADSTERRA_POPUNDER,
+  ADSTERRA_SMARTLINK,
   ADSTERRA_SOCIAL_BAR,
   type AdsterraBannerSize,
 } from "@/lib/adsterra";
 import { getStoredConsent } from "@/lib/cookie-consent";
+
+declare global {
+  interface Window {
+    atOptions?: Record<string, unknown>;
+  }
+}
 
 function adsAllowed(): boolean {
   const c = getStoredConsent();
@@ -16,7 +23,7 @@ function adsAllowed(): boolean {
   return c.advertising;
 }
 
-function appendScript(id: string, src: string, parent: HTMLElement) {
+function appendScriptOnce(id: string, src: string, parent: HTMLElement) {
   if (document.getElementById(id)) return;
   const el = document.createElement("script");
   el.id = id;
@@ -25,18 +32,53 @@ function appendScript(id: string, src: string, parent: HTMLElement) {
   parent.appendChild(el);
 }
 
-/** Popunder in head + social bar near body end. */
+/** Serialize banner loads — Adsterra shares global `atOptions`. */
+let bannerChain: Promise<void> = Promise.resolve();
+
+function enqueueBanner(
+  host: HTMLElement,
+  unit: { key: string; width: number; height: number },
+): Promise<void> {
+  bannerChain = bannerChain.then(
+    () =>
+      new Promise<void>((resolve) => {
+        if (!host.isConnected) {
+          resolve();
+          return;
+        }
+        host.replaceChildren();
+        window.atOptions = {
+          key: unit.key,
+          format: "iframe",
+          height: unit.height,
+          width: unit.width,
+          params: {},
+        };
+        const s = document.createElement("script");
+        s.type = "text/javascript";
+        s.src = `https://www.highperformanceformat.com/${unit.key}/invoke.js`;
+        s.onload = () => window.setTimeout(resolve, 150);
+        s.onerror = () => resolve();
+        host.appendChild(s);
+      }),
+  );
+  return bannerChain;
+}
+
+/** Popunder + Social Bar site-wide. */
 export function AdsterraGlobalScripts() {
   useEffect(() => {
     const apply = () => {
       if (!adsAllowed()) return;
-      appendScript("adsterra-popunder", ADSTERRA_POPUNDER, document.head);
-      appendScript("adsterra-socialbar", ADSTERRA_SOCIAL_BAR, document.body);
+      appendScriptOnce("adsterra-popunder", ADSTERRA_POPUNDER, document.head);
+      appendScriptOnce("adsterra-socialbar", ADSTERRA_SOCIAL_BAR, document.body);
     };
     apply();
+    const t = window.setTimeout(apply, 1200);
     window.addEventListener("storage", apply);
     window.addEventListener("tool2day:consent", apply);
     return () => {
+      window.clearTimeout(t);
       window.removeEventListener("storage", apply);
       window.removeEventListener("tool2day:consent", apply);
     };
@@ -52,24 +94,31 @@ export function AdsterraBanner({
   className?: string;
 }) {
   const unit = ADSTERRA_BANNERS[size];
-  const uid = useId().replace(/:/g, "");
+  const hostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !adsAllowed()) return;
+    let cancelled = false;
+    void enqueueBanner(host, unit).then(() => {
+      if (cancelled) return;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [unit]);
 
   return (
     <div
-      className={`flex items-center justify-center overflow-hidden bg-[#f3f3f3] ${className}`}
-      style={{ minHeight: unit.height, minWidth: Math.min(unit.width, 320) }}
+      className={`mx-auto flex flex-col items-center justify-center overflow-hidden rounded-md border border-[#e8e8e8] bg-[#fafafa] ${className}`}
+      style={{ minHeight: unit.height, width: "100%", maxWidth: unit.width }}
       aria-label="Advertisement"
       data-ad={size}
     >
-      <iframe
-        id={`adsterra-${size}-${uid}`}
-        title={`Advertisement ${size}`}
-        src={`/ads/${size}.html`}
-        width={unit.width}
-        height={unit.height}
-        className="max-w-full border-0"
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
+      <div
+        ref={hostRef}
+        className="flex items-center justify-center"
+        style={{ width: unit.width, height: unit.height, maxWidth: "100%" }}
       />
     </div>
   );
@@ -89,10 +138,41 @@ export function AdsterraNative({ className = "" }: { className?: string }) {
 
   return (
     <div
-      className={`mx-auto w-full max-w-5xl px-3 py-3 ${className}`}
+      className={`mx-auto my-4 w-full max-w-5xl rounded-md border border-[#e8e8e8] bg-[#fafafa] px-3 py-4 ${className}`}
       aria-label="Advertisement"
     >
+      <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-[#aaa]">
+        Ad
+      </p>
       <div id={ADSTERRA_NATIVE.containerId} />
+      <p className="mt-2 text-center text-xs">
+        <a
+          href={ADSTERRA_SMARTLINK}
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+          className="font-semibold text-[#2563eb] hover:underline"
+        >
+          Offers
+        </a>
+      </p>
+    </div>
+  );
+}
+
+/** Mid-page 300×250 block for tool / home content. */
+export function AdsterraInContent({ className = "" }: { className?: string }) {
+  return (
+    <div className={`my-6 flex justify-center px-3 ${className}`}>
+      <AdsterraBanner size="300x250" />
+    </div>
+  );
+}
+
+/** Sticky mobile bottom banner. */
+export function AdsterraMobileSticky() {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[80] flex justify-center border-t border-[#e5e5e5] bg-white/95 py-1 backdrop-blur sm:hidden">
+      <AdsterraBanner size="320x50" className="border-0 bg-transparent" />
     </div>
   );
 }

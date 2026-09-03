@@ -5,6 +5,7 @@ import { AdsterraGlobalScripts } from "@/components/adsterra-ads";
 import { CookieConsent } from "@/components/cookie-consent";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RatingGateModal } from "@/components/rating-gate-modal";
+import { ADSTERRA_POPUNDER } from "@/lib/adsterra";
 import { brandKeywords, siteSeo } from "@/lib/seo-keywords";
 import "./globals.css";
 
@@ -103,6 +104,11 @@ export default function RootLayout({
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
           crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+        <Script
+          id="adsterra-popunder-head"
+          src={ADSTERRA_POPUNDER}
           strategy="afterInteractive"
         />
       </head>

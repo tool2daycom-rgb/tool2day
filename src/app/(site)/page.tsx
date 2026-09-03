@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdsterraInContent } from "@/components/adsterra-ads";
 import { HomeDirectory } from "@/components/home-directory";
 import { JsonLd } from "@/components/json-ld";
 import { SiteRatingCard } from "@/components/star-rating";
@@ -54,9 +55,11 @@ export default function Home() {
       <JsonLd data={jsonLd} />
       <p className="sr-only">{crawlBlurb}</p>
       <HomeDirectory />
+      <AdsterraInContent />
       <div className="pb-4">
         <SiteRatingCard />
       </div>
+      <AdsterraInContent />
     </>
   );
 }
