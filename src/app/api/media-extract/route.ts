@@ -275,7 +275,11 @@ function isDirectMediaUrl(url: string): boolean {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { url?: string; platform?: string };
+    const body = (await req.json()) as {
+      url?: string;
+      platform?: string;
+      youtubeCookies?: string;
+    };
     const raw = (body.url || "").trim();
     if (!raw) {
       return NextResponse.json({ error: "الصق رابطاً أولاً" }, { status: 400 });
@@ -285,8 +289,10 @@ export async function POST(req: Request) {
     const target = await assertSafeUrl(driveDirect || raw);
     const platform =
       (body.platform as PlatformHint) || detectPlatform(target.toString());
+    const youtubeCookies = (body.youtubeCookies || "").trim() || undefined;
 
-    // YouTube: list qualities via InnerTube (ANDROID progressive + MWEB)
+    // YouTube: on Vercel datacenter IPs InnerTube often has no stream URLs —
+    // prefer loader.to there; otherwise InnerTube first then loader.to.
     const ytId = extractYoutubeId(raw);
     if (
       ytId &&
@@ -295,116 +301,237 @@ export async function POST(req: Request) {
         platform === "thumbnails" ||
         detectPlatform(raw) === "youtube")
     ) {
-      try {
-        const yt = await listYoutubeFormats(ytId);
-        const items =
-          platform === "thumbnails"
-            ? yt.items.filter((i) => i.type === "image")
-            : yt.items;
-        return NextResponse.json({
+      const page = `https://www.youtube.com/watch?v=${ytId}`;
+      const thumbMax = `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`;
+
+      const respondYoutube = (
+        title: string,
+        thumbnail: string,
+        items: MediaHit[],
+        note: string,
+      ) =>
+        NextResponse.json({
           ok: true,
           pageUrl: target.toString(),
-          title: yt.title,
+          title,
           platform: "youtube",
-          thumbnail: yt.thumbnail,
+          thumbnail,
           items,
-          note: "جودات يوتيوب — مع صوت عند التوفر + صورة maxres",
+          note,
         });
-      } catch (e) {
-        // Cobalt fallback for YouTube (muxed with audio)
-        try {
-          const { extractWithCobalt } = await import("@/lib/server/cobalt");
-          const page = `https://www.youtube.com/watch?v=${ytId}`;
-          const qualities = ["720", "480", "360", "1080"];
-          const items: MediaHit[] = [];
-          for (const q of qualities) {
-            const got = await extractWithCobalt(page, {
-              videoQuality: q,
-              downloadMode: "auto",
-            });
-            const vid = got?.items.find((i) => i.type === "video");
-            if (!vid) continue;
-            if (items.some((i) => i.quality === q)) continue;
-            items.push({
-              url: vid.url,
-              type: "video",
-              title: `MP4 ${q} · مع صوت`,
-              source: vid.source,
-              quality: q,
-              container: "MP4",
-              hasAudio: true,
-              hasVideo: true,
-              videoId: ytId,
-            });
-          }
-          const audio = await extractWithCobalt(page, { downloadMode: "audio" });
-          if (audio?.items[0]) {
-            items.push({
-              url: audio.items[0].url,
-              type: "audio",
-              title: "MP3 صوت",
-              source: audio.items[0].source,
-              container: "MP3",
-              hasAudio: true,
-              hasVideo: false,
-              videoId: ytId,
-            });
-          }
-          items.push({
-            url: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+
+      const withMaxres = (items: MediaHit[], thumb: string): MediaHit[] => {
+        if (items.some((i) => i.type === "image")) return items;
+        return [
+          ...items,
+          {
+            url: thumbMax,
             type: "image",
             title: "صورة — أقصى جودة (maxres)",
-            thumbnail: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+            thumbnail: thumb || thumbMax,
             source: "youtube-thumb",
             quality: "maxres",
             container: "JPG",
-          });
-          if (items.some((i) => i.type === "video")) {
-            return NextResponse.json({
-              ok: true,
-              pageUrl: target.toString(),
-              title: `YouTube ${ytId}`,
-              platform: "youtube",
-              thumbnail: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
-              items,
-              note: "فيديو يوتيوب مع صوت عبر Cobalt + صورة maxres",
-            });
-          }
-        } catch {
-          /* ignore */
-        }
+          },
+        ];
+      };
 
-        const message =
-          e instanceof Error ? e.message : "فشل استخراج جودات يوتيوب";
-        if (platform === "youtube" || detectPlatform(raw) === "youtube") {
-          return NextResponse.json({
-            ok: true,
-            pageUrl: target.toString(),
-            title: `YouTube ${ytId}`,
-            platform: "youtube",
-            items: [
-              {
-                url: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
-                type: "image",
-                title: "صورة — أقصى جودة (maxres)",
-                thumbnail: `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
-                source: "youtube-thumb",
-                quality: "maxres",
-                container: "JPG",
-              } satisfies MediaHit,
-            ],
-            note: `تعذّر جلب الفيديو (${message}) — تتوفر الصورة المصغّرة`,
-          });
+      if (platform === "thumbnails") {
+        return respondYoutube(`YouTube ${ytId}`, thumbMax, [
+          {
+            url: thumbMax,
+            type: "image",
+            title: "صورة — أقصى جودة (maxres)",
+            thumbnail: thumbMax,
+            source: "youtube-thumb",
+            quality: "maxres",
+            container: "JPG",
+          },
+        ], "صورة مصغّرة maxres");
+      }
+
+      const tryLoader = async () => {
+        const { youtubeViaLoaderTo } = await import("@/lib/server/loader-to");
+        const got = await youtubeViaLoaderTo(page, ["720", "360", "1080"]);
+        if (!got.items.some((i) => i.type === "video")) return null;
+        const thumb = got.thumbnail || thumbMax;
+        const items = withMaxres(
+          got.items.map(
+            (i) =>
+              ({
+                url: i.url,
+                type: i.type,
+                title: i.title,
+                thumbnail: i.thumbnail || thumb,
+                source: i.source,
+                quality: i.quality,
+                container: i.container,
+                hasAudio: i.hasAudio,
+                hasVideo: i.hasVideo,
+                size: i.size ?? null,
+                videoId: ytId,
+              }) satisfies MediaHit,
+          ),
+          thumb,
+        );
+        return {
+          title: got.title || `YouTube ${ytId}`,
+          thumbnail: thumb,
+          items,
+        };
+      };
+
+      const tryInnerTube = async () => {
+        const yt = await listYoutubeFormats(ytId, { cookie: youtubeCookies });
+        return {
+          title: yt.title,
+          thumbnail: yt.thumbnail,
+          items: yt.items as MediaHit[],
+        };
+      };
+
+      const preferLoader =
+        Boolean(process.env.VERCEL) &&
+        !youtubeCookies &&
+        !process.env.YOUTUBE_COOKIES?.trim();
+
+      let lastError = "لم تتوفر روابط فيديو قابلة للتنزيل حالياً";
+
+      if (preferLoader) {
+        try {
+          const got = await tryLoader();
+          if (got) {
+            return respondYoutube(
+              got.title,
+              got.thumbnail,
+              got.items,
+              "فيديو يوتيوب مع صوت + صورة maxres",
+            );
+          }
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : lastError;
         }
       }
+
+      try {
+        const got = await tryInnerTube();
+        if (got.items.some((i) => i.type === "video")) {
+          return respondYoutube(
+            got.title,
+            got.thumbnail,
+            got.items,
+            "جودات يوتيوب — مع صوت عند التوفر + صورة maxres",
+          );
+        }
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : lastError;
+      }
+
+      if (!preferLoader) {
+        try {
+          const got = await tryLoader();
+          if (got) {
+            return respondYoutube(
+              got.title,
+              got.thumbnail,
+              got.items,
+              "فيديو يوتيوب مع صوت + صورة maxres",
+            );
+          }
+        } catch (e) {
+          lastError = e instanceof Error ? e.message : lastError;
+        }
+      }
+
+      return respondYoutube(
+        `YouTube ${ytId}`,
+        thumbMax,
+        [
+          {
+            url: thumbMax,
+            type: "image",
+            title: "صورة — أقصى جودة (maxres)",
+            thumbnail: thumbMax,
+            source: "youtube-thumb",
+            quality: "maxres",
+            container: "JPG",
+          },
+        ],
+        `تعذّر جلب الفيديو (${lastError}). جرّب «إعدادات متقدمة» والصق Cookie من youtube.com، ثم أعد المحاولة.`,
+      );
     }
 
-    // Social / web: Cobalt first (video+audio when possible)
+    // Social / web: Cobalt + loader.to (Vercel prefers loader — Cobalt often empty)
     if (
       !driveDirect &&
       !isDirectMediaUrl(target.toString()) &&
       platform !== "thumbnails"
     ) {
+      const mapLoaderItems = (
+        got: {
+          title?: string;
+          thumbnail?: string;
+          items: Array<{
+            url: string;
+            type: "video" | "audio" | "image";
+            title: string;
+            thumbnail?: string;
+            source: string;
+            quality?: string;
+            container?: string;
+            hasAudio?: boolean;
+            hasVideo?: boolean;
+            size?: number | null;
+          }>;
+        },
+        note: string,
+      ) => {
+        const items: MediaHit[] = got.items.map((i) => ({
+          url: i.url,
+          type: i.type,
+          title: i.title,
+          thumbnail: i.thumbnail,
+          source: i.source,
+          quality: i.quality,
+          container: i.container,
+          hasAudio: i.hasAudio,
+          hasVideo: i.hasVideo,
+          size: i.size ?? null,
+        }));
+        if (!items.some((i) => i.type === "image") && got.thumbnail) {
+          items.push({
+            url: got.thumbnail,
+            type: "image",
+            title: "صورة — أقصى جودة (maxres)",
+            thumbnail: got.thumbnail,
+            source: "loader-thumb",
+            quality: "maxres",
+            container: "JPG",
+          });
+        }
+        return NextResponse.json({
+          ok: true,
+          pageUrl: target.toString(),
+          title: got.title,
+          platform,
+          thumbnail: got.thumbnail,
+          items,
+          note,
+        });
+      };
+
+      if (process.env.VERCEL) {
+        try {
+          const { socialViaLoaderTo } = await import("@/lib/server/loader-to");
+          const got = await socialViaLoaderTo(target.toString());
+          if (got?.items.some((i) => i.type === "video" || i.type === "audio")) {
+            return mapLoaderItems(got, `فيديو مع صوت · ${platform}`);
+          }
+        } catch {
+          /* try Cobalt */
+        }
+      }
+
       try {
         const { extractWithCobalt } = await import("@/lib/server/cobalt");
         const cobalt = await extractWithCobalt(target.toString(), {
@@ -491,6 +618,17 @@ export async function POST(req: Request) {
             items,
             note: `فيديو مع صوت + صورة عند التوفر · ${platform}`,
           });
+        }
+      } catch {
+        /* fall through */
+      }
+
+      // loader.to fallback (Facebook often works when Cobalt is empty)
+      try {
+        const { socialViaLoaderTo } = await import("@/lib/server/loader-to");
+        const got = await socialViaLoaderTo(target.toString());
+        if (got?.items.length) {
+          return mapLoaderItems(got, `فيديو مع صوت · ${platform}`);
         }
       } catch {
         /* fall through to HTML scrape */

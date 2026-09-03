@@ -29,13 +29,15 @@ function installEvalShim() {
 
 async function createTube(
   client: (typeof ClientType)[keyof typeof ClientType],
+  cookie?: string,
 ) {
   installEvalShim();
-  const cookie = process.env.YOUTUBE_COOKIES?.trim() || undefined;
+  const c =
+    cookie?.trim() || process.env.YOUTUBE_COOKIES?.trim() || undefined;
   return Innertube.create({
     client_type: client,
     generate_session_locally: true,
-    ...(cookie ? { cookie } : {}),
+    ...(c ? { cookie: c } : {}),
   });
 }
 
@@ -154,10 +156,13 @@ async function ingestFormats(
 }
 
 /**
- * List YouTube download options. Prefer ANDROID (progressive + audio),
- * then MWEB decipher for more qualities.
+ * List YouTube download options. Prefer iOS/ANDROID plain CDN URLs,
+ * then MWEB decipher. Pass `cookie` when the host IP hits LOGIN_REQUIRED.
  */
-export async function listYoutubeFormats(videoId: string): Promise<{
+export async function listYoutubeFormats(
+  videoId: string,
+  options?: { cookie?: string },
+): Promise<{
   title: string;
   thumbnail: string;
   items: YoutubeFormatHit[];
@@ -168,13 +173,14 @@ export async function listYoutubeFormats(videoId: string): Promise<{
   let bestAudio: Row | null = null;
   let title = `YouTube ${videoId}`;
   let thumbnail = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+  const cookie =
+    options?.cookie?.trim() || process.env.YOUTUBE_COOKIES?.trim() || undefined;
 
   const clients: Array<{
     client: (typeof ClientType)[keyof typeof ClientType];
     source: string;
     decipher: boolean;
   }> = [
-    // iOS often still returns plain CDN URLs when other clients hit LOGIN_REQUIRED
     { client: ClientType.IOS, source: "youtube-ios", decipher: false },
     { client: ClientType.ANDROID, source: "youtube-android", decipher: false },
     { client: ClientType.MWEB, source: "youtube-mweb", decipher: true },
@@ -187,7 +193,7 @@ export async function listYoutubeFormats(videoId: string): Promise<{
 
   for (const { client, source, decipher } of clients) {
     try {
-      const yt = await createTube(client);
+      const yt = await createTube(client, cookie);
       const info = await yt.getBasicInfo(videoId);
       if (info.basic_info?.title) title = info.basic_info.title;
       const thumb = info.basic_info?.thumbnail?.slice(-1)?.[0]?.url;
@@ -292,13 +298,16 @@ export async function resolveYoutubeStreamUrl(opts: {
   itag?: number;
   quality?: string;
   kind: "video" | "audio";
+  cookie?: string;
 }): Promise<{
   url: string;
   filename: string;
   contentType: string;
   size?: number | null;
 }> {
-  const listed = await listYoutubeFormats(opts.videoId);
+  const listed = await listYoutubeFormats(opts.videoId, {
+    cookie: opts.cookie,
+  });
   let hit = listed.items.find(
     (i) =>
       opts.itag

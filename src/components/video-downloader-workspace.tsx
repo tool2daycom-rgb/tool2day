@@ -116,9 +116,20 @@ export function VideoDownloaderWorkspace({
   const [status, setStatus] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [delogoBoxes, setDelogoBoxes] = useState<DelogoBox[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [youtubeCookies, setYoutubeCookies] = useState("");
 
   useEffect(() => {
     setDownloadRatingContext(slug);
+    try {
+      const saved = localStorage.getItem("tool2day.youtubeCookies");
+      if (saved) {
+        setYoutubeCookies(saved);
+        setShowAdvanced(true);
+      }
+    } catch {
+      /* ignore */
+    }
     return () => setDownloadRatingContext(null);
   }, [slug]);
 
@@ -287,7 +298,11 @@ export function VideoDownloaderWorkspace({
       const res = await fetch("/api/media-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: raw, platform }),
+        body: JSON.stringify({
+          url: raw,
+          platform,
+          youtubeCookies: youtubeCookies.trim() || undefined,
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -640,6 +655,50 @@ export function VideoDownloaderWorkspace({
             </div>
           </div>
         )}
+        {!isDelogo ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              className="text-xs font-bold text-[#666] underline-offset-2 hover:underline"
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              {showAdvanced
+                ? "إخفاء الإعدادات المتقدمة"
+                : "إعدادات متقدمة (كوكيز يوتيوب)"}
+            </button>
+            {showAdvanced ? (
+              <div className="mt-2 space-y-2 rounded-xl bg-white/80 p-3">
+                <label className="block text-xs font-bold text-[#333]">
+                  Cookie من youtube.com (إذا فشل التحميل بسبب حظر السيرفر)
+                  <textarea
+                    className={`${field} mt-1 min-h-[72px] font-mono text-[11px]`}
+                    dir="ltr"
+                    placeholder="VISITOR_INFO1_LIVE=...; SID=...; ..."
+                    value={youtubeCookies}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setYoutubeCookies(v);
+                      try {
+                        if (v.trim()) {
+                          localStorage.setItem("tool2day.youtubeCookies", v);
+                        } else {
+                          localStorage.removeItem("tool2day.youtubeCookies");
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                  />
+                </label>
+                <p className="text-[11px] leading-5 text-[#777]">
+                  من Chrome: افتح youtube.com → F12 → Application → Cookies →
+                  انسخ القيم، أو من Network انسخ رأس Cookie. تُحفظ محلياً في
+                  متصفحك فقط.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {!isDelogo ? (
           <p className="mt-3 text-[11px] leading-5 text-[#777]">
             استخدمه للمحتوى الذي يحق لك حفظه. التحميل بدون علامة مائية من
