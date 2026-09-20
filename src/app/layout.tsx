@@ -98,13 +98,15 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* AdSense site verification + loader (Consent Mode still defaults to denied) */}
-        <Script
-          id="adsense"
+        {/* Raw tags so AdSense crawler sees them in initial HTML (not afterInteractive only). */}
+        <meta
+          name="google-adsense-account"
+          content="ca-pub-9998186124580672"
+        />
+        <script
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
           crossOrigin="anonymous"
-          strategy="afterInteractive"
         />
         {/* Google Funding Choices / Privacy & Messaging (IAB TCF-compatible CMP) */}
         <Script
