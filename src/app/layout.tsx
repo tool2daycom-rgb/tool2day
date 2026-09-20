@@ -98,14 +98,16 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Raw tags so AdSense crawler sees them in initial HTML (not afterInteractive only). */}
+        {/* Explicit meta for AdSense ownership (also in metadata.other). */}
         <meta
           name="google-adsense-account"
           content="ca-pub-9998186124580672"
         />
-        <script
-          async
+        {/* beforeInteractive injects a real <script> into initial HTML for AdSense crawlers */}
+        <Script
+          id="adsense"
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
+          strategy="beforeInteractive"
           crossOrigin="anonymous"
         />
         {/* Google Funding Choices / Privacy & Messaging (IAB TCF-compatible CMP) */}
