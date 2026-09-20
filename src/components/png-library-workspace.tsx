@@ -58,6 +58,7 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
   // افتراضياً مقفول: قص AI يخرّب الشعارات والـ PNG الشفافة الجاهزة
   const [autoCut, setAutoCut] = useState(false);
   const [describing, setDescribing] = useState(false);
+  const [rightsOk, setRightsOk] = useState(false);
 
   const visibleItems = useMemo(
     () => items.filter((item) => !broken[item.id]),
@@ -291,6 +292,10 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
       setError("أدخل عنوان الصورة");
       return;
     }
+    if (!rightsOk) {
+      setError("يجب تأكيد أنك تملك حقوق الصورة أو ترخيصاً صريحاً برفعها");
+      return;
+    }
     setUploading(true);
     setError(null);
     setStatus("جاري الرفع والتخزين…");
@@ -346,6 +351,14 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
     <section className="rounded-2xl border border-[#e8e8e8] bg-white p-5 shadow-sm sm:p-7">
       <h2 className="text-lg font-bold text-[#111] sm:text-xl">{title}</h2>
       <p className="mt-2 text-sm leading-7 text-[#555]">{description}</p>
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-7 text-amber-950">
+        <p className="font-bold">حقوق الطبع والنشر والترخيص</p>
+        <p className="mt-1">
+          الصور من Pixabay وOpenverse ومجتمع Tool2Day تبقى خاضعة لرخصة مصدرها.
+          لا ترفع شخصيات أو شعارات أو تصاميم لا تملك حقوقها. راجع رابط المصدر قبل
+          أي استخدام تجاري أو إعادة نشر.
+        </p>
+      </div>
 
       <div className="mt-5 flex flex-wrap gap-2">
         <button
@@ -455,6 +468,16 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
                     {item.fileSize ? ` · ${formatBytes(item.fileSize)}` : ""}
                     {` · ${SOURCE_LABEL[item.source]}`}
                   </p>
+                  {item.pageUrl ? (
+                    <a
+                      href={item.pageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-[11px] font-semibold text-[#0d9488] hover:underline"
+                    >
+                      المصدر / الترخيص
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void downloadItem(item)}
@@ -603,9 +626,22 @@ export function PngLibraryWorkspace({ slug, arTitle, arDescription }: Props) {
             </div>
           </div>
 
+          <label className="flex items-start gap-2 rounded-lg border border-[#e8e8e8] bg-[#fafafa] px-3 py-3 text-sm leading-6 text-[#333]">
+            <input
+              type="checkbox"
+              checked={rightsOk}
+              onChange={(e) => setRightsOk(e.target.checked)}
+              className="mt-1 h-4 w-4 shrink-0"
+            />
+            <span>
+              أؤكد أن هذا الملف أصلي أو لدي ترخيص صريح برفعه، وأنه لا يتضمن
+              شخصيات أو شعارات أو تصاميم محمية دون إذن.
+            </span>
+          </label>
+
           <button
             type="button"
-            disabled={uploading || cutting || describing || !file}
+            disabled={uploading || cutting || describing || !file || !rightsOk}
             onClick={() => void submitPng()}
             className="w-full rounded-lg bg-[#0d9488] px-5 py-3 text-sm font-bold text-white disabled:opacity-40"
           >

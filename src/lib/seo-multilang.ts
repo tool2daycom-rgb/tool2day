@@ -17,7 +17,6 @@ export const intentSuffixesByLocale: Record<LocaleCode, string[]> = {
     "free",
     "online",
     "free online",
-    "no watermark",
     "in browser",
     "online free",
   ],
@@ -25,7 +24,6 @@ export const intentSuffixesByLocale: Record<LocaleCode, string[]> = {
     "kostenlos",
     "online",
     "kostenlos online",
-    "ohne Wasserzeichen",
     "im Browser",
   ],
   es: [
@@ -578,16 +576,12 @@ export function buildToolJsonLd(opts: {
 }) {
   const { tool, locale, displayTitle, description, seo } = opts;
   const url = `https://www.tool2day.com/tools/${tool.slug}`;
-  const alternateName = getToolTitlesAllLocales(tool.slug, tool.title).filter(
-    (t) => t !== displayTitle,
-  );
 
   return [
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       name: displayTitle,
-      alternateName,
       url,
       description,
       applicationCategory: "MultimediaApplication",
@@ -645,15 +639,10 @@ export function buildHomeJsonLd() {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Tool2Day",
-    alternateName: [
-      "Tool2day Com",
-      "tool2day",
-      "tool2day.com",
-      ...locales.map((l) => siteSeoByLocale[l.code].title),
-    ],
+    alternateName: ["Tool2day Com", "tool2day", "tool2day.com"],
     url: "https://www.tool2day.com",
     description: siteSeoByLocale.en.description,
-    inLanguage: locales.map((l) => l.code),
+    inLanguage: "en",
     potentialAction: {
       "@type": "SearchAction",
       target: "https://www.tool2day.com/#converters",
@@ -667,12 +656,9 @@ export function buildHomeJsonLd() {
     },
     hasPart: tools
       .filter((tool) => !tool.hidden)
-      .map((tool) => {
-      const names = getToolTitlesAllLocales(tool.slug, tool.title);
-      return {
+      .map((tool) => ({
         "@type": "WebApplication",
-        name: names[0],
-        alternateName: names.slice(1),
+        name: getToolTitle(tool.slug, "en", tool.title),
         url: `https://www.tool2day.com/tools/${tool.slug}`,
         applicationCategory: "MultimediaApplication",
         isAccessibleForFree: true,
@@ -681,7 +667,6 @@ export function buildHomeJsonLd() {
           price: "0",
           priceCurrency: "USD",
         },
-      };
-    }),
+      })),
   };
 }

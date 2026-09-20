@@ -32,7 +32,7 @@ import {
 export type DailyToolKind =
   | "company-slogan-generator"
   | "jwt-decoder"
-  | "social-caption-generator"
+  | "social-media-caption"
   | "bio-username-generator"
   | "random-picker"
   | "qr-generator"
@@ -970,9 +970,9 @@ function CaptionPanel({
           value={platform}
           onChange={(e) => setPlatform(e.target.value as CaptionPlatform)}
         >
-          <option value="instagram">انستغرام</option>
-          <option value="youtube">يوتيوب</option>
-          <option value="tiktok">تيك توك</option>
+          <option value="instagram">منشور قصير</option>
+          <option value="youtube">وصف فيديو طويل</option>
+          <option value="tiktok">مقطع قصير عمودي</option>
         </select>
       </label>
       <button type="button" className={btnPrimary} onClick={generate}>

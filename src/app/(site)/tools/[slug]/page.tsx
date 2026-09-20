@@ -138,7 +138,7 @@ export default async function ToolPage({ params }: Props) {
     kind === "speed-test";
   const isDailyTool =
     kind === "company-slogan-generator" ||
-    kind === "social-caption-generator" ||
+    kind === "social-media-caption" ||
     kind === "bio-username-generator" ||
     kind === "jwt-decoder" ||
     kind === "qr-generator" ||
@@ -232,7 +232,7 @@ export default async function ToolPage({ params }: Props) {
             kind={
               kind as
                 | "company-slogan-generator"
-                | "social-caption-generator"
+                | "social-media-caption"
                 | "bio-username-generator"
                 | "jwt-decoder"
                 | "qr-generator"

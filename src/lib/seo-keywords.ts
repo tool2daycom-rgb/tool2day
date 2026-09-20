@@ -1,9 +1,5 @@
 import { categoryMeta, tools, type Tool, type ToolCategory } from "@/lib/tools";
-import {
-  buildAllSiteKeywordsMultilang,
-  buildMultilangToolKeywords,
-  siteSeoByLocale,
-} from "@/lib/seo-multilang";
+import { buildAllSiteKeywordsMultilang, siteSeoByLocale } from "@/lib/seo-multilang";
 
 /** كلمات العلامة والنية العامة */
 export const brandKeywords = [
@@ -271,12 +267,12 @@ const toolExtraKeywords: Record<string, string[]> = {
     "slogan generator",
     "اسم علامة تجارية",
   ],
-  "social-caption-generator": [
-    "مولد وصف يوتيوب",
-    "مولد وصف انستغرام",
-    "youtube description generator",
-    "instagram caption",
-    "وصف تيك توك",
+  "social-media-caption": [
+    "مولد وصف فيديو",
+    "مولد وصف سوشيال ميديا",
+    "video caption generator",
+    "social media caption",
+    "وصف منشور",
   ],
   "bio-username-generator": [
     "مولد bio",
@@ -448,12 +444,13 @@ const toolExtraKeywords: Record<string, string[]> = {
     "magic erase",
   ],
   "png-library": [
-    "مكتبة png",
+    "مكتبة PNG",
+    "صور PNG شفافة",
+    "transparent PNG",
+    "clipart مرخّص",
+    "PNG بدون خلفية",
     "صور بدون خلفية",
-    "تحميل png شفاف",
     "png library",
-    "transparent png download",
-    "رفع png",
   ],
   "hashtag-generator": [
     "مولد هاشتاغات",
@@ -476,13 +473,11 @@ const toolExtraKeywords: Record<string, string[]> = {
   ],
   "video-content-ideas": [
     "مولد عناوين فيديو",
-    "أفكار فيديوهات يوتيوب",
+    "أفكار محتوى فيديو",
     "أسئلة محتوى",
     "video title generator",
     "content ideas generator",
-    "كلمات مفتاحية يوتيوب",
     "عناوين جذابة",
-    "SEO يوتيوب",
   ],
   "video-subtitles": [
     "ترجمة فيديو",
@@ -796,10 +791,10 @@ const toolExtraKeywords: Record<string, string[]> = {
     "archive converter",
   ],
   "ebook-converter": [
-    "تحويل كتب إلكترونية",
+    "تحويل EPUB إلى PDF",
     "EPUB to PDF",
-    "MOBI to EPUB",
-    "ebook converter",
+    "ebook format convert",
+    "تحويل كتاب إلكتروني غير محمي",
     "تحويل EPUB",
   ],
   "archive-extractor": [
@@ -826,8 +821,7 @@ const INTENT_SUFFIXES = [
   "مجاني",
   "أونلاين",
   "مجاني أونلاين",
-  "بدون علامة مائية",
-  "بدون تحميل",
+  "في المتصفح",
 ] as const;
 
 function unique(list: string[]): string[] {
@@ -888,18 +882,17 @@ export function toolFreeKeyword(title: string) {
 export function getToolKeywords(tool: Tool): string[] {
   const cat = categoryMeta[tool.category];
   const extras = toolExtraKeywords[tool.slug] ?? [];
+  // Keep keywords lean (AR + EN only) — avoid multilang stuffing that looks like spam.
   return unique([
-    ...buildMultilangToolKeywords(tool.slug, tool.title, [
-      ...arabicSearchVariants(tool.title),
-      ...extras,
-      ...extras.flatMap((k) => withIntentVariants(k)),
-      ...withIntentVariants(tool.title),
-      cat.label,
-      cat.sectionTitle,
-      ...categoryExtraKeywords[tool.category],
-      ...brandKeywords,
-    ]),
-  ]);
+    tool.title,
+    toolFreeKeyword(tool.title),
+    ...arabicSearchVariants(tool.title),
+    ...extras,
+    cat.label,
+    cat.sectionTitle,
+    ...categoryExtraKeywords[tool.category].slice(0, 8),
+    ...brandKeywords.slice(0, 12),
+  ]).slice(0, 40);
 }
 
 export function getAllSiteKeywords(): string[] {

@@ -21,11 +21,18 @@ const nextConfig: NextConfig = {
       "remove-logo-image",
       "pdf-unlock",
     ];
-    return gone.map((slug) => ({
-      source: `/tools/${slug}`,
-      destination: "/",
-      permanent: true,
-    }));
+    return [
+      ...gone.map((slug) => ({
+        source: `/tools/${slug}`,
+        destination: "/",
+        permanent: true,
+      })),
+      {
+        source: "/tools/social-caption-generator",
+        destination: "/tools/social-media-caption",
+        permanent: true,
+      },
+    ];
   },
   // نفس الأصل لتجنّب CORS على نماذج إزالة الخلفية
   async rewrites() {

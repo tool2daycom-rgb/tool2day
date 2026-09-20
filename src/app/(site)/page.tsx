@@ -6,7 +6,6 @@ import { brandKeywords, siteSeo } from "@/lib/seo-keywords";
 import {
   buildHomeJsonLd,
   buildLanguageAlternateMap,
-  siteSeoByLocale,
 } from "@/lib/seo-multilang";
 
 export const metadata: Metadata = {
@@ -43,16 +42,10 @@ export const metadata: Metadata = {
 
 const jsonLd = buildHomeJsonLd();
 
-/** Extra discovery copy for crawlers (visually hidden). */
-const crawlBlurb = Object.values(siteSeoByLocale)
-  .map((s) => `${s.title}. ${s.description}`)
-  .join(" ");
-
 export default function Home() {
   return (
     <>
       <JsonLd data={jsonLd} />
-      <p className="sr-only">{crawlBlurb}</p>
       <HomeDirectory />
       <div className="pb-4">
         <SiteRatingCard />

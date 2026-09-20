@@ -67,6 +67,39 @@ export function ToolSeoSections({
         </ol>
       </section>
 
+      {content.formats?.length ? (
+        <section>
+          <h2 className="text-2xl font-bold text-[#111]">
+            {content.formatsTitle || "الصيغ المدعومة"}
+          </h2>
+          {content.formatsIntro ? (
+            <p className="mt-3 text-[15px] leading-8 text-[#555]">
+              {content.formatsIntro}
+            </p>
+          ) : null}
+          <div className="mt-6 overflow-x-auto rounded-xl border border-[#e8e8e8]">
+            <table className="min-w-full text-start text-sm">
+              <thead className="bg-[#f7f7f7] text-[#333]">
+                <tr>
+                  <th className="px-4 py-3 font-bold">الصيغة / النوع</th>
+                  <th className="px-4 py-3 font-bold">ملاحظات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {content.formats.map((row) => (
+                  <tr key={row.label} className="border-t border-[#eee]">
+                    <td className="px-4 py-3 font-semibold text-[#111]">
+                      {row.label}
+                    </td>
+                    <td className="px-4 py-3 leading-7 text-[#555]">{row.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       {content.moreTitle && content.moreBody ? (
         <section>
           <h2 className="text-2xl font-bold text-[#111]">{content.moreTitle}</h2>

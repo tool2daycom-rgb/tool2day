@@ -246,18 +246,18 @@ export const tools: Tool[] = [
   },
   {
     slug: "video-content-ideas",
-    title: "مولد عناوين وأسئلة الفيديوهات",
+    title: "مولد عناوين وأسئلة للفيديو",
     description:
-      "أسئلة وعناوين وترندات يوتيوب حسب الكلمة المفتاحية.",
+      "اقترح عناوين وأسئلة وأفكار محتوى فيديو حسب الكلمة المفتاحية.",
     category: "social-dev",
     accept: "text/plain",
     icon: Lightbulb,
   },
   {
-    slug: "social-caption-generator",
-    title: "مولد وصف يوتيوب وانستغرام",
+    slug: "social-media-caption",
+    title: "مولد وصف الفيديو والسوشيال ميديا",
     description:
-      "ولّد أوصاف منشورات وفيديوهات لانستغرام ويوتيوب وتيك توك حسب الموضوع.",
+      "ولّد أوصاف منشورات ومقاطع فيديو للمنصات الاجتماعية حسب الموضوع — دون الاعتماد على علامات تجارية في اسم الأداة.",
     category: "social-dev",
     accept: "text/plain",
     icon: MessageSquareText,
@@ -386,7 +386,7 @@ export const tools: Tool[] = [
     slug: "png-library",
     title: "مكتبة PNG بدون خلفية",
     description:
-      "تصفّح آلاف الصور الشفافة الجاهزة للتنزيل، أو ارفع PNG خاصتك للمكتبة مع العنوان والكلمات المفتاحية.",
+      "تصفّح صور PNG شفافة من مصادر مرخّصة أو من مجتمع Tool2Day مع ذكر المصدر، أو ارفع ملفاتك الأصلية فقط مع احترام حقوق الطبع والنشر.",
     category: "ai",
     accept: "image/png",
     icon: ImageDown,
@@ -803,7 +803,8 @@ export const tools: Tool[] = [
   {
     slug: "ebook-converter",
     title: "محوّل الكتب الإلكترونية",
-    description: "حوّل EPUB إلى PDF نصي، أو نزّل PDF كما هو.",
+    description:
+      "حوّل ملفات EPUB غير المحمية إلى PDF نصي بسيط، أو أعد تنزيل PDF كما هو — لا تزيل DRM ولا تتجاوز حماية الكتب.",
     category: "converters",
     accept: ".epub,application/pdf",
     icon: FileText,
