@@ -98,17 +98,21 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Explicit meta for AdSense ownership (also in metadata.other). */}
+        {/* Ownership meta — visible to AdSense crawlers in initial HTML */}
         <meta
           name="google-adsense-account"
           content="ca-pub-9998186124580672"
         />
-        {/* beforeInteractive injects a real <script> into initial HTML for AdSense crawlers */}
-        <Script
-          id="adsense"
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
-          strategy="beforeInteractive"
-          crossOrigin="anonymous"
+        {/*
+          Do NOT use next/script for AdSense verification.
+          Next rewrites it to self.__next_s.push(...), which AdSense crawlers reject.
+          Emit a literal <script src="adsbygoogle.js"> in the HTML source instead.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '</script><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672" crossorigin="anonymous"></script><script>',
+          }}
         />
         {/* Google Funding Choices / Privacy & Messaging (IAB TCF-compatible CMP) */}
         <Script
