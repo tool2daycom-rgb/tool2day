@@ -11,10 +11,6 @@ import {
   type ActiveToolKind,
 } from "@/lib/processors/active-tools";
 import { setDownloadRatingContext, beginToolUse } from "@/lib/ratings";
-import {
-  LogoRemoveControls,
-  type DelogoBox,
-} from "@/components/logo-remove-controls";
 
 type Props = {
   slug: string;
@@ -41,7 +37,6 @@ const noFileKinds = new Set<ActiveToolKind>([
   "voice-recorder",
   "video-recorder",
   "tts",
-  "media-downloader",
 ]);
 
 const sel = "block w-full rounded-md border border-[#ddd] bg-white px-3 py-2";
@@ -91,9 +86,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
   const [ttsVoice, setTtsVoice] = useState("ar-SA-HamedNeural");
   const [ttsStyle, setTtsStyle] = useState("video");
   const [ttsSpeed, setTtsSpeed] = useState(0.92);
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaBusy, setMediaBusy] = useState(false);
-  const [mediaNote, setMediaNote] = useState("");
   const [mediaItems, setMediaItems] = useState<
     Array<{
       url: string;
@@ -119,7 +111,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
     "top-left" | "top-right" | "bottom-left" | "bottom-right" | "center"
   >("top-right");
   const [imgOpacity, setImgOpacity] = useState("1");
-  const [delogoBoxes, setDelogoBoxes] = useState<DelogoBox[]>([]);
   const overlayVideoRef = useRef<HTMLInputElement>(null);
   const overlayImageRef = useRef<HTMLInputElement>(null);
 
@@ -148,124 +139,8 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
 
   const multiple = multiKinds.has(kind);
 
-  async function extractMedia() {
-    beginToolUse(slug);
-    setMediaBusy(true);
-    setBusy(true);
-    setError(null);
-    setMediaNote("");
-    setMediaItems([]);
-    setProgress(20);
-    setStatus("جارٍ فحص الرابط واستخراج الوسائط…");
-    try {
-      const res = await fetch("/api/media-extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: mediaUrl.trim() }),
-      });
-      const data = (await res.json()) as {
-        error?: string;
-        note?: string;
-        title?: string;
-        items?: Array<{
-          url: string;
-          type: string;
-          title?: string;
-          thumbnail?: string;
-          source: string;
-        }>;
-      };
-      if (!res.ok) throw new Error(data.error || "فشل الاستخراج");
-      setMediaItems(data.items || []);
-      setMediaNote(data.note || (data.title ? `صفحة: ${data.title}` : ""));
-      setProgress(100);
-      setStatus(
-        data.items?.length
-          ? `وُجد ${data.items.length} وسيط/وسائط`
-          : "لا نتائج عامة في هذه الصفحة",
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "فشل الاستخراج");
-      setStatus(null);
-    } finally {
-      setMediaBusy(false);
-      setBusy(false);
-    }
-  }
 
-  async function openMediaItem(itemUrl: string) {
-    try {
-      const {
-        hasRatedCurrentUse,
-        openRatingGate,
-        getCurrentUseId,
-        beginToolUse: startUse,
-      } = await import("@/lib/ratings");
-      if (!getCurrentUseId(slug)) startUse(slug);
-      if (!hasRatedCurrentUse(slug)) {
-        const ok = await openRatingGate(slug);
-        if (!ok) {
-          setError("يجب تقييم الأداة قبل فتح/تنزيل الملف");
-          return;
-        }
-      }
-      window.open(itemUrl, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "تعذّر الفتح");
-    }
-  }
 
-  async function downloadMediaItem(itemUrl: string) {
-    setBusy(true);
-    setError(null);
-    setStatus("جارٍ التحميل…");
-    try {
-      const href = `/api/media-proxy?url=${encodeURIComponent(itemUrl)}`;
-      const res = await fetch(href);
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error || "فشل التحميل عبر الوكيل");
-      }
-      const blob = await res.blob();
-      const name =
-        itemUrl.split("/").pop()?.split("?")[0] ||
-        `tool2day-media-${Date.now()}`;
-      const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
-      // يفتح بوابة «قيّم الأداة قبل التنزيل» إن لم يُقيَّم هذا الاستخدام
-      await downloadBlob(blob, name);
-      setStatus("تم التنزيل");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "فشل التحميل";
-      // إن ألغى المستخدم التقييم
-      if (msg.includes("تقييم")) {
-        setError(msg);
-        setStatus(null);
-        return;
-      }
-      // مسار احتياطي: تقييم ثم فتح الرابط الأصلي
-      try {
-        const { hasRatedCurrentUse, openRatingGate, getCurrentUseId, beginToolUse } =
-          await import("@/lib/ratings");
-        if (!getCurrentUseId(slug)) beginToolUse(slug);
-        if (!hasRatedCurrentUse(slug)) {
-          const ok = await openRatingGate(slug);
-          if (!ok) {
-            setError("يجب تقييم الأداة قبل التنزيل");
-            setStatus(null);
-            return;
-          }
-        }
-        window.open(itemUrl, "_blank", "noopener,noreferrer");
-        setStatus("فُتح الرابط الأصلي — احفظه من المتصفح إن لزم");
-        setError(msg);
-      } catch {
-        setError(msg);
-        setStatus(null);
-      }
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function ensureTtsFile(): Promise<File> {
     if (ttsFile) return ttsFile;
@@ -368,11 +243,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
         // التشغيل يتم عبر playTts / التنزيل عبر downloadTts
         return;
       }
-      if (kind === "media-downloader") {
-        await extractMedia();
-        return;
-      }
-
       if (kind === "screen-recorder" || kind === "voice-recorder" || kind === "video-recorder") {
         const secs = Number(recordSecs) || 10;
         setStatus(`تسجيل ${secs} ثانية… اسمح بالصلاحية`);
@@ -452,20 +322,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
           await media.cropVideo(files[0], box, onProgress);
           break;
         }
-        case "video-delogo": {
-          if (!delogoBoxes.length) {
-            throw new Error("اختر وضع الإزالة أو ارسم منطقة الشعار على المعاينة");
-          }
-          await media.removeLogo(files[0], delogoBoxes, onProgress);
-          break;
-        }
-        case "image-delogo": {
-          if (!delogoBoxes.length) {
-            throw new Error("اختر وضع الإزالة أو ارسم منطقة الشعار على المعاينة");
-          }
-          await media.removeLogoFromImage(files[0], delogoBoxes, onProgress);
-          break;
-        }
         case "video-add-audio":
           if (files.length < 2) throw new Error("اختر فيديو ثم ملف صوت (ملفين)");
           await media.addAudioToVideo(files[0], files[1], onProgress);
@@ -540,10 +396,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
           break;
         case "pdf-protect":
           await extra.protectPdf(files[0], password);
-          setProgress(100);
-          break;
-        case "pdf-unlock":
-          await extra.unlockPdf(files[0], password);
           setProgress(100);
           break;
         case "pdf-to-word":
@@ -718,89 +570,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
             صوت عصبي حقيقي من Microsoft Edge — مناسب لتعليق فيديوهات بصوت يشبه
             الإنسان. حرّك العيار لضبط الإيقاع بدقة.
           </p>
-        </div>
-      ) : kind === "media-downloader" ? (
-        <div className="space-y-4">
-          <Field label="رابط الصفحة أو الملف">
-            <input
-              className={sel}
-              dir="ltr"
-              type="url"
-              placeholder="https://example.com/page-or-file.mp4"
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void extractMedia();
-                }
-              }}
-            />
-          </Field>
-          <p className="text-xs leading-6 text-[#666]">
-            يستخرج الروابط العامة الظاهرة في الصفحة (Open Graph / فيديو HTML /
-            صور / ملفات مباشرة). لا يتجاوز الحماية أو حقوق النشر — استخدمه فقط
-            للمحتوى الذي يحق لك حفظه.
-          </p>
-          {mediaNote ? (
-            <p className="rounded-lg bg-[#f5f5f5] px-3 py-2 text-xs text-[#555]">
-              {mediaNote}
-            </p>
-          ) : null}
-          {mediaItems.length > 0 ? (
-            <ul className="space-y-2">
-              {mediaItems.map((item) => (
-                <li
-                  key={item.url}
-                  className="flex flex-col gap-2 rounded-lg border border-[#e5e5e5] bg-[#fafafa] p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-[#111]">
-                      {item.type === "video"
-                        ? "فيديو"
-                        : item.type === "audio"
-                          ? "صوت"
-                          : item.type === "image"
-                            ? "صورة"
-                            : "ملف"}
-                      {item.title ? ` — ${item.title}` : ""}
-                    </p>
-                    <p className="mt-0.5 truncate text-[11px] text-[#888]" dir="ltr">
-                      {item.url}
-                    </p>
-                    <p className="text-[10px] text-[#aaa]">مصدر: {item.source}</p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    {item.thumbnail ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.thumbnail}
-                        alt=""
-                        className="h-12 w-12 rounded object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void downloadMediaItem(item.url)}
-                      className="rounded-md bg-[#16a34a] px-3 py-2 text-xs font-bold text-white hover:bg-[#15803d] disabled:opacity-50"
-                    >
-                      تنزيل
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void openMediaItem(item.url)}
-                      className="rounded-md border border-[#ddd] bg-white px-3 py-2 text-xs font-bold text-[#333] hover:bg-[#f5f5f5] disabled:opacity-50"
-                    >
-                      فتح
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
       ) : kind === "video-add-image" ? (
         <div className="space-y-4">
@@ -1145,12 +914,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
             <Field label={fields.height}><input className={sel} type="number" value={cropH} onChange={(e) => setCropH(e.target.value)} /></Field>
           </>
         )}
-        {(kind === "video-delogo" || kind === "image-delogo") && (
-          <LogoRemoveControls
-            file={files[0] || null}
-            onBoxesChange={setDelogoBoxes}
-          />
-        )}
         {kind === "pdf-split" && (
           <>
             <Field label={fields.split}>
@@ -1167,7 +930,7 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
             )}
           </>
         )}
-        {(kind === "pdf-protect" || kind === "pdf-unlock") && (
+        {kind === "pdf-protect" && (
           <Field label={fields.password}>
             <input className={sel} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
@@ -1218,15 +981,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
             {ttsFile ? "تنزيل MP3" : "نزّل بعد التشغيل"}
           </button>
         </div>
-      ) : kind === "media-downloader" ? (
-        <button
-          type="button"
-          disabled={busy || mediaBusy || !mediaUrl.trim()}
-          onClick={() => void extractMedia()}
-          className="mt-5 rounded-md bg-[#111] px-5 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
-        >
-          {busy || mediaBusy ? "جارٍ الاستخراج…" : "استخراج الوسائط"}
-        </button>
       ) : (
         <button
           type="button"
@@ -1248,12 +1002,10 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
         </p>
       ) : null}
       <p className="mt-3 text-xs text-[#888]">
-        {kind === "media-downloader"
-          ? `${title} — ${messages.free}`
-          : `${title} — ${messages.browserProcessing}`}
+        {`${title} — ${messages.browserProcessing}`}
       </p>
       <AdsterraWaitOverlay
-        open={busy || mediaBusy}
+        open={busy}
         label={status || messages.working}
       />
     </div>

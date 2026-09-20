@@ -24,8 +24,7 @@ export const brandKeywords = [
   "مجاناً",
   "مجاني",
   "مجاني بالكامل",
-  "بدون علامة مائية",
-  "بدون علامات مائية",
+  "مجاني أونلاين",
   "بدون تسجيل",
   "بدون تحميل برامج",
   "بدون اشتراك",
@@ -44,7 +43,6 @@ export const brandKeywords = [
   "تحرير ملفات أونلاين",
   "online tools",
   "free online tools",
-  "no watermark",
   "browser tools",
 ] as const;
 
@@ -106,33 +104,14 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "أدوات المطورين والسوشيال ميديا",
     "سوشيال ميديا",
     "هاشتاغات",
-    "تحميل صور مصغرة",
-    "يوتيوب ثمنيل",
     "JSON formatter",
     "HTML encoder",
     "أفكار فيديو",
     "عناوين يوتيوب",
     "مولد أسئلة",
-    "thumbnail downloader",
     "hashtag generator",
     "video content ideas",
     "SEO keywords",
-  ],
-  downloaders: [
-    "تحميل فيديوهات",
-    "تحميل من يوتيوب",
-    "تحميل من تيك توك",
-    "تحميل من انستغرام",
-    "تحميل من فيسبوك",
-    "تحميل من بينترست",
-    "تحميل بدون علامة مائية",
-    "إزالة شعار",
-    "صور مصغّرة يوتيوب",
-    "video downloader",
-    "tiktok downloader no watermark",
-    "youtube thumbnail download",
-    "facebook video download",
-    "instagram reels download",
   ],
   video: [
     "تحرير فيديو",
@@ -152,7 +131,6 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "تسجيل شاشة مجاني",
     "screen recorder online",
     "online video tools",
-    "بدون علامة مائية فيديو",
   ],
   audio: [
     "تحرير صوت",
@@ -254,30 +232,6 @@ const toolExtraKeywords: Record<string, string[]> = {
     "قراءة النص",
     "تحويل كتابة إلى صوت",
     "text to speech arabic",
-  ],
-  "media-downloader": [
-    "تحميل فيديو من رابط",
-    "تحميل صورة من رابط",
-    "استخراج وسائط",
-    "media downloader",
-    "download video from url",
-    "تحميل ميديا",
-    "حفظ فيديو من صفحة",
-  ],
-  "video-downloader": [
-    "تحميل فيديوهات",
-    "تحميل من يوتيوب",
-    "تحميل من تيك توك",
-    "تحميل من انستغرام",
-    "تحميل من فيسبوك",
-    "تحميل من بينترست",
-    "تحميل فيديو بدون علامة مائية",
-    "video downloader",
-    "tiktok downloader",
-    "youtube downloader",
-    "instagram reels download",
-    "facebook video download",
-    "pinterest video download",
   ],
   "video-to-text": [
     "تحويل فيديو إلى نص",
@@ -501,14 +455,6 @@ const toolExtraKeywords: Record<string, string[]> = {
     "transparent png download",
     "رفع png",
   ],
-  "thumbnail-downloader": [
-    "تحميل صورة مصغرة يوتيوب",
-    "youtube thumbnail downloader",
-    "تحميل ثمنيل",
-    "انستغرام صورة مصغرة",
-    "instagram thumbnail",
-    "maxresdefault",
-  ],
   "hashtag-generator": [
     "مولد هاشتاغات",
     "hashtag generator",
@@ -595,20 +541,6 @@ const toolExtraKeywords: Record<string, string[]> = {
     "add text to video",
     "عناوين فيديو",
     "caption video",
-  ],
-  "remove-logo": [
-    "إزالة لوجو من فيديو",
-    "حذف شعار فيديو",
-    "remove watermark from video",
-    "إزالة علامة مائية من فيديو",
-    "remove logo video",
-  ],
-  "remove-logo-image": [
-    "إزالة لوجو من صورة",
-    "حذف شعار من صورة",
-    "remove watermark from image",
-    "إزالة علامة مائية من صورة",
-    "remove logo from photo",
   ],
   "crop-video": [
     "قص إطار فيديو",
@@ -754,12 +686,6 @@ const toolExtraKeywords: Record<string, string[]> = {
     "compress PDF",
     "ضغط ملف PDF",
     "reduce PDF size",
-  ],
-  "pdf-unlock": [
-    "فك قفل PDF",
-    "unlock PDF",
-    "إزالة كلمة مرور PDF",
-    "remove PDF password",
   ],
   "pdf-protect": [
     "قفل PDF",
@@ -932,7 +858,7 @@ export function arabicSearchVariants(title: string): string[] {
     `${t} مجاناً`,
     `${t} أونلاين`,
     `${t} مجاني`,
-    `${t} بدون علامة مائية`,
+    `${t} مجاناً أونلاين`,
     `${t} في المتصفح`,
   ];
   const stripped = t
@@ -948,7 +874,7 @@ export function arabicSearchVariants(title: string): string[] {
       `${stripped} أونلاين`,
       `مولد ${stripped}`,
       `محول ${stripped}`,
-      `${stripped} بدون علامة مائية`,
+      `${stripped} مجاناً أونلاين`,
     );
   }
   return out;
@@ -1012,7 +938,7 @@ export function getToolPageDescription(tool: Tool, tagline?: string) {
     tagline?.trim() ||
     tool.description ||
     `${tool.title} أونلاين في المتصفح.`;
-  return `${free} — ${base} مجاني بالكامل وبدون علامة مائية على Tool2Day.`;
+  return `${free} — ${base} مجاني بالكامل في المتصفح على Tool2Day.`;
 }
 
 export const siteSeo = {

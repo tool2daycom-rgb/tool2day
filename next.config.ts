@@ -12,6 +12,21 @@ const nextConfig: NextConfig = {
   ],
   transpilePackages: ["@imgly/background-removal", "tesseract.js"],
   // *.vercel.app → www.tool2day.com is handled in src/middleware.ts
+  async redirects() {
+    const gone = [
+      "video-downloader",
+      "media-downloader",
+      "thumbnail-downloader",
+      "remove-logo",
+      "remove-logo-image",
+      "pdf-unlock",
+    ];
+    return gone.map((slug) => ({
+      source: `/tools/${slug}`,
+      destination: "/",
+      permanent: true,
+    }));
+  },
   // نفس الأصل لتجنّب CORS على نماذج إزالة الخلفية
   async rewrites() {
     return [

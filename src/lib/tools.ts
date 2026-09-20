@@ -10,7 +10,6 @@ import {
   Coins,
   Combine,
   Crop,
-  Download,
   Dumbbell,
   FileArchive,
   FileImage,
@@ -23,7 +22,6 @@ import {
   ImagePlus,
   Landmark,
   Lock,
-  LockOpen,
   Mail,
   Merge,
   Mic,
@@ -72,7 +70,6 @@ export type ToolCategory =
   | "calculators"
   | "ai"
   | "social-dev"
-  | "downloaders"
   | "video"
   | "audio"
   | "pdf"
@@ -114,11 +111,6 @@ export const categoryMeta: Record<
     sectionTitle: "أدوات المطورين والسوشيال ميديا",
     anchor: "social-dev",
   },
-  downloaders: {
-    label: "تحميل فيديوهات",
-    sectionTitle: "أداة تحميل فيديوهات",
-    anchor: "downloaders",
-  },
   video: {
     label: "الفيديو",
     sectionTitle: "أدوات الفيديو",
@@ -151,7 +143,6 @@ export const navCategories: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
-  "downloaders",
   "social-dev",
   "converters",
   "pdf",
@@ -236,15 +227,6 @@ export const tools: Tool[] = [
 
   // Social & Dev utils
   {
-    slug: "thumbnail-downloader",
-    title: "تحميل صور مصغّرة يوتيوب وانستغرام",
-    description:
-      "استخرج ونزّل صور الغلاف المصغّرة من روابط يوتيوب أو انستغرام بجودة عالية.",
-    category: "downloaders",
-    accept: "text/plain",
-    icon: ImageDown,
-  },
-  {
     slug: "hashtag-generator",
     title: "مولد هاشتاغات ذكي",
     description:
@@ -293,7 +275,7 @@ export const tools: Tool[] = [
     slug: "jwt-decoder",
     title: "فك ترميز JWT",
     description:
-      "اعرض Header وPayload لرموز JWT في المتصفح فقط — بدون إرسال للخادم وبدون التحقق من التوقيع.",
+      "للمطورين: اعرض Header وPayload لرموز JWT التي تملكها — محلياً في المتصفح للتصحيح فقط، بدون تحقق من التوقيع وبدون إرسال للخادم.",
     category: "social-dev",
     accept: "text/plain",
     icon: KeyRound,
@@ -411,9 +393,9 @@ export const tools: Tool[] = [
   },
   {
     slug: "error-detector",
-    title: "كاشف الأخطاء",
+    title: "كاشف أخطاء الصياغة",
     description:
-      "افحص JSON والروابط والبريد وصياغة JavaScript وهيكل HTML قبل الاستخدام.",
+      "للمطورين: افحص صحة صياغة JSON والروابط والبريد وكود JavaScript/HTML — أداة تحقق من الصيغة وليست أداة اختراق.",
     category: "ai",
     accept: "text/plain",
     icon: Bug,
@@ -453,24 +435,6 @@ export const tools: Tool[] = [
     category: "video",
     accept: "text/plain",
     icon: Type,
-  },
-  {
-    slug: "media-downloader",
-    title: "تحميل الوسائط من رابط",
-    description:
-      "الصق رابط صفحة أو ملف واستخرج فيديو/صورة/صوت عاماً للتنزيل — مجاناً وبدون علامة مائية.",
-    category: "downloaders",
-    accept: "text/plain",
-    icon: Download,
-  },
-  {
-    slug: "video-downloader",
-    title: "تحميل فيديوهات",
-    description:
-      "أداة واحدة لتحميل فيديوهات وصور من يوتيوب، تيك توك، انستغرام، فيسبوك، بينترست، وروابط جوجل — بدون علامة مائية، مع صور مصغّرة وإزالة الشعار.",
-    category: "downloaders",
-    accept: "text/plain",
-    icon: Download,
   },
   {
     slug: "video-to-text",
@@ -520,14 +484,6 @@ export const tools: Tool[] = [
     category: "video",
     accept: "video/*",
     icon: PencilLine,
-  },
-  {
-    slug: "remove-logo",
-    title: "إزالة الشعار من الفيديو",
-    description: "أخفِ الشعارات والعلامات المائية من الفيديو بدون غبش سميك.",
-    category: "downloaders",
-    accept: "video/*",
-    icon: WandSparkles,
   },
   {
     slug: "crop-video",
@@ -711,14 +667,6 @@ export const tools: Tool[] = [
     icon: FileArchive,
   },
   {
-    slug: "pdf-unlock",
-    title: "فتح قفل PDF",
-    description: "أزل كلمة المرور عن ملف PDF.",
-    category: "pdf",
-    accept: "application/pdf",
-    icon: LockOpen,
-  },
-  {
     slug: "pdf-protect",
     title: "حماية PDF",
     description: "أضف كلمة مرور لحماية المستند.",
@@ -898,15 +846,6 @@ export const tools: Tool[] = [
     icon: Coins,
   },
   {
-    slug: "remove-logo-image",
-    title: "إزالة الشعار من صورة",
-    description:
-      "أخفِ الشعارات والعلامات المائية من الصور بنفس نظام إزالة شعار الفيديو — بدون غبش سميك.",
-    category: "downloaders",
-    accept: "image/*",
-    icon: WandSparkles,
-  },
-  {
     slug: "qr-generator",
     title: "مولد رمز QR",
     description:
@@ -940,7 +879,6 @@ export const categoryOrder: ToolCategory[] = [
   "generators",
   "calculators",
   "ai",
-  "downloaders",
   "social-dev",
   "video",
   "audio",

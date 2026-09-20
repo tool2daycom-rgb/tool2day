@@ -13,8 +13,6 @@ export type ActiveToolKind =
   | "video-add-audio"
   | "video-add-image"
   | "video-add-text"
-  | "video-delogo"
-  | "image-delogo"
   | "video-stabilize"
   | "video-enhance"
   | "audio-convert"
@@ -32,7 +30,6 @@ export type ActiveToolKind =
   | "pdf-compress"
   | "pdf-pages"
   | "pdf-protect"
-  | "pdf-unlock"
   | "pdf-to-word"
   | "pdf-to-excel"
   | "pdf-to-jpg"
@@ -47,8 +44,6 @@ export type ActiveToolKind =
   | "voice-recorder"
   | "video-recorder"
   | "tts"
-  | "media-downloader"
-  | "video-downloader"
   | "video-to-text"
   | "text-tools"
   | "error-detector"
@@ -71,7 +66,6 @@ export type ActiveToolKind =
   | "ai-upscale"
   | "ai-erase"
   | "png-library"
-  | "thumbnail-downloader"
   | "hashtag-generator"
   | "code-formatter"
   | "video-content-ideas"
@@ -105,15 +99,11 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "add-audio-to-video": "video-add-audio",
   "add-image-to-video": "video-add-image",
   "add-text-to-video": "video-add-text",
-  "remove-logo": "video-delogo",
-  "remove-logo-image": "image-delogo",
   "stabilize-video": "video-stabilize",
   "enhance-video": "video-enhance",
   "screen-recorder": "screen-recorder",
   "video-recorder": "video-recorder",
   "text-to-speech": "tts",
-  "media-downloader": "media-downloader",
-  "video-downloader": "video-downloader",
   "video-to-text": "video-to-text",
   "text-tools": "text-tools",
   "error-detector": "error-detector",
@@ -136,7 +126,6 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "ai-upscale": "ai-upscale",
   "ai-erase": "ai-erase",
   "png-library": "png-library",
-  "thumbnail-downloader": "thumbnail-downloader",
   "hashtag-generator": "hashtag-generator",
   "code-formatter": "code-formatter",
   "video-content-ideas": "video-content-ideas",
@@ -165,7 +154,6 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "pdf-compress": "pdf-compress",
   "pdf-page-numbers": "pdf-pages",
   "pdf-protect": "pdf-protect",
-  "pdf-unlock": "pdf-unlock",
   "pdf-to-word": "pdf-to-word",
   "pdf-to-excel": "pdf-to-excel",
   "pdf-to-jpg": "pdf-to-jpg",

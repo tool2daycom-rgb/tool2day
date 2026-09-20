@@ -4180,14 +4180,7 @@ export function VideoEditorWorkspace({
                       similarity: c.chromaSensitivity ?? 30,
                     }
                   : null,
-                removeLogo: c.logoEnabled && c.logoBox
-                  ? {
-                      x: c.logoBox.x,
-                      y: c.logoBox.y,
-                      w: c.logoBox.w,
-                      h: c.logoBox.h,
-                    }
-                  : null,
+                removeLogo: null,
               }));
           }),
           overlays: overlays.map((o) => {
@@ -4247,14 +4240,7 @@ export function VideoEditorWorkspace({
                 similarity: chromaSensitivity,
               }
             : null,
-          removeLogo: logoEnabled
-            ? {
-                x: logoBox.x,
-                y: logoBox.y,
-                w: logoBox.w,
-                h: logoBox.h,
-              }
-            : null,
+          removeLogo: null,
         },
         (r) => setProgress(Math.round(r * 100)),
       );
@@ -5836,7 +5822,6 @@ export function VideoEditorWorkspace({
                     [
                       ["crop", "المحصول"],
                       ["chroma", "إزالة اللون"],
-                      ["logo", "إزالة الشعار"],
                       ["speed", "السرعة"],
                     ] as const
                   ).map(([id, label]) => (
@@ -5986,67 +5971,6 @@ export function VideoEditorWorkspace({
                   </div>
                 )}
 
-                {videoTool === "logo" && (
-                  <div className="space-y-2 rounded border border-[#333] p-2">
-                    <label className="flex items-center justify-between">
-                      تفعيل إزالة الشعار
-                      <input
-                        type="checkbox"
-                        checked={
-                          editingLayer
-                            ? Boolean(editingLayer.logoEnabled)
-                            : logoEnabled
-                        }
-                        onChange={(e) => {
-                          if (editingLayer) {
-                            patchLayerClip(editingLayer.id, {
-                              logoEnabled: e.target.checked,
-                              logoBox:
-                                editingLayer.logoBox ?? {
-                                  ...DEFAULT_LAYER_LOGO,
-                                },
-                            });
-                          } else setLogoEnabled(e.target.checked);
-                        }}
-                      />
-                    </label>
-                    {(
-                      [
-                        ["x", "X"],
-                        ["y", "Y"],
-                        ["w", "عرض"],
-                        ["h", "ارتفاع"],
-                      ] as const
-                    ).map(([key, label]) => {
-                      const box = editingLayer ? layerLogo : logoBox;
-                      return (
-                        <div key={key}>
-                          <label className="text-[#888]">
-                            {label} {box[key]}px
-                          </label>
-                          <input
-                            type="range"
-                            min={0}
-                            max={key === "x" || key === "w" ? 1280 : 720}
-                            value={box[key]}
-                            onChange={(e) => {
-                              const v = Number(e.target.value);
-                              if (editingLayer) {
-                                patchLayerClip(editingLayer.id, {
-                                  logoBox: { ...layerLogo, [key]: v },
-                                  logoEnabled: true,
-                                });
-                              } else {
-                                setLogoBox((b) => ({ ...b, [key]: v }));
-                              }
-                            }}
-                            className="w-full"
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
 
                 <label className="text-[#888]">
                   السرعة {(editingLayer ? layerSpeed : speed).toFixed(2)}×

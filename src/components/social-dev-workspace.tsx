@@ -9,21 +9,17 @@ import {
   contentIdeasToSeoText,
   decodeHtml,
   encodeHtml,
-  extractYoutubeId,
   formatJson,
   generateHashtags,
   generateVideoContentIdeasLocal,
-  looksLikeInstagram,
   mergeYoutubeTrends,
   minifyJson,
-  youtubeThumbnailUrls,
   type ContentIdeas,
   type SocialPlatform,
   type YoutubeTrendVideo,
 } from "@/lib/processors/social-dev-tools";
 
 export type SocialDevKind =
-  | "thumbnail-downloader"
   | "hashtag-generator"
   | "code-formatter"
   | "video-content-ideas";
@@ -87,12 +83,7 @@ export function SocialDevWorkspace({
     return () => setDownloadRatingContext(null);
   }, [slug]);
 
-  if (kind === "thumbnail-downloader") {
-    return (
-      <ThumbnailPanel slug={slug} title={title} description={description} />
-    );
-  }
-  if (kind === "hashtag-generator") {
+if (kind === "hashtag-generator") {
     return (
       <HashtagPanel slug={slug} title={title} description={description} />
     );
@@ -101,135 +92,6 @@ export function SocialDevWorkspace({
     return <CodePanel slug={slug} title={title} description={description} />;
   }
   return <IdeasPanel slug={slug} title={title} description={description} />;
-}
-
-function ThumbnailPanel({
-  slug,
-  title,
-  description,
-}: {
-  slug: string;
-  title: string;
-  description: string;
-}) {
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<
-    { label: string; url: string; title?: string }[]
-  >([]);
-
-  async function run() {
-    setBusy(true);
-    setError(null);
-    setItems([]);
-    beginToolUse(slug);
-    try {
-      const yt = extractYoutubeId(url);
-      if (yt) {
-        setItems(youtubeThumbnailUrls(yt));
-        return;
-      }
-      if (looksLikeInstagram(url) || url.trim()) {
-        const res = await fetch("/api/thumbnail", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-        const data = (await res.json()) as {
-          thumbnail?: string;
-          title?: string;
-          error?: string;
-        };
-        if (!res.ok || !data.thumbnail) {
-          throw new Error(data.error || "فشل استخراج الصورة");
-        }
-        setItems([
-          {
-            label: data.title || "الصورة المصغّرة",
-            url: data.thumbnail,
-            title: data.title,
-          },
-        ]);
-        return;
-      }
-      throw new Error("الصق رابط يوتيوب أو انستغرام");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "فشل");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function downloadImage(src: string, name: string) {
-    beginToolUse(slug);
-    try {
-      const res = await fetch(src);
-      const blob = await res.blob();
-      const { downloadBlob } = await import("@/lib/processors/ffmpeg-client");
-      const ext = blob.type.includes("png")
-        ? "png"
-        : blob.type.includes("webp")
-          ? "webp"
-          : "jpg";
-      await downloadBlob(blob, `${name}.${ext}`);
-    } catch {
-      window.open(src, "_blank", "noopener,noreferrer");
-    }
-  }
-
-  return (
-    <Shell title={title} description={description}>
-      <label className="block text-xs font-bold text-[#444]">
-        رابط يوتيوب أو انستغرام
-        <input
-          className={field}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=… أو منشور انستغرام"
-          dir="ltr"
-        />
-      </label>
-      <button
-        type="button"
-        className={btnPrimary}
-        disabled={busy || !url.trim()}
-        onClick={() => void run()}
-      >
-        {busy ? "جارٍ الاستخراج…" : "استخرج الصور المصغّرة"}
-      </button>
-      {error ? <p className="text-sm font-bold text-red-600">{error}</p> : null}
-      {items.length > 0 ? (
-        <ul className="grid gap-4 sm:grid-cols-2">
-          {items.map((item) => (
-            <li
-              key={item.url}
-              className="overflow-hidden rounded-xl border border-[#eee] bg-[#fafafa]"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={item.url}
-                alt={item.label}
-                className="aspect-video w-full object-cover bg-[#eee]"
-              />
-              <div className="flex items-center justify-between gap-2 p-3">
-                <span className="text-xs font-bold text-[#444]">{item.label}</span>
-                <button
-                  type="button"
-                  className={btnGhost}
-                  onClick={() =>
-                    void downloadImage(item.url, `thumbnail-${Date.now()}`)
-                  }
-                >
-                  تنزيل
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </Shell>
-  );
 }
 
 function HashtagPanel({

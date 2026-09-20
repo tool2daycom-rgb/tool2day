@@ -5,7 +5,6 @@ export const toolImageIcons: Record<string, string> = {
   "pdf-split": "/brand/tools/pdf-split.png",
   "pdf-merge": "/brand/tools/pdf-merge.png",
   "pdf-compress": "/brand/tools/pdf-compress.png",
-  "pdf-unlock": "/brand/tools/pdf-unlock.png",
   "pdf-protect": "/brand/tools/pdf-protect.png",
   "pdf-rotate": "/brand/tools/pdf-rotate.png",
   "pdf-page-numbers": "/brand/tools/pdf-page-numbers.png",
@@ -40,7 +39,6 @@ export const toolImageIcons: Record<string, string> = {
   "code-formatter": "/brand/tools/code-formatter.png",
   "video-content-ideas": "/brand/tools/video-content-ideas.png",
   "video-subtitles": "/brand/tools/video-subtitles.png",
-  "thumbnail-downloader": "/brand/tools/thumbnail-downloader.png",
 };
 
 export function getToolImageIcon(slug: string): string | null {
