@@ -98,6 +98,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* AdSense site verification + loader (Consent Mode still defaults to denied) */}
+        <Script
+          id="adsense"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
         {/* Google Funding Choices / Privacy & Messaging (IAB TCF-compatible CMP) */}
         <Script
           id="google-funding-choices"
