@@ -446,10 +446,6 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
           await archive.convertArchiveToZip(files[0]);
           setProgress(100);
           break;
-        case "ebook-convert":
-          await archive.ebookToPdfStub(files[0]);
-          setProgress(100);
-          break;
         case "font-convert":
           await archive.convertFont(files[0], fontTarget);
           setProgress(100);

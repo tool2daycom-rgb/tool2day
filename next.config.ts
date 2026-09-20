@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
       "remove-logo",
       "remove-logo-image",
       "pdf-unlock",
+      "png-library",
+      "ebook-converter",
     ];
     return [
       ...gone.map((slug) => ({

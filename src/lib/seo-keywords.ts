@@ -443,15 +443,6 @@ const toolExtraKeywords: Record<string, string[]> = {
     "object remover",
     "magic erase",
   ],
-  "png-library": [
-    "مكتبة PNG",
-    "صور PNG شفافة",
-    "transparent PNG",
-    "clipart مرخّص",
-    "PNG بدون خلفية",
-    "صور بدون خلفية",
-    "png library",
-  ],
   "hashtag-generator": [
     "مولد هاشتاغات",
     "hashtag generator",
@@ -789,13 +780,6 @@ const toolExtraKeywords: Record<string, string[]> = {
     "RAR to ZIP",
     "7z converter",
     "archive converter",
-  ],
-  "ebook-converter": [
-    "تحويل EPUB إلى PDF",
-    "EPUB to PDF",
-    "ebook format convert",
-    "تحويل كتاب إلكتروني غير محمي",
-    "تحويل EPUB",
   ],
   "archive-extractor": [
     "فك ضغط",

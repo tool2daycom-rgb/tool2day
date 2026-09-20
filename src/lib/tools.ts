@@ -52,7 +52,6 @@ import {
   Hash,
   Braces,
   Lightbulb,
-  ImageDown,
   Pipette,
   Palette,
   Blend,
@@ -381,15 +380,6 @@ export const tools: Tool[] = [
     category: "ai",
     accept: "image/*",
     icon: Eraser,
-  },
-  {
-    slug: "png-library",
-    title: "مكتبة PNG بدون خلفية",
-    description:
-      "تصفّح صور PNG شفافة من مصادر مرخّصة أو من مجتمع Tool2Day مع ذكر المصدر، أو ارفع ملفاتك الأصلية فقط مع احترام حقوق الطبع والنشر.",
-    category: "ai",
-    accept: "image/png",
-    icon: ImageDown,
   },
   {
     slug: "error-detector",
@@ -799,15 +789,6 @@ export const tools: Tool[] = [
     category: "converters",
     accept: ".zip,.epub,.docx,.pptx,application/zip",
     icon: FileArchive,
-  },
-  {
-    slug: "ebook-converter",
-    title: "محوّل الكتب الإلكترونية",
-    description:
-      "حوّل ملفات EPUB غير المحمية إلى PDF نصي بسيط، أو أعد تنزيل PDF كما هو — لا تزيل DRM ولا تتجاوز حماية الكتب.",
-    category: "converters",
-    accept: ".epub,application/pdf",
-    icon: FileText,
   },
   {
     slug: "archive-extractor",

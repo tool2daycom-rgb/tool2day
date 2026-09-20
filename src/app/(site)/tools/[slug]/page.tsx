@@ -16,7 +16,6 @@ import { DailyToolsWorkspace } from "@/components/daily-tools-workspace";
 import { VideoToTextWorkspace } from "@/components/video-to-text-workspace";
 import { VideoSubtitlesWorkspace } from "@/components/video-subtitles-workspace";
 import { KineticCaptionsWorkspace } from "@/components/kinetic-captions-workspace";
-import { PngLibraryWorkspace } from "@/components/png-library-workspace";
 import { getToolTitle } from "@/lib/i18n/tool-titles";
 import { JsonLd } from "@/components/json-ld";
 import { resolveRequestLocale } from "@/lib/request-locale";
@@ -172,7 +171,6 @@ export default async function ToolPage({ params }: Props) {
   const isVideoToText = kind === "video-to-text";
   const isVideoSubtitles = kind === "video-subtitles";
   const isKineticCaptions = kind === "kinetic-captions";
-  const isPngLibrary = kind === "png-library";
   const isImageConverter = slug === "image-converter";
   const isWide =
     isPdf ||
@@ -182,7 +180,6 @@ export default async function ToolPage({ params }: Props) {
     isImageConverter ||
     isVideoSubtitles ||
     isKineticCaptions ||
-    isPngLibrary ||
     kind === "video-content-ideas";
 
   return (
@@ -313,12 +310,6 @@ export default async function ToolPage({ params }: Props) {
           />
         ) : isKineticCaptions ? (
           <KineticCaptionsWorkspace
-            slug={tool.slug}
-            arTitle={tool.title}
-            arDescription={tool.description}
-          />
-        ) : isPngLibrary ? (
-          <PngLibraryWorkspace
             slug={tool.slug}
             arTitle={tool.title}
             arDescription={tool.description}

@@ -65,7 +65,6 @@ export type ActiveToolKind =
   | "ai-remove-bg"
   | "ai-upscale"
   | "ai-erase"
-  | "png-library"
   | "hashtag-generator"
   | "code-formatter"
   | "video-content-ideas"
@@ -80,7 +79,6 @@ export type ActiveToolKind =
   | "random-picker"
   | "archive-extract"
   | "archive-convert"
-  | "ebook-convert"
   | "font-convert";
 
 /** Every catalog slug maps to a working kind — no coming-soon. */
@@ -125,7 +123,6 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "ai-remove-bg": "ai-remove-bg",
   "ai-upscale": "ai-upscale",
   "ai-erase": "ai-erase",
-  "png-library": "png-library",
   "hashtag-generator": "hashtag-generator",
   "code-formatter": "code-formatter",
   "video-content-ideas": "video-content-ideas",
@@ -166,7 +163,6 @@ export const activeToolKinds: Record<string, ActiveToolKind> = {
   "image-converter": "image-convert",
   "archive-extractor": "archive-extract",
   "archive-converter": "archive-convert",
-  "ebook-converter": "ebook-convert",
   "font-converter": "font-convert",
 };
 
