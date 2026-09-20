@@ -9,6 +9,7 @@ import {
   ADSTERRA_SOCIAL_BAR,
   type AdsterraBannerSize,
 } from "@/lib/adsterra";
+import { getStoredConsent } from "@/lib/cookie-consent";
 
 const WAIT_MIN_MS = 10_000;
 
@@ -35,6 +36,21 @@ function isApprovedHost(): boolean {
   return h === "tool2day.com" || h === "localhost" || h === "127.0.0.1";
 }
 
+function hasAdvertisingConsent(): boolean {
+  return Boolean(getStoredConsent()?.advertising);
+}
+
+function useAdvertisingConsent() {
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => {
+    const sync = () => setAllowed(hasAdvertisingConsent());
+    sync();
+    window.addEventListener("tool2day:consent", sync);
+    return () => window.removeEventListener("tool2day:consent", sync);
+  }, []);
+  return allowed;
+}
+
 /** Official Adsterra unit via same-origin /ads page (www.tool2day.com). */
 export function AdsterraBanner({
   size,
@@ -44,6 +60,7 @@ export function AdsterraBanner({
   className?: string;
 }) {
   const unit = ADSTERRA_BANNERS[size];
+  const allowed = useAdvertisingConsent();
 
   return (
     <div
@@ -52,24 +69,27 @@ export function AdsterraBanner({
       aria-label="Advertisement"
       data-ad={size}
     >
-      <iframe
-        title={`Adsterra ${size}`}
-        src={`/ads/${size}.html`}
-        width={unit.width}
-        height={unit.height}
-        className="max-w-full border-0"
-        scrolling="no"
-        loading="lazy"
-        referrerPolicy="no-referrer-when-downgrade"
-      />
+      {allowed ? (
+        <iframe
+          title={`Adsterra ${size}`}
+          src={`/ads/${size}.html`}
+          width={unit.width}
+          height={unit.height}
+          className="max-w-full border-0"
+          scrolling="no"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      ) : null}
     </div>
   );
 }
 
-/** Popunder + Social Bar on approved host only. */
+/** Popunder + Social Bar after advertising consent on approved host. */
 export function AdsterraGlobalScripts() {
+  const allowed = useAdvertisingConsent();
   useEffect(() => {
-    if (!isApprovedHost()) return;
+    if (!allowed || !isApprovedHost()) return;
     const apply = () => {
       appendScriptOnce("adsterra-popunder", ADSTERRA_POPUNDER, document.head);
       appendScriptOnce("adsterra-socialbar", ADSTERRA_SOCIAL_BAR, document.body);
@@ -77,13 +97,14 @@ export function AdsterraGlobalScripts() {
     apply();
     const t = window.setTimeout(apply, 800);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [allowed]);
   return null;
 }
 
 export function AdsterraNative({ className = "" }: { className?: string }) {
+  const allowed = useAdvertisingConsent();
   useEffect(() => {
-    if (!isApprovedHost()) return;
+    if (!allowed || !isApprovedHost()) return;
     const run = () => {
       if (document.getElementById("adsterra-native-invoke")) return;
       if (!document.getElementById(ADSTERRA_NATIVE.containerId)) return;
@@ -97,7 +118,7 @@ export function AdsterraNative({ className = "" }: { className?: string }) {
     run();
     const t = window.setTimeout(run, 500);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [allowed]);
 
   return (
     <div
@@ -118,8 +139,8 @@ export function AdsterraInContent({ className = "" }: { className?: string }) {
 }
 
 /**
- * Center wait ad during downloads.
- * ≥10s lock; Exit/X opens Smartlink first.
+ * Wait overlay during long processing.
+ * ≥10s lock; Exit/X opens Smartlink first when ads are allowed.
  */
 export function AdsterraWaitOverlay({
   open,
@@ -128,6 +149,7 @@ export function AdsterraWaitOverlay({
   open: boolean;
   label?: string;
 }) {
+  const allowed = useAdvertisingConsent();
   const [active, setActive] = useState(false);
   const [canClose, setCanClose] = useState(false);
   const [leftSec, setLeftSec] = useState(10);
@@ -156,7 +178,7 @@ export function AdsterraWaitOverlay({
   if (!active) return null;
 
   const tryClose = () => {
-    openSmartlink();
+    if (allowed) openSmartlink();
     if (canClose) setActive(false);
   };
 
@@ -172,7 +194,7 @@ export function AdsterraWaitOverlay({
           type="button"
           onClick={tryClose}
           className="absolute end-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-[#111] text-lg font-bold leading-none text-white transition hover:bg-[#333]"
-          aria-label="فتح الإعلان ثم الإغلاق"
+          aria-label={allowed ? "فتح الإعلان ثم الإغلاق" : "إغلاق"}
         >
           ×
         </button>
@@ -181,31 +203,41 @@ export function AdsterraWaitOverlay({
         </p>
         <p className="mb-3 text-center text-[11px] font-semibold text-[#666]">
           {canClose
-            ? "الخروج يفتح الإعلان أولاً ثم يغلق النافذة"
-            : `يبقى ${leftSec} ثوانٍ — × يفتح الإعلان`}
+            ? allowed
+              ? "الخروج يفتح الإعلان أولاً ثم يغلق النافذة"
+              : "يمكنك المتابعة الآن"
+            : `يبقى ${leftSec} ثوانٍ`}
         </p>
-        <div
-          className="overflow-hidden bg-[#f5f5f5]"
-          style={{ width: 300, height: 250, maxWidth: "100%" }}
-        >
-          <iframe
-            title="Adsterra 300x250"
-            src="/ads/300x250.html"
-            width={300}
-            height={250}
-            className="max-w-full border-0"
-            scrolling="no"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-        </div>
+        {allowed ? (
+          <div
+            className="overflow-hidden bg-[#f5f5f5]"
+            style={{ width: 300, height: 250, maxWidth: "100%" }}
+          >
+            <iframe
+              title="Adsterra 300x250"
+              src="/ads/300x250.html"
+              width={300}
+              height={250}
+              className="max-w-full border-0"
+              scrolling="no"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        ) : (
+          <div className="flex h-[120px] w-full items-center justify-center rounded-lg bg-[#f5f5f5] text-xs text-[#888]">
+            جارٍ المعالجة…
+          </div>
+        )}
         <button
           type="button"
           onClick={tryClose}
           className="mt-3 text-xs font-semibold text-[#2563eb] hover:underline"
         >
           {canClose
-            ? "فتح الإعلان ثم إغلاق والمتابعة"
-            : `انتظر ${leftSec}ث — أو اضغط × لفتح الإعلان`}
+            ? allowed
+              ? "فتح الإعلان ثم إغلاق والمتابعة"
+              : "متابعة"
+            : `انتظر ${leftSec}ث`}
         </button>
       </div>
     </div>

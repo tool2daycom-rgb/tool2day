@@ -77,6 +77,16 @@ export function ContactForm() {
         <p className="mt-1.5 text-sm text-[#888]">
           اطرح سؤالاً، أبلغ عن خطأ، أو اقترح ميزة
         </p>
+        <p className="mt-3 rounded-xl bg-[#f5f8ff] px-3 py-2.5 text-sm leading-6 text-[#334]">
+          البريد الرسمي:{" "}
+          <a
+            href="mailto:support@tool2day.com"
+            className="font-bold text-[#2563eb] hover:underline"
+            dir="ltr"
+          >
+            support@tool2day.com
+          </a>
+        </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-3">
           <textarea

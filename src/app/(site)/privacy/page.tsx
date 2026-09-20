@@ -535,12 +535,50 @@ export default function PrivacyPage() {
         <p>We do not sell the Personal Information of our users.</p>
         <p>For more information about these rights, please contact us.</p>
 
+        <h2>Advertising partners & cookies</h2>
+        <p>
+          We may show ads through Google AdSense and other ad networks such as
+          Adsterra. These partners may use cookies or similar technologies to
+          measure ad performance and, where allowed, to personalize ads. For
+          visitors in the EEA/UK/Switzerland we rely on consent collected via our
+          cookie banner and Google Privacy &amp; Messaging (Funding Choices)
+          where enabled.
+        </p>
+        <p>
+          You can change cookie preferences anytime from the Cookie Settings
+          link in the footer. Advertising and analytics cookies are not set
+          until you accept them (except strictly necessary cookies required to
+          run the site).
+        </p>
+        <ul>
+          <li>
+            Google AdSense / Google advertising:{" "}
+            <a
+              href="https://policies.google.com/technologies/ads"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Google advertising technologies
+            </a>
+          </li>
+          <li>
+            Contact for privacy requests:{" "}
+            <a href="mailto:support@tool2day.com">support@tool2day.com</a>
+          </li>
+        </ul>
+
         <h2>Contact Us</h2>
         <p>Don&apos;t hesitate to contact us if you have any questions.</p>
         <ul>
           <li>
             Email:{" "}
             <a href="mailto:support@tool2day.com">support@tool2day.com</a>
+          </li>
+          <li>
+            Contact form:{" "}
+            <a href="https://www.tool2day.com/contact">
+              https://www.tool2day.com/contact
+            </a>
           </li>
           <li>
             Website:{" "}

@@ -77,6 +77,7 @@ export type UiMessages = {
   pricing: string;
   help: string;
   contact: string;
+  about: string;
   testimonialsTitle: string;
   testimonialsSub: string;
   viewAllTestimonials: string;
@@ -239,6 +240,7 @@ export const en: UiMessages = {
   pricing: "Pricing",
   help: "Help",
   contact: "Contact us",
+  about: "About us",
   testimonialsTitle: "What they say about us",
   testimonialsSub: "",
   viewAllTestimonials: "View all reviews",
@@ -387,6 +389,7 @@ export const ar: UiMessages = {
   pricing: "التسعير",
   help: "المساعدة",
   contact: "تواصل معنا",
+  about: "من نحن",
   testimonialsTitle: "ماذا يقولون عنا",
   testimonialsSub: "",
   viewAllTestimonials: "عرض كل التعليقات",

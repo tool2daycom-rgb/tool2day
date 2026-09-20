@@ -22,6 +22,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...[
       "privacy",
       "terms",
+      "about",
       "refund",
       "pricing",
       "help",

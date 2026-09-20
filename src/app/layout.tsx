@@ -5,7 +5,6 @@ import { AdsterraGlobalScripts } from "@/components/adsterra-ads";
 import { CookieConsent } from "@/components/cookie-consent";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RatingGateModal } from "@/components/rating-gate-modal";
-import { ADSTERRA_POPUNDER } from "@/lib/adsterra";
 import { brandKeywords, siteSeo } from "@/lib/seo-keywords";
 import "./globals.css";
 
@@ -99,18 +98,16 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* Google Funding Choices / Privacy & Messaging (IAB TCF-compatible CMP) */}
         <Script
-          id="adsense"
+          id="google-funding-choices"
           async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9998186124580672"
-          crossOrigin="anonymous"
+          src="https://fundingchoicesmessages.google.com/i/pub-9998186124580672?ers=1"
           strategy="afterInteractive"
         />
-        <Script
-          id="adsterra-popunder-head"
-          src={ADSTERRA_POPUNDER}
-          strategy="afterInteractive"
-        />
+        <Script id="google-funding-choices-present" strategy="afterInteractive">
+          {`(function(){function signalGooglefcPresent(){if(!window.frames['googlefcPresent']){if(document.body){const iframe=document.createElement('iframe');iframe.style.cssText='display:none';iframe.name='googlefcPresent';document.body.appendChild(iframe);}else{setTimeout(signalGooglefcPresent,0);}}}signalGooglefcPresent();})();`}
+        </Script>
       </head>
       <body className="min-h-full font-sans">
         <Script id="consent-default" strategy="beforeInteractive">

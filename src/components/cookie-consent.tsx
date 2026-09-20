@@ -68,7 +68,7 @@ export function CookieConsent() {
   const { messages } = useLocale();
   const [visible, setVisible] = useState(false);
   const [manage, setManage] = useState(false);
-  const [prefs, setPrefs] = useState<Prefs>({ analytics: true, advertising: true });
+  const [prefs, setPrefs] = useState<Prefs>({ analytics: false, advertising: false });
 
   const save = useCallback((choice: Omit<CookieConsentChoice, "decidedAt" | "essential">) => {
     setStoredConsent({ essential: true, ...choice });
