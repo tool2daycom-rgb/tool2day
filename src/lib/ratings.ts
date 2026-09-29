@@ -18,6 +18,21 @@ export type RatingStats = {
   count: number;
 };
 
+/** Starting public tally for the homepage site rating card (grows with real votes). */
+export const SITE_RATING_SEED_COUNT = 56_543;
+export const SITE_RATING_SEED_AVERAGE = 4.8;
+
+/** Merge real DB/local votes onto the public seed for `site` target. */
+export function applySiteSeedStats(stats: RatingStats): RatingStats {
+  const realCount = Math.max(0, Number(stats.count) || 0);
+  const realAvg = Number(stats.average) || 0;
+  const realSum = realAvg * realCount;
+  const count = SITE_RATING_SEED_COUNT + realCount;
+  const average =
+    (SITE_RATING_SEED_AVERAGE * SITE_RATING_SEED_COUNT + realSum) / count;
+  return { average, count };
+}
+
 type PendingDownload = {
   blob: Blob;
   filename: string;
@@ -278,7 +293,9 @@ function localAggregateAll(): RatingStats {
 }
 
 function localFallbackStats(target: string): RatingStats {
-  if (target === SITE_RATING_TARGET) return localAggregateAll();
+  if (target === SITE_RATING_TARGET) {
+    return applySiteSeedStats(localAggregateAll());
+  }
   return readLocalEntry(target);
 }
 
@@ -403,6 +420,12 @@ export async function fetchPublicReviews(
 }
 
 export function formatRatingAverage(average: number) {
-  if (!average) return "—";
-  return (Math.round(average * 10) / 10).toFixed(1);
+  const n = Number(average);
+  if (!Number.isFinite(n) || n <= 0) return SITE_RATING_SEED_AVERAGE.toFixed(1);
+  return (Math.round(n * 10) / 10).toFixed(1);
+}
+
+export function formatRatingCount(count: number) {
+  const n = Math.max(0, Math.round(Number(count) || 0));
+  return n.toLocaleString("en-US");
 }

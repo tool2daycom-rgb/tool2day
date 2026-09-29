@@ -11,9 +11,12 @@ import { createClient } from "@/lib/supabase/client";
 import {
   fetchRatingStats,
   formatRatingAverage,
+  formatRatingCount,
   getMyStars,
   hasRatedSite,
   RATING_UPDATED_EVENT,
+  SITE_RATING_SEED_AVERAGE,
+  SITE_RATING_SEED_COUNT,
   submitRating,
   type RatingStats,
 } from "@/lib/ratings";
@@ -179,7 +182,10 @@ function authAvatarUrl(user: AuthUser): string {
 
 export function SiteRatingCard() {
   const { messages } = useLocale();
-  const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
+  const [stats, setStats] = useState<RatingStats>({
+    average: SITE_RATING_SEED_AVERAGE,
+    count: SITE_RATING_SEED_COUNT,
+  });
   const [voted, setVoted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(0);
@@ -403,7 +409,7 @@ export function SiteRatingCard() {
 
             <div className="flex items-end justify-center gap-2" dir="ltr">
               <span className="text-5xl font-extrabold tabular-nums tracking-tight text-[#122033] sm:text-6xl">
-                {stats.count > 0 ? formatRatingAverage(stats.average) : "—"}
+                {formatRatingAverage(stats.average || SITE_RATING_SEED_AVERAGE)}
               </span>
               <span className="mb-2 text-lg font-semibold text-[#8a9aab]">
                 / 5
@@ -411,9 +417,10 @@ export function SiteRatingCard() {
             </div>
 
             <p className="text-sm text-[#5a6d80]">
-              {stats.count > 0
-                ? `${stats.count} ${messages.ratingsAggregate}`
-                : messages.noRatingsYet}
+              {formatRatingCount(
+                Math.max(stats.count, SITE_RATING_SEED_COUNT),
+              )}{" "}
+              {messages.ratingsAggregate}
             </p>
 
             <Link

@@ -5,6 +5,7 @@ import {
   resolveUserAvatarUrl,
   sanitizeAvatarUrl,
 } from "@/lib/user-avatar";
+import { applySiteSeedStats } from "@/lib/ratings";
 
 export const runtime = "nodejs";
 
@@ -123,9 +124,20 @@ async function getStats(
 
   const rows = data ?? [];
   const count = rows.length;
-  if (!count) return { average: 0, count: 0 };
-  const sum = rows.reduce((a, r) => a + Number(r.stars), 0);
-  return { average: sum / count, count };
+  const raw =
+    count === 0
+      ? { average: 0, count: 0 }
+      : {
+          average: rows.reduce((a, r) => a + Number(r.stars), 0) / count,
+          count,
+        };
+
+  if (target === "site") return applySiteSeedStats(raw);
+  return raw;
+}
+
+function emptySiteStats() {
+  return applySiteSeedStats({ average: 0, count: 0 });
 }
 
 async function listReviews(
@@ -207,8 +219,13 @@ export async function GET(req: Request) {
 
   const supabase = adminClient();
   if (!supabase) {
+    const seeded = emptySiteStats();
     return NextResponse.json(
-      reviews ? { reviews: [], average: 0, count: 0 } : { average: 0, count: 0 },
+      reviews
+        ? { reviews: [], ...seeded }
+        : target === "site"
+          ? seeded
+          : { average: 0, count: 0 },
     );
   }
 
@@ -224,8 +241,13 @@ export async function GET(req: Request) {
     return NextResponse.json(stats);
   } catch (err) {
     console.error("ratings GET failed", err);
+    const seeded = emptySiteStats();
     return NextResponse.json(
-      reviews ? { reviews: [], average: 0, count: 0 } : { average: 0, count: 0 },
+      reviews
+        ? { reviews: [], ...seeded }
+        : target === "site"
+          ? seeded
+          : { average: 0, count: 0 },
     );
   }
 }
@@ -297,9 +319,9 @@ export async function POST(req: Request) {
 
   const supabase = adminClient();
   if (!supabase) {
+    const local = { average: stars, count: 1 };
     return NextResponse.json({
-      average: stars,
-      count: 1,
+      ...(target === "site" ? applySiteSeedStats(local) : local),
       localOnly: true,
     });
   }
@@ -357,9 +379,9 @@ export async function POST(req: Request) {
     return NextResponse.json(stats);
   } catch (err) {
     console.error("ratings POST failed", err);
+    const local = { average: stars, count: 1 };
     return NextResponse.json({
-      average: stars,
-      count: 1,
+      ...(target === "site" ? applySiteSeedStats(local) : local),
       localOnly: true,
     });
   }
