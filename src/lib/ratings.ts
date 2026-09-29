@@ -22,15 +22,53 @@ export type RatingStats = {
 export const SITE_RATING_SEED_COUNT = 56_543;
 export const SITE_RATING_SEED_AVERAGE = 4.8;
 
-/** Merge real DB/local votes onto the public seed for `site` target. */
-export function applySiteSeedStats(stats: RatingStats): RatingStats {
+function hashSlug(slug: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < slug.length; i++) {
+    h ^= slug.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Deterministic seed count per tool — varies by thousands (≈3k–24k). */
+export function toolSeedCount(slug: string): number {
+  if (!slug || slug === SITE_RATING_TARGET) return SITE_RATING_SEED_COUNT;
+  const h = hashSlug(slug);
+  return 3_200 + (h % 21_700);
+}
+
+/** Deterministic seed average per tool — 4.5 to 4.9 */
+export function toolSeedAverage(slug: string): number {
+  if (!slug || slug === SITE_RATING_TARGET) return SITE_RATING_SEED_AVERAGE;
+  const h = hashSlug(`${slug}:avg`);
+  return 4.5 + ((h % 5) / 10);
+}
+
+/** Merge real votes onto the public seed for site or any tool slug. */
+export function applySeedStats(
+  target: string,
+  stats: RatingStats,
+): RatingStats {
+  const seedCount =
+    target === SITE_RATING_TARGET
+      ? SITE_RATING_SEED_COUNT
+      : toolSeedCount(target);
+  const seedAvg =
+    target === SITE_RATING_TARGET
+      ? SITE_RATING_SEED_AVERAGE
+      : toolSeedAverage(target);
   const realCount = Math.max(0, Number(stats.count) || 0);
   const realAvg = Number(stats.average) || 0;
   const realSum = realAvg * realCount;
-  const count = SITE_RATING_SEED_COUNT + realCount;
-  const average =
-    (SITE_RATING_SEED_AVERAGE * SITE_RATING_SEED_COUNT + realSum) / count;
+  const count = seedCount + realCount;
+  const average = (seedAvg * seedCount + realSum) / count;
   return { average, count };
+}
+
+/** @deprecated use applySeedStats */
+export function applySiteSeedStats(stats: RatingStats): RatingStats {
+  return applySeedStats(SITE_RATING_TARGET, stats);
 }
 
 type PendingDownload = {
@@ -294,9 +332,9 @@ function localAggregateAll(): RatingStats {
 
 function localFallbackStats(target: string): RatingStats {
   if (target === SITE_RATING_TARGET) {
-    return applySiteSeedStats(localAggregateAll());
+    return applySeedStats(SITE_RATING_TARGET, localAggregateAll());
   }
-  return readLocalEntry(target);
+  return applySeedStats(target, readLocalEntry(target));
 }
 
 function saveLocalFallback(target: string, stars: number) {
@@ -320,23 +358,30 @@ export async function submitRating(
     avatarUrl?: string;
     countryCode?: string;
     countryFlag?: string;
+    /** One star vote per visitor on the tool/site page (upsert). */
+    pageVote?: boolean;
   },
 ): Promise<RatingStats> {
   const clamped = Math.min(5, Math.max(1, Math.round(stars)));
   const visitorId = getVisitorId();
+  const hasComment = Boolean(extra?.comment?.trim());
+  const pageVote = Boolean(extra?.pageVote) || target === SITE_RATING_TARGET;
   const useId =
     target === SITE_RATING_TARGET
       ? "site"
       : getCurrentUseId(target) || `once-${Date.now()}`;
-  const hasComment = Boolean(extra?.comment?.trim());
-  // تعليق الموقع: صف جديد في كل مرة. تقييم النجوم فقط: مرة واحدة لكل زائر.
+  // Site/tool page: once per visitor. Download gate: once per tool-use id.
   const visitorKey =
     target === SITE_RATING_TARGET
       ? hasComment
         ? `${visitorId}:c-${Date.now()}`
         : visitorId
-      : `${visitorId}:${useId}`;
-  const once = target === SITE_RATING_TARGET && !hasComment;
+      : pageVote
+        ? `${visitorId}:page`
+        : `${visitorId}:${useId}`;
+  const once =
+    (target === SITE_RATING_TARGET && !hasComment) ||
+    (pageVote && !hasComment);
 
   try {
     const res = await fetch("/api/ratings", {

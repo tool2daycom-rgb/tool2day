@@ -5,7 +5,7 @@ import {
   resolveUserAvatarUrl,
   sanitizeAvatarUrl,
 } from "@/lib/user-avatar";
-import { applySiteSeedStats } from "@/lib/ratings";
+import { applySeedStats } from "@/lib/ratings";
 
 export const runtime = "nodejs";
 
@@ -132,12 +132,11 @@ async function getStats(
           count,
         };
 
-  if (target === "site") return applySiteSeedStats(raw);
-  return raw;
+  return applySeedStats(target, raw);
 }
 
 function emptySiteStats() {
-  return applySiteSeedStats({ average: 0, count: 0 });
+  return applySeedStats("site", { average: 0, count: 0 });
 }
 
 async function listReviews(
@@ -219,13 +218,9 @@ export async function GET(req: Request) {
 
   const supabase = adminClient();
   if (!supabase) {
-    const seeded = emptySiteStats();
+    const seeded = applySeedStats(target, { average: 0, count: 0 });
     return NextResponse.json(
-      reviews
-        ? { reviews: [], ...seeded }
-        : target === "site"
-          ? seeded
-          : { average: 0, count: 0 },
+      reviews ? { reviews: [], ...emptySiteStats() } : seeded,
     );
   }
 
@@ -241,13 +236,9 @@ export async function GET(req: Request) {
     return NextResponse.json(stats);
   } catch (err) {
     console.error("ratings GET failed", err);
-    const seeded = emptySiteStats();
+    const seeded = applySeedStats(target, { average: 0, count: 0 });
     return NextResponse.json(
-      reviews
-        ? { reviews: [], ...seeded }
-        : target === "site"
-          ? seeded
-          : { average: 0, count: 0 },
+      reviews ? { reviews: [], ...emptySiteStats() } : seeded,
     );
   }
 }
@@ -321,7 +312,7 @@ export async function POST(req: Request) {
   if (!supabase) {
     const local = { average: stars, count: 1 };
     return NextResponse.json({
-      ...(target === "site" ? applySiteSeedStats(local) : local),
+      ...applySeedStats(target, local),
       localOnly: true,
     });
   }
@@ -381,7 +372,7 @@ export async function POST(req: Request) {
     console.error("ratings POST failed", err);
     const local = { average: stars, count: 1 };
     return NextResponse.json({
-      ...(target === "site" ? applySiteSeedStats(local) : local),
+      ...applySeedStats(target, local),
       localOnly: true,
     });
   }

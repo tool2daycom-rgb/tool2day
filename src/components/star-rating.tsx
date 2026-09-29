@@ -18,6 +18,8 @@ import {
   SITE_RATING_SEED_AVERAGE,
   SITE_RATING_SEED_COUNT,
   submitRating,
+  toolSeedAverage,
+  toolSeedCount,
   type RatingStats,
 } from "@/lib/ratings";
 import { countryFromAuthMeta } from "@/lib/profile-countries";
@@ -109,7 +111,7 @@ export function StarsRow({
   );
 }
 
-/** عرض فقط — التقييم يتم مرة واحدة بعد استخدام الأداة (قبل التنزيل) */
+/** تقييم تفاعلي على صفحة كل أداة — مرة واحدة لكل زائر + عدّاد بآلاف */
 export function ToolRatingBar({
   target,
   label,
@@ -120,9 +122,17 @@ export function ToolRatingBar({
   className?: string;
 }) {
   const { messages } = useLocale();
-  const [stats, setStats] = useState<RatingStats>({ average: 0, count: 0 });
+  const seedAvg = toolSeedAverage(target);
+  const seedCount = toolSeedCount(target);
+  const [stats, setStats] = useState<RatingStats>({
+    average: seedAvg,
+    count: seedCount,
+  });
   const [myStars, setMyStars] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [hover, setHover] = useState(0);
   const resolvedLabel = label ?? messages.rateTool;
+  const voted = myStars >= 1;
 
   useEffect(() => {
     setMyStars(getMyStars(target));
@@ -138,28 +148,59 @@ export function ToolRatingBar({
     return () => window.removeEventListener(RATING_UPDATED_EVENT, onUp);
   }, [target]);
 
-  const display = stats.average || myStars;
+  async function pick(stars: number) {
+    if (voted || busy) return;
+    setBusy(true);
+    setMyStars(stars);
+    try {
+      const next = await submitRating(target, stars, { pageVote: true });
+      setStats(next);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const display = hover || myStars || stats.average || seedAvg;
 
   return (
     <div
       className={`flex flex-wrap items-center justify-center gap-3 border-t border-dashed border-[#ddd] pt-8 ${className}`}
     >
       <p className="text-base font-bold text-[#111]">{resolvedLabel}</p>
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <StarsRow value={display} disabled size="lg" />
+      <div
+        className="flex flex-wrap items-center justify-center gap-3"
+        onMouseLeave={() => setHover(0)}
+      >
+        <div
+          className={voted ? "" : "cursor-pointer"}
+          onMouseMove={(e) => {
+            if (voted || busy) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const n = Math.min(
+              5,
+              Math.max(1, Math.ceil((x / rect.width) * 5)),
+            );
+            setHover(n);
+          }}
+        >
+          <StarsRow
+            value={display}
+            onPick={voted ? undefined : pick}
+            disabled={voted || busy}
+            size="lg"
+          />
+        </div>
         <span className="text-sm font-semibold text-[#333]" dir="ltr">
-          {stats.count > 0
-            ? `${formatRatingAverage(stats.average)} / 5`
-            : "— / 5"}
+          {formatRatingAverage(stats.average || seedAvg)} / 5
         </span>
         <span className="text-sm text-[#666]">
-          {stats.count > 0
-            ? `${stats.count} ${messages.ratingsCount}`
-            : messages.noRatingsYet}
+          {formatRatingCount(Math.max(stats.count, seedCount))}{" "}
+          {messages.ratingsCount}
         </span>
       </div>
       <p className="w-full text-center text-xs text-[#888]">
-        {messages.rateOnceOnDownload}
+        {voted ? messages.thankYouRating : messages.clickStarsOnce}
       </p>
     </div>
   );
