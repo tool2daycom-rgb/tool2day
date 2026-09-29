@@ -92,6 +92,8 @@ export type UiMessages = {
   reviewCommentHint: string;
   publishReview: string;
   loginToComment: string;
+  /** Guest can rate; optional note is private and not shown publicly */
+  guestCommentPrivate: string;
   writeYourReview: string;
   writeYourReviewSub: string;
   writeNewReview: string;
@@ -254,8 +256,10 @@ export const en: UiMessages = {
   reviewDisplayNameHint: "Your name (not email)",
   reviewComment: "Your comment",
   reviewCommentHint: "Share what you liked…",
-  publishReview: "Publish review",
-  loginToComment: "Log in to rate the site and leave a comment",
+  publishReview: "Submit rating",
+  loginToComment: "Log in to publish your comment publicly",
+  guestCommentPrivate:
+    "Optional note — stays private and is not shown on the site. Stars are saved for everyone.",
   writeYourReview: "Write your review",
   writeYourReviewSub: "",
   writeNewReview: "New review",
@@ -272,7 +276,7 @@ export const en: UiMessages = {
   confirmDownload: "Confirm & download",
   thankYouRating: "Thanks — your rating was saved",
   siteFeedbackTitle: "What do you think of the site?",
-  siteFeedbackSub: "Tool ratings are collected here. Rate the site once.",
+  siteFeedbackSub: "Rate with stars once. An optional note stays private and is not shown publicly.",
   ratingsAggregate: "ratings from all tools and the site",
   noRatingsYet: "No ratings yet",
   starBad: "Poor",
@@ -403,8 +407,10 @@ export const ar: UiMessages = {
   reviewDisplayNameHint: "اسمك (وليس الإيميل)",
   reviewComment: "تعليقك",
   reviewCommentHint: "اكتب رأيك باختصار…",
-  publishReview: "نشر التقييم",
-  loginToComment: "سجّل الدخول لتقييم الموقع وترك تعليق",
+  publishReview: "إرسال التقييم",
+  loginToComment: "سجّل الدخول لنشر تعليقك علناً",
+  guestCommentPrivate:
+    "ملاحظة اختيارية — تبقى خاصة ولا تظهر على الموقع. النجوم تُحفظ للجميع.",
   writeYourReview: "اكتب تعليقك هنا",
   writeYourReviewSub: "",
   writeNewReview: "تعليق جديد",
@@ -421,7 +427,8 @@ export const ar: UiMessages = {
   confirmDownload: "تأكيد والتنزيل",
   thankYouRating: "شكراً — تم حفظ تقييمك",
   siteFeedbackTitle: "ما رأيك في الموقع؟",
-  siteFeedbackSub: "تقييمات الأدوات تتجمع هنا. تقييم الموقع مرة واحدة فقط.",
+  siteFeedbackSub:
+    "قيّم بالنجوم مرة واحدة. الملاحظة الاختيارية تبقى خاصة ولا تظهر للجميع.",
   ratingsAggregate: "تقييماً من كل الأدوات والموقع",
   noRatingsYet: "لا تقييمات بعد",
   starBad: "سيء",

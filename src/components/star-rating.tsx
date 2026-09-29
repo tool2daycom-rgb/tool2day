@@ -242,22 +242,28 @@ export function SiteRatingCard() {
   }
 
   async function save() {
-    if (voted || busy || picked < 1 || !user) return;
-    const name = authDisplayName(user);
-    if (!name) return;
-    const country = countryFromAuthMeta(user.user_metadata);
+    if (voted || busy || picked < 1) return;
     setBusy(true);
     try {
-      await submitRating("site", picked, {
-        displayName: name,
-        comment: comment.trim() || undefined,
-        avatarUrl: authAvatarUrl(user) || undefined,
-        countryCode: country.code || undefined,
-        countryFlag: country.flag || undefined,
-      });
+      if (user) {
+        const name = authDisplayName(user);
+        if (!name) return;
+        const country = countryFromAuthMeta(user.user_metadata);
+        await submitRating("site", picked, {
+          displayName: name,
+          comment: comment.trim() || undefined,
+          avatarUrl: authAvatarUrl(user) || undefined,
+          countryCode: country.code || undefined,
+          countryFlag: country.flag || undefined,
+        });
+      } else {
+        // Guest: stars only — optional note is not published publicly.
+        await submitRating("site", picked);
+      }
       const next = await fetchRatingStats("site");
       setStats(next);
       setVoted(true);
+      setComment("");
     } finally {
       setBusy(false);
     }
@@ -340,9 +346,9 @@ export function SiteRatingCard() {
             onMouseLeave={() => setHover(0)}
           >
             <div
-              className={`flex justify-center ${voted || !loggedIn ? "" : "cursor-pointer"}`}
+              className={`flex justify-center ${voted ? "" : "cursor-pointer"}`}
               onMouseMove={(e) => {
-                if (voted || busy || !loggedIn) return;
+                if (voted || busy) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const n = Math.min(
@@ -354,27 +360,13 @@ export function SiteRatingCard() {
             >
               <StarsRow
                 value={preview || stats.average}
-                onPick={voted || !loggedIn ? undefined : pick}
-                disabled={voted || busy || !loggedIn}
+                onPick={voted ? undefined : pick}
+                disabled={voted || busy}
                 size="xl"
               />
             </div>
 
-            {!voted && authReady && !loggedIn ? (
-              <div className="w-full rounded-xl border border-[#f3e0d0] bg-[#fff8f2] px-4 py-4 text-center">
-                <p className="text-sm font-bold text-[#7a4a28]">
-                  {messages.loginToComment}
-                </p>
-                <Link
-                  href="/login?next=/"
-                  className="mt-3 inline-flex rounded-xl bg-[#122033] px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-[#1c3048]"
-                >
-                  {messages.login}
-                </Link>
-              </div>
-            ) : null}
-
-            {!voted && loggedIn ? (
+            {!voted ? (
               <div className="w-full space-y-3 text-start">
                 <label className="block text-xs font-bold text-[#444]">
                   {messages.reviewComment}
@@ -387,6 +379,17 @@ export function SiteRatingCard() {
                     disabled={busy}
                   />
                 </label>
+                {!loggedIn && authReady ? (
+                  <p className="text-[11px] leading-5 text-[#888]">
+                    {messages.guestCommentPrivate}{" "}
+                    <Link
+                      href="/login?next=/"
+                      className="font-semibold text-[#2563eb] underline-offset-2 hover:underline"
+                    >
+                      {messages.loginToComment}
+                    </Link>
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   disabled={busy || picked < 1}
