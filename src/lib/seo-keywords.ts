@@ -438,10 +438,11 @@ const toolExtraKeywords: Record<string, string[]> = {
     "image upscaler",
   ],
   "ai-erase": [
-    "حذف من صورة",
-    "مسح عنصر من صورة",
+    "مسح عناصر من الصورة",
+    "تنظيف صورة",
+    "مسح شخص من صورة",
     "object remover",
-    "magic erase",
+    "photo cleanup",
   ],
   "hashtag-generator": [
     "مولد هاشتاغات",

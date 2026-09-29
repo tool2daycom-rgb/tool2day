@@ -730,9 +730,8 @@ export async function addTextToVideo(
 }
 
 /**
- * إزالة علامة مائية وكأنها غير موجودة قدر الإمكان داخل المتصفح:
- * 1) removelogo بقناع ناعم (inpainting من FFmpeg)
- * 2) وإلا استنساخ ناعم من جهة السطح مع قناع ألفا شفاف الحواف
+ * Inpaint a rectangular region in video/image (FFmpeg removelogo or soft clone).
+ * Intended for cleaning user-owned footage — not for stripping third-party watermarks.
  */
 export async function removeLogo(
   file: File,
@@ -744,7 +743,7 @@ export async function removeLogo(
   await removeLogoMedia(file, boxOrBoxes, "video", onProgress);
 }
 
-/** نفس نظام إزالة شعار الفيديو، لكن لصورة ثابتة (PNG بنفس الأبعاد). */
+/** Same region inpaint for a still image (PNG, same dimensions). */
 export async function removeLogoFromImage(
   file: File,
   boxOrBoxes:
@@ -765,7 +764,7 @@ async function removeLogoMedia(
 ) {
   const boxes = Array.isArray(boxOrBoxes) ? boxOrBoxes : [boxOrBoxes];
   if (!boxes.length) {
-    throw new Error("حدّد منطقة الشعار أولاً");
+    throw new Error("حدّد المنطقة المراد مسحها أولاً");
   }
 
   const { w: vw, h: vh } =
@@ -933,12 +932,12 @@ async function removeLogoMedia(
   if (kind === "image") {
     await downloadBlob(
       toBlob(data, "image/png"),
-      `${basename(file.name)}-no-watermark.png`,
+      `${basename(file.name)}-cleaned.png`,
     );
   } else {
     await downloadBlob(
       toBlob(data, "video/mp4"),
-      `${basename(file.name)}-no-watermark.mp4`,
+      `${basename(file.name)}-cleaned.mp4`,
     );
   }
   try {

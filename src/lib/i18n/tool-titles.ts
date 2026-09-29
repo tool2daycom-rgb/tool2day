@@ -18,7 +18,7 @@ export const toolTitlesEn: Record<string, string> = {
   "ai-summarize": "Article & link summarizer",
   "ai-remove-bg": "Background remover",
   "ai-upscale": "Upscale images to 4K",
-  "ai-erase": "Erase objects from images",
+  "ai-erase": "Clean up objects in your photos",
   "hashtag-generator": "Smart hashtag generator",
   "code-formatter": "JSON& HTML Encoder",
   "video-content-ideas": "Video titles & questions generator",
