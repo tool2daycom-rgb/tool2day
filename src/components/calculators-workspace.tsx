@@ -323,8 +323,31 @@ type RatesPayload = {
   date: string;
   base: string;
   rates: Record<string, number>;
+  source?: string;
   fetchedAt?: string;
 };
+
+function formatMarketStamp(dateYmd: string, fetchedAt?: string): string {
+  const day = (() => {
+    const [y, m, d] = dateYmd.split("-").map(Number);
+    if (!y || !m || !d) return dateYmd;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.toLocaleDateString("ar-SY", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  })();
+  if (!fetchedAt) return day;
+  const time = new Date(fetchedAt).toLocaleTimeString("ar-SY", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+  return `${day} · ${time}`;
+}
 
 function convertAmount(
   amount: number,
@@ -645,7 +668,14 @@ function CurrencyPanel({
   useEffect(() => {
     void loadRates();
     const id = setInterval(() => void loadRates(), 60_000);
-    return () => clearInterval(id);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void loadRates();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -708,21 +738,14 @@ function CurrencyPanel({
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             تحديث لحظي
           </button>
-          {rates?.date ? <span>آخر تحديث للسوق: {rates.date}</span> : null}
-          {rates?.fetchedAt ? (
+          {rates?.date ? (
             <span>
-              · سُحب{" "}
-              {new Date(rates.fetchedAt).toLocaleTimeString("en-GB", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true,
-              })}
+              سعر اليوم: {formatMarketStamp(rates.date, rates.fetchedAt)}
             </span>
           ) : null}
         </div>
         <p className="text-[11px] text-[#888]">
-          أسعار مجمّعة من مصادر السوق العالمية · تُحدَّث تلقائياً كل دقيقة
+          أسعار يومية رسمية للعملات · ذهب وفضة لحظي · تحديث تلقائي كل دقيقة
         </p>
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -740,7 +763,8 @@ function CurrencyPanel({
         ) : null}
         {rate != null && (from === "SYP" || to === "SYP") ? (
           <p className="mt-1 text-center text-[11px] text-[#888]">
-            سعر الليرة السورية مرجعي من مصادر دولية وقد يختلف عن سعر السوق المحلي.
+            سعر الليرة السورية الرسمي اليومي (مثل MSN) — قد يختلف عن سعر السوق
+            المحلي الموازي.
           </p>
         ) : null}
         {change != null && changePct != null ? (

@@ -14,36 +14,77 @@ type RatesPayload = {
 const memoryCache = new Map<string, { at: number; data: RatesPayload }>();
 const TTL_MS = 60_000;
 
+/** Metal / crypto codes — kept from currency-api (er-api has weak/no coverage). */
+const NON_FIAT = new Set([
+  "XAU",
+  "XAG",
+  "XPT",
+  "XPD",
+  "BTC",
+  "ETH",
+  "USDT",
+  "BNB",
+  "XRP",
+  "SOL",
+  "DOGE",
+  "ADA",
+]);
+
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "tool2day-fx/1.0",
+    },
     next: { revalidate: 0 },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
 }
 
-/** Fill gaps (e.g. SYP) from open.er-api.com — rates are "1 USD = x CURRENCY". */
-async function loadUsdSupplement(): Promise<Record<string, number>> {
+/** Official daily mid-market fiat (same class as MSN / Yahoo) — 1 USD = x CODE. */
+async function loadOfficialUsdFiat(): Promise<{
+  rates: Record<string, number>;
+  date: string;
+  source: string;
+} | null> {
   try {
     const raw = (await fetchJson("https://open.er-api.com/v6/latest/USD")) as {
       result?: string;
       rates?: Record<string, number>;
+      time_last_update_utc?: string;
+      time_last_update_unix?: number;
     };
-    if (raw.result !== "success" || !raw.rates) return {};
-    const out: Record<string, number> = {};
+    if (raw.result !== "success" || !raw.rates) return null;
+    const rates: Record<string, number> = {};
     for (const [k, v] of Object.entries(raw.rates)) {
       if (typeof v === "number" && Number.isFinite(v) && v > 0) {
-        out[k.toUpperCase()] = v;
+        rates[k.toUpperCase()] = v;
       }
     }
-    return out;
+    let date = new Date().toISOString().slice(0, 10);
+    if (typeof raw.time_last_update_unix === "number") {
+      date = new Date(raw.time_last_update_unix * 1000).toISOString().slice(0, 10);
+    } else if (typeof raw.time_last_update_utc === "string") {
+      const parsed = new Date(raw.time_last_update_utc);
+      if (!Number.isNaN(parsed.getTime())) {
+        date = parsed.toISOString().slice(0, 10);
+      }
+    }
+    return { rates, date, source: "open.er-api.com" };
   } catch {
-    return {};
+    return null;
   }
 }
 
-async function loadRates(base: string, date: string): Promise<RatesPayload> {
+/**
+ * Broad basket (metals, crypto, extras) from fawazahmed0 currency-api.
+ * Rates are "1 BASE = x QUOTE".
+ */
+async function loadCurrencyApi(
+  base: string,
+  date: string,
+): Promise<{ rates: Record<string, number>; date: string; source: string }> {
   const b = base.toLowerCase();
   const primary = `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/${b}.min.json`;
   const fallback = `https://${date}.currency-api.pages.dev/v1/currencies/${b}.min.json`;
@@ -68,29 +109,53 @@ async function loadRates(base: string, date: string): Promise<RatesPayload> {
     }
   }
 
-  // Primary CDN omits some fiat codes (notably SYP). Merge USD-based supplement.
-  if (base.toLowerCase() === "usd") {
-    const extra = await loadUsdSupplement();
-    let filled = 0;
-    for (const [code, value] of Object.entries(extra)) {
-      if (rates[code] == null) {
-        rates[code] = value;
-        filled += 1;
-      }
-    }
-    if (filled > 0) {
-      source = `${source} + open.er-api.com`;
-    }
-  }
-
   const dateField =
     typeof raw.date === "string" ? raw.date : date === "latest" ? "" : date;
 
   return {
+    rates,
     date: dateField || new Date().toISOString().slice(0, 10),
+    source,
+  };
+}
+
+/**
+ * Latest USD basket: official fiat (er-api) overwrites market CDN fiat so SYP/etc.
+ * match MSN-style daily rates; metals/crypto stay from currency-api.
+ */
+async function loadRates(base: string, date: string): Promise<RatesPayload> {
+  const api = await loadCurrencyApi(base, date);
+  const rates = { ...api.rates };
+  const sources = [api.source];
+  let dateOut = api.date;
+
+  if (base.toLowerCase() === "usd" && date === "latest") {
+    const official = await loadOfficialUsdFiat();
+    if (official) {
+      let overwritten = 0;
+      for (const [code, value] of Object.entries(official.rates)) {
+        if (NON_FIAT.has(code)) continue;
+        // Always prefer official daily fiat over parallel-market CDN values.
+        if (rates[code] == null || rates[code] !== value) {
+          if (rates[code] != null && rates[code] !== value) overwritten += 1;
+          rates[code] = value;
+        }
+      }
+      sources.unshift(official.source);
+      dateOut = official.date || dateOut;
+      if (overwritten > 0) {
+        sources.push(`official-fiat×${overwritten}`);
+      }
+    }
+  }
+
+  rates[base.toUpperCase()] = 1;
+
+  return {
+    date: dateOut,
     base: base.toUpperCase(),
     rates,
-    source,
+    source: sources.join(" + "),
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -99,6 +164,23 @@ function daysAgo(n: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString().slice(0, 10);
+}
+
+/** Drop historical points that clash with today's official rate (e.g. SYP parallel vs official). */
+function sanitizeHistory(
+  points: { date: string; rate: number }[],
+  latestRate: number | undefined,
+): { date: string; rate: number }[] {
+  if (latestRate == null || latestRate <= 0 || points.length === 0) return points;
+  const consistent = points.filter((p) => {
+    const ratio = p.rate / latestRate;
+    return ratio > 0.5 && ratio < 2;
+  });
+  // If CDN used a different scale (parallel market), keep only the official latest point.
+  if (consistent.length < Math.max(2, Math.floor(points.length * 0.4))) {
+    return [];
+  }
+  return consistent;
 }
 
 export async function GET(request: Request) {
@@ -128,7 +210,7 @@ export async function GET(request: Request) {
         }),
       );
 
-      const points = settled.filter(
+      let points = settled.filter(
         (p): p is { date: string; rate: number } => p != null,
       );
 
@@ -136,6 +218,7 @@ export async function GET(request: Request) {
         const latest = await loadRates(base, "latest");
         const rate = latest.rates[quote];
         if (typeof rate === "number") {
+          points = sanitizeHistory(points, rate);
           const last = points[points.length - 1];
           if (!last || last.date !== latest.date) {
             points.push({ date: latest.date || daysAgo(0), rate });
