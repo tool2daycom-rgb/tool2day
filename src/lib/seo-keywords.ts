@@ -1,5 +1,9 @@
 import { categoryMeta, tools, type Tool, type ToolCategory } from "@/lib/tools";
-import { buildAllSiteKeywordsMultilang, siteSeoByLocale } from "@/lib/seo-multilang";
+import {
+  buildAllSiteKeywordsMultilang,
+  buildLeanMultilangToolKeywords,
+  siteSeoByLocale,
+} from "@/lib/seo-multilang";
 
 /** كلمات العلامة والنية العامة */
 export const brandKeywords = [
@@ -40,6 +44,12 @@ export const brandKeywords = [
   "online tools",
   "free online tools",
   "browser tools",
+  "file converter online",
+  "video tools free",
+  "audio tools free",
+  "PDF editor free",
+  "AI tools online",
+  "online calculators",
 ] as const;
 
 /** كلمات إضافية لكل فئة */
@@ -160,7 +170,6 @@ const categoryExtraKeywords: Record<ToolCategory, string[]> = {
     "JPG to PDF",
     "PDF إلى صورة",
     "حماية PDF",
-    "فك قفل PDF",
     "online PDF editor",
   ],
   converters: [
@@ -427,9 +436,11 @@ const toolExtraKeywords: Record<string, string[]> = {
   ],
   "ai-remove-bg": [
     "إزالة خلفية",
+    "إزالة خلفية الصورة",
     "خلفية شفافة",
     "remove background",
     "background remover",
+    "remove image background free",
   ],
   "ai-upscale": [
     "تكبير صورة",
@@ -512,6 +523,7 @@ const toolExtraKeywords: Record<string, string[]> = {
   "add-audio-to-video": [
     "إضافة موسيقى للفيديو",
     "دمج صوت مع فيديو",
+    "تركيب صوت على فيديو",
     "add audio to video",
     "إضافة تعليق صوتي",
     "موسيقى خلفية فيديو",
@@ -560,9 +572,11 @@ const toolExtraKeywords: Record<string, string[]> = {
   ],
   "loop-video": [
     "تكرار فيديو",
+    "تكرار الفيديو",
     "فيديو لوب",
     "loop video",
     "إعادة تشغيل فيديو",
+    "loop video online free",
   ],
   "change-video-volume": [
     "رفع صوت فيديو",
@@ -579,6 +593,7 @@ const toolExtraKeywords: Record<string, string[]> = {
   ],
   "stabilize-video": [
     "تثبيت اهتزاز فيديو",
+    "تثبيت فيديو",
     "stabilize video",
     "video stabilizer",
     "فيديو ثابت",
@@ -592,6 +607,9 @@ const toolExtraKeywords: Record<string, string[]> = {
     "تحسين وضوح فيديو",
     "video enhancer online",
     "رفع دقة فيديو",
+    "تحسين جودة الفيديو إلى 4k اون لاين مجانا",
+    "تحسين جودة الفيديو إلى 4k",
+    "video quality 4k online free",
   ],
   "video-recorder": [
     "تسجيل فيديو من الكاميرا",
@@ -615,8 +633,10 @@ const toolExtraKeywords: Record<string, string[]> = {
   "change-audio-speed": [
     "تسريع صوت",
     "تبطيء صوت",
+    "تسريع الصوت اون لاين",
     "change audio speed",
     "speed up mp3",
+    "speed up audio online",
   ],
   "change-pitch": [
     "تغيير طبقة الصوت",
@@ -631,6 +651,7 @@ const toolExtraKeywords: Record<string, string[]> = {
     "bass booster",
   ],
   "reverse-audio": [
+    "عكس الصوت",
     "عكس MP3",
     "reverse audio",
     "تشغيل صوت بالعكس",
@@ -651,10 +672,12 @@ const toolExtraKeywords: Record<string, string[]> = {
   ],
   "pdf-editor": [
     "تعديل PDF",
+    "تعديل ملف pdf اون لاين مجانا",
     "edit PDF",
     "PDF editor free",
     "كتابة على PDF",
     "إضافة صورة لـ PDF",
+    "edit pdf online free",
   ],
   "pdf-split": [
     "فصل صفحات PDF",
@@ -867,17 +890,18 @@ export function toolFreeKeyword(title: string) {
 export function getToolKeywords(tool: Tool): string[] {
   const cat = categoryMeta[tool.category];
   const extras = toolExtraKeywords[tool.slug] ?? [];
-  // Keep keywords lean (AR + EN only) — avoid multilang stuffing that looks like spam.
+  // All locales: localized titles + top intent suffixes, plus AR/EN extras.
   return unique([
-    tool.title,
-    toolFreeKeyword(tool.title),
-    ...arabicSearchVariants(tool.title),
-    ...extras,
+    ...buildLeanMultilangToolKeywords(tool.slug, tool.title, [
+      ...extras,
+      ...arabicSearchVariants(tool.title),
+      toolFreeKeyword(tool.title),
+    ]),
     cat.label,
     cat.sectionTitle,
-    ...categoryExtraKeywords[tool.category].slice(0, 8),
-    ...brandKeywords.slice(0, 12),
-  ]).slice(0, 40);
+    ...categoryExtraKeywords[tool.category].slice(0, 10),
+    ...brandKeywords.slice(0, 10),
+  ]).slice(0, 160);
 }
 
 export function getAllSiteKeywords(): string[] {
