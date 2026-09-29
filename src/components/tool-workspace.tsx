@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AdsterraWaitOverlay } from "@/components/adsterra-ads";
+import { ProcessingOverlay } from "@/components/processing-overlay";
 import { useLocale } from "@/components/locale-provider";
 import { useToolDisplay } from "@/hooks/use-tool-display";
 import { getFieldLabels } from "@/lib/i18n/field-labels";
@@ -1000,7 +1000,7 @@ export function ToolWorkspace({ slug, arTitle, arDescription, accept }: Props) {
       <p className="mt-3 text-xs text-[#888]">
         {`${title} — ${messages.browserProcessing}`}
       </p>
-      <AdsterraWaitOverlay
+      <ProcessingOverlay
         open={busy}
         label={status || messages.working}
       />

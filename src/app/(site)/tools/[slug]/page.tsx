@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
-import { AdsterraInContent } from "@/components/adsterra-ads";
 import { AiToolsWorkspace } from "@/components/ai-tools-workspace";
 import { CalculatorsWorkspace } from "@/components/calculators-workspace";
 import { GeneratorsWorkspace } from "@/components/generators-workspace";
@@ -330,7 +329,6 @@ export default async function ToolPage({ params }: Props) {
         )}
       </div>
 
-      <AdsterraInContent />
       <ToolSeoSections toolSlug={tool.slug} arTitle={tool.title} />
     </div>
   );

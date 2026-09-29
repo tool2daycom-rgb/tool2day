@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const CANONICAL = "https://www.tool2day.com";
 
-/** Preview/production *.vercel.app → approved Adsterra host */
+/** Preview/production *.vercel.app → www.tool2day.com */
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
   if (!host.endsWith(".vercel.app")) {
@@ -17,7 +17,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Skip Next internals and static assets; still catch pages + /ads/*.html
+     * Skip Next internals and static assets
      */
     "/((?!_next/static|_next/image|favicon.ico|icon\\.svg|.*\\.(?:png|jpg|jpeg|gif|webp|ico|svg|woff2?)$).*)",
   ],

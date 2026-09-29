@@ -537,12 +537,12 @@ export default function PrivacyPage() {
 
         <h2>Advertising partners & cookies</h2>
         <p>
-          We may show ads through Google AdSense and other ad networks such as
-          Adsterra. These partners may use cookies or similar technologies to
-          measure ad performance and, where allowed, to personalize ads. For
-          visitors in the EEA/UK/Switzerland we rely on consent collected via our
-          cookie banner and Google Privacy &amp; Messaging (Funding Choices)
-          where enabled.
+          When advertising is enabled, we may show ads through Google AdSense.
+          Ad partners may use cookies or similar technologies to measure ad
+          performance and, where allowed, to personalize ads. For visitors in
+          the EEA/UK/Switzerland we rely on consent collected via our cookie
+          banner and Google Privacy &amp; Messaging (Funding Choices) where
+          enabled.
         </p>
         <p>
           You can change cookie preferences anytime from the Cookie Settings
