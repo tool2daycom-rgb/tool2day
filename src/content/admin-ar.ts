@@ -51,6 +51,7 @@ export const adminAr = {
   replyFrom: "من",
   replySubject: "الموضوع",
   replyBody: "نص الرسالة",
+  replyUseTemplate: "استخدام قالب الرد",
   replySend: "إرسال الرد",
   replySending: "جارٍ الإرسال…",
   replySent: "تم إرسال الرد وتحديث الحالة إلى «تم الرد».",

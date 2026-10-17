@@ -1426,6 +1426,12 @@ a:hover {
   font-weight: 650;
 }
 
+.admin-reply-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
 .admin-reply-setup {
   padding: 1rem;
   border-radius: 0.9rem;

@@ -8,8 +8,10 @@ import { AdminReplyForm } from "@/components/admin/AdminReplyForm";
 import { hasDatabaseUrl } from "@/db/client";
 import { getAdminSession } from "@/lib/auth";
 import {
-  defaultReplyBody,
-  defaultReplySubject,
+  buildReplyTemplate,
+  resolveProjectTypeLabel,
+} from "@/content/admin-reply-templates";
+import {
   displayValue,
   getInquiry,
   listInquiryReplies,
@@ -72,6 +74,16 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
   const payload = inquiry.payload || {};
   const replies = await listInquiryReplies(inquiry.id);
   const mailReady = mailConfigured();
+  const projectTypeLabel = resolveProjectTypeLabel({
+    locale: inquiry.locale,
+    type: inquiry.type,
+    payload,
+  });
+  const draft = buildReplyTemplate({
+    locale: inquiry.locale,
+    name: inquiry.name,
+    projectType: projectTypeLabel,
+  });
 
   return (
     <main className="admin-main">
@@ -109,8 +121,11 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
           <AdminReplyForm
             inquiryId={inquiry.id}
             toEmail={inquiry.email}
-            defaultSubject={defaultReplySubject(inquiry)}
-            defaultBody={defaultReplyBody(inquiry)}
+            locale={inquiry.locale}
+            customerName={inquiry.name}
+            projectTypeLabel={projectTypeLabel}
+            defaultSubject={draft.subject}
+            defaultBody={draft.body}
             mailReady={mailReady}
           />
         </div>

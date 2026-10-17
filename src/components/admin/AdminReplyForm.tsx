@@ -5,11 +5,15 @@ import {
   sendReplyAction,
   type SendReplyState,
 } from "@/app/admin/actions";
+import { buildReplyTemplate } from "@/content/admin-reply-templates";
 import { adminAr } from "@/content/admin-ar";
 
 type Props = {
   inquiryId: string;
   toEmail: string;
+  locale: string;
+  customerName: string;
+  projectTypeLabel: string;
   defaultSubject: string;
   defaultBody: string;
   mailReady: boolean;
@@ -20,11 +24,16 @@ const initialState: SendReplyState = { ok: false };
 export function AdminReplyForm({
   inquiryId,
   toEmail,
+  locale,
+  customerName,
+  projectTypeLabel,
   defaultSubject,
   defaultBody,
   mailReady,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [subject, setSubject] = useState(defaultSubject);
+  const [body, setBody] = useState(defaultBody);
   const panelRef = useRef<HTMLDivElement>(null);
   const [state, action, pending] = useActionState(sendReplyAction, initialState);
 
@@ -32,6 +41,16 @@ export function AdminReplyForm({
     if (!open) return;
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [open]);
+
+  function applyTemplate() {
+    const draft = buildReplyTemplate({
+      locale,
+      name: customerName,
+      projectType: projectTypeLabel,
+    });
+    setSubject(draft.subject);
+    setBody(draft.body);
+  }
 
   return (
     <div className="admin-reply">
@@ -87,13 +106,23 @@ export function AdminReplyForm({
                 <span>{adminAr.replyFrom}</span>
                 <strong>support@tool2day.com</strong>
               </p>
+              <div className="admin-reply-toolbar">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={applyTemplate}
+                >
+                  {adminAr.replyUseTemplate}
+                </button>
+              </div>
               <label>
                 <span>{adminAr.replySubject}</span>
                 <input
                   name="subject"
                   required
                   maxLength={200}
-                  defaultValue={defaultSubject}
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
                 />
               </label>
               <label>
@@ -101,9 +130,10 @@ export function AdminReplyForm({
                 <textarea
                   name="body"
                   required
-                  rows={12}
+                  rows={14}
                   maxLength={20000}
-                  defaultValue={defaultBody}
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
                 />
               </label>
               {state.error ? <p className="admin-error">{state.error}</p> : null}
