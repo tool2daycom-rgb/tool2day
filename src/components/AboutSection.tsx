@@ -50,37 +50,43 @@ export function AboutSection({ locale, t }: Props) {
       />
 
       <div className="shell about-layout">
-        <button
-          type="button"
-          ref={cardRef}
-          className="about-portrait"
-          aria-pressed={active}
-          aria-describedby={titleId}
-          onMouseEnter={() => setActive(true)}
-          onMouseLeave={() => setActive(false)}
-          onFocus={() => setActive(true)}
-          onBlur={(event) => {
-            const next = event.relatedTarget as Node | null;
-            if (next && sectionRef.current?.contains(next)) return;
-            setActive(false);
-          }}
-          onClick={() => {
-            if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-              return;
-            }
-            setActive((value) => !value);
-          }}
-        >
-          <Image
-            src="/about-portrait.jpg"
-            alt={t.imageAlt}
-            width={571}
-            height={1024}
-            className="about-portrait-image"
-            sizes="(max-width: 720px) 72vw, 280px"
-            priority={false}
-          />
-        </button>
+        <figure className="about-person">
+          <button
+            type="button"
+            ref={cardRef}
+            className="about-portrait"
+            aria-pressed={active}
+            aria-describedby={titleId}
+            onMouseEnter={() => setActive(true)}
+            onMouseLeave={() => setActive(false)}
+            onFocus={() => setActive(true)}
+            onBlur={(event) => {
+              const next = event.relatedTarget as Node | null;
+              if (next && sectionRef.current?.contains(next)) return;
+              setActive(false);
+            }}
+            onClick={() => {
+              if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+                return;
+              }
+              setActive((value) => !value);
+            }}
+          >
+            <Image
+              src="/about-portrait.jpg"
+              alt={t.imageAlt}
+              width={571}
+              height={1024}
+              className="about-portrait-image"
+              sizes="(max-width: 720px) 72vw, 280px"
+              priority={false}
+            />
+          </button>
+          <figcaption className="about-person-meta">
+            <span className="about-person-name">{t.personName}</span>
+            <span className="about-person-role">{t.personRole}</span>
+          </figcaption>
+        </figure>
 
         <div
           className="about-copy"

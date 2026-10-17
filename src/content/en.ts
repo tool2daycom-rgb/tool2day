@@ -62,7 +62,9 @@ export const en = {
       "From the first conversation to launch, you’ll know what we’re building and why. Have an idea in mind? Let’s talk about it.",
     ],
     cta: "Tell me about your project",
-    imageAlt: "Portrait of the Tool2day founder",
+    imageAlt: "Portrait of Wisam Dandash, founder of Tool2day",
+    personName: "Wisam Dandash",
+    personRole: "Founder of Tool2day",
   },
   process: {
     eyebrow: "Process",

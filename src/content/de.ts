@@ -28,6 +28,8 @@ export type Dictionary = {
     body: [string, string];
     cta: string;
     imageAlt: string;
+    personName: string;
+    personRole: string;
   };
   process: {
     eyebrow: string;
@@ -137,7 +139,9 @@ export const de: Dictionary = {
       "Vom ersten Gespräch bis zum Start wissen Sie, was wir entwickeln und warum. Sie haben eine Idee? Lassen Sie uns darüber sprechen.",
     ],
     cta: "Projekt besprechen",
-    imageAlt: "Portrait of the Tool2day founder",
+    imageAlt: "Porträt von Wisam Dandash, Gründer von Tool2day",
+    personName: "Wisam Dandash",
+    personRole: "Gründer von Tool2day",
   },
   process: {
     eyebrow: "Ablauf",
