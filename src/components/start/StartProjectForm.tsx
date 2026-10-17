@@ -24,6 +24,7 @@ import {
 } from "@/content/start-form";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { Logo } from "@/components/Logo";
+import { LiveSitePreview } from "./LiveSitePreview";
 import {
   clearFormState,
   initialFormState,
@@ -33,6 +34,7 @@ import {
   toggleInList,
   type FormState,
 } from "./formState";
+import { getPreviewCopy } from "@/content/preview-i18n";
 
 const TOTAL_STEPS = 5;
 
@@ -47,6 +49,9 @@ export function StartProjectForm({ locale }: Props) {
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [mobilePane, setMobilePane] = useState<"options" | "preview">("options");
+  const previewCopy = getPreviewCopy(locale);
+  const showLivePreview = showsWebsiteFeatures(state.projectTypes);
 
   useEffect(() => {
     setState(loadFormState());
@@ -233,7 +238,7 @@ export function StartProjectForm({ locale }: Props) {
   }
 
   return (
-    <div className="start-shell">
+    <div className={`start-shell ${step === 2 && showLivePreview ? "is-wide" : ""}`}>
       <StartTop locale={locale} t={t} />
 
       <header className="start-hero">
@@ -293,7 +298,7 @@ export function StartProjectForm({ locale }: Props) {
         ) : null}
 
         {step === 2 ? (
-          <section aria-labelledby="step2-title">
+          <section aria-labelledby="step2-title" className="step2-section">
             <p className="start-kicker">{t.steps[2].title}</p>
             <h2 id="step2-title">{t.steps[2].goalsTitle}</h2>
             <p className="start-hint">{t.multiSelectHint}</p>
@@ -321,17 +326,59 @@ export function StartProjectForm({ locale }: Props) {
             <p className="start-note">{t.unsureNote}</p>
             <p className="start-note muted">{t.sizeNote}</p>
 
-            {showsWebsiteFeatures(state.projectTypes) ? (
-              <FeatureGroup
-                title={t.steps[2].websiteTitle}
-                features={WEBSITE_FEATURES}
-                labels={t.websiteFeatures}
-                selected={state.websiteFeatures}
-                sizeLabel={sizeLabel}
-                onToggle={(id) =>
-                  update("websiteFeatures", toggleInList(state.websiteFeatures, id))
-                }
-              />
+            {showLivePreview ? (
+              <>
+                <div className="step2-mobile-toggle" role="tablist" aria-label="Step 2 view">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mobilePane === "options"}
+                    className={mobilePane === "options" ? "is-active" : undefined}
+                    onClick={() => setMobilePane("options")}
+                  >
+                    {previewCopy.mobileOptions}
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mobilePane === "preview"}
+                    className={mobilePane === "preview" ? "is-active" : undefined}
+                    onClick={() => setMobilePane("preview")}
+                  >
+                    {previewCopy.mobilePreview}
+                  </button>
+                </div>
+
+                <div className="step2-split">
+                  <div
+                    className={`step2-options ${mobilePane === "options" ? "is-mobile-active" : ""}`}
+                  >
+                    <FeatureGroup
+                      title={t.steps[2].websiteTitle}
+                      features={WEBSITE_FEATURES}
+                      labels={t.websiteFeatures}
+                      selected={state.websiteFeatures}
+                      sizeLabel={sizeLabel}
+                      viewExampleLabel={previewCopy.viewExample}
+                      demoOnlyLabel={previewCopy.demoOnly}
+                      demoBadge={previewCopy.demoBadge}
+                      onToggle={(id) =>
+                        update("websiteFeatures", toggleInList(state.websiteFeatures, id))
+                      }
+                    />
+                  </div>
+                  <aside
+                    className={`step2-preview ${mobilePane === "preview" ? "is-mobile-active" : ""}`}
+                    aria-label={previewCopy.tabPreview}
+                  >
+                    <LiveSitePreview
+                      locale={locale}
+                      selected={state.websiteFeatures}
+                      featureLabels={t.websiteFeatures}
+                    />
+                  </aside>
+                </div>
+              </>
             ) : null}
 
             {showsWebappFeatures(state.projectTypes) ? (
@@ -608,6 +655,9 @@ function FeatureGroup({
   selected,
   onToggle,
   sizeLabel,
+  viewExampleLabel,
+  demoOnlyLabel,
+  demoBadge,
 }: {
   title: string;
   features: { id: string; size: SizeHint }[];
@@ -615,21 +665,37 @@ function FeatureGroup({
   selected: string[];
   onToggle: (id: string) => void;
   sizeLabel: (size: SizeHint) => string;
+  viewExampleLabel?: string;
+  demoOnlyLabel?: string;
+  demoBadge?: string;
 }) {
   return (
     <div className="feature-group">
       <h3>{title}</h3>
       <div className="option-grid features">
-        {features.map((feature) => (
-          <OptionCard
-            key={feature.id}
-            selected={selected.includes(feature.id)}
-            label={labels[feature.id].label}
-            desc={labels[feature.id].desc}
-            badge={sizeLabel(feature.size)}
-            onToggle={() => onToggle(feature.id)}
-          />
-        ))}
+        {features.map((feature) => {
+          const isOn = selected.includes(feature.id);
+          return (
+            <div key={feature.id} className="feature-item">
+              <OptionCard
+                selected={isOn}
+                label={labels[feature.id].label}
+                desc={labels[feature.id].desc}
+                badge={sizeLabel(feature.size)}
+                onToggle={() => onToggle(feature.id)}
+              />
+              {isOn && viewExampleLabel && demoOnlyLabel ? (
+                <details className="feature-example">
+                  <summary>{viewExampleLabel}</summary>
+                  <p>
+                    {demoBadge ? <span className="option-badge">{demoBadge}</span> : null}{" "}
+                    {demoOnlyLabel}
+                  </p>
+                </details>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
