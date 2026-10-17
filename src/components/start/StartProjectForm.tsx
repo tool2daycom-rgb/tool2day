@@ -25,6 +25,7 @@ import {
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { Logo } from "@/components/Logo";
 import { LiveSitePreview } from "./LiveSitePreview";
+import { LiveWebappPreview } from "./LiveWebappPreview";
 import {
   clearFormState,
   initialFormState,
@@ -35,6 +36,7 @@ import {
   type FormState,
 } from "./formState";
 import { getPreviewCopy } from "@/content/preview-i18n";
+import { getWebappPreviewCopy } from "@/content/webapp-preview-i18n";
 
 const TOTAL_STEPS = 5;
 
@@ -50,8 +52,17 @@ export function StartProjectForm({ locale }: Props) {
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [mobilePane, setMobilePane] = useState<"options" | "preview">("options");
+  const [previewKind, setPreviewKind] = useState<"site" | "app">("site");
   const previewCopy = getPreviewCopy(locale);
-  const showLivePreview = showsWebsiteFeatures(state.projectTypes);
+  const webappPreviewCopy = getWebappPreviewCopy(locale);
+  const showWebsitePreview = showsWebsiteFeatures(state.projectTypes);
+  const showWebappPreview = showsWebappFeatures(state.projectTypes);
+  const showLivePanel = showWebsitePreview || showWebappPreview;
+
+  useEffect(() => {
+    if (showWebappPreview && !showWebsitePreview) setPreviewKind("app");
+    if (showWebsitePreview && !showWebappPreview) setPreviewKind("site");
+  }, [showWebsitePreview, showWebappPreview]);
 
   useEffect(() => {
     setState(loadFormState());
@@ -238,7 +249,7 @@ export function StartProjectForm({ locale }: Props) {
   }
 
   return (
-    <div className={`start-shell ${step === 2 && showLivePreview ? "is-wide" : ""}`}>
+    <div className={`start-shell ${step === 2 && showLivePanel ? "is-wide" : ""}`}>
       <StartTop locale={locale} t={t} />
 
       <header className="start-hero">
@@ -326,7 +337,7 @@ export function StartProjectForm({ locale }: Props) {
             <p className="start-note">{t.unsureNote}</p>
             <p className="start-note muted">{t.sizeNote}</p>
 
-            {showLivePreview ? (
+            {showLivePanel ? (
               <>
                 <div className="step2-mobile-toggle" role="tablist" aria-label="Step 2 view">
                   <button
@@ -353,45 +364,84 @@ export function StartProjectForm({ locale }: Props) {
                   <div
                     className={`step2-options ${mobilePane === "options" ? "is-mobile-active" : ""}`}
                   >
-                    <FeatureGroup
-                      title={t.steps[2].websiteTitle}
-                      features={WEBSITE_FEATURES}
-                      labels={t.websiteFeatures}
-                      selected={state.websiteFeatures}
-                      sizeLabel={sizeLabel}
-                      viewExampleLabel={previewCopy.viewExample}
-                      demoOnlyLabel={previewCopy.demoOnly}
-                      demoBadge={previewCopy.demoBadge}
-                      onToggle={(id) =>
-                        update("websiteFeatures", toggleInList(state.websiteFeatures, id))
-                      }
-                    />
+                    {showWebsitePreview ? (
+                      <FeatureGroup
+                        title={t.steps[2].websiteTitle}
+                        features={WEBSITE_FEATURES}
+                        labels={t.websiteFeatures}
+                        selected={state.websiteFeatures}
+                        sizeLabel={sizeLabel}
+                        viewExampleLabel={previewCopy.viewExample}
+                        demoOnlyLabel={previewCopy.demoOnly}
+                        demoBadge={previewCopy.demoBadge}
+                        onToggle={(id) =>
+                          update("websiteFeatures", toggleInList(state.websiteFeatures, id))
+                        }
+                      />
+                    ) : null}
+
+                    {showWebappPreview ? (
+                      <FeatureGroup
+                        title={t.steps[2].webappTitle}
+                        features={WEBAPP_FEATURES}
+                        labels={t.webappFeatures}
+                        selected={state.webappFeatures}
+                        sizeLabel={sizeLabel}
+                        viewExampleLabel={webappPreviewCopy.viewExample}
+                        demoOnlyLabel={webappPreviewCopy.demoOnly}
+                        demoBadge={webappPreviewCopy.demoBadge}
+                        onToggle={(id) =>
+                          update("webappFeatures", toggleInList(state.webappFeatures, id))
+                        }
+                      />
+                    ) : null}
                   </div>
                   <aside
                     className={`step2-preview ${mobilePane === "preview" ? "is-mobile-active" : ""}`}
                     aria-label={previewCopy.tabPreview}
                   >
-                    <LiveSitePreview
-                      locale={locale}
-                      selected={state.websiteFeatures}
-                      featureLabels={t.websiteFeatures}
-                    />
+                    {showWebsitePreview && showWebappPreview ? (
+                      <div className="preview-kind-toggle" role="tablist" aria-label="Preview type">
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={previewKind === "site"}
+                          className={previewKind === "site" ? "is-active" : undefined}
+                          onClick={() => setPreviewKind("site")}
+                        >
+                          {webappPreviewCopy.kindWebsite}
+                        </button>
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={previewKind === "app"}
+                          className={previewKind === "app" ? "is-active" : undefined}
+                          onClick={() => setPreviewKind("app")}
+                        >
+                          {webappPreviewCopy.kindApp}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {previewKind === "site" && showWebsitePreview ? (
+                      <LiveSitePreview
+                        locale={locale}
+                        selected={state.websiteFeatures}
+                        featureLabels={t.websiteFeatures}
+                      />
+                    ) : null}
+
+                    {(previewKind === "app" || (!showWebsitePreview && showWebappPreview)) &&
+                    showWebappPreview ? (
+                      <LiveWebappPreview
+                        locale={locale}
+                        selected={state.webappFeatures}
+                        featureLabels={t.webappFeatures}
+                      />
+                    ) : null}
                   </aside>
                 </div>
               </>
-            ) : null}
-
-            {showsWebappFeatures(state.projectTypes) ? (
-              <FeatureGroup
-                title={t.steps[2].webappTitle}
-                features={WEBAPP_FEATURES}
-                labels={t.webappFeatures}
-                selected={state.webappFeatures}
-                sizeLabel={sizeLabel}
-                onToggle={(id) =>
-                  update("webappFeatures", toggleInList(state.webappFeatures, id))
-                }
-              />
             ) : null}
 
             {showsMobileFeatures(state.projectTypes) ? (
