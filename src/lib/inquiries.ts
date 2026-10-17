@@ -1,9 +1,10 @@
 import { randomUUID } from "crypto";
-import { and, desc, eq, gte, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { ensureInquiryTable, getDb, hasDatabaseUrl } from "@/db/client";
 import {
   inquiries,
+  inquiryReplies,
   type InquiryStatus,
   type InquiryType,
 } from "@/db/schema";
@@ -280,4 +281,80 @@ export async function countByStatus() {
     .from(inquiries)
     .groupBy(inquiries.status);
   return rows;
+}
+
+export async function listInquiryReplies(inquiryId: string) {
+  await ensureInquiryTable();
+  const db = getDb();
+  return db
+    .select()
+    .from(inquiryReplies)
+    .where(eq(inquiryReplies.inquiryId, inquiryId))
+    .orderBy(asc(inquiryReplies.sentAt));
+}
+
+export async function saveInquiryReply(input: {
+  inquiryId: string;
+  subject: string;
+  body: string;
+  toEmail: string;
+  fromEmail: string;
+}) {
+  await ensureInquiryTable();
+  const db = getDb();
+  const id = randomUUID();
+  const sentAt = new Date();
+  await db.insert(inquiryReplies).values({
+    id,
+    inquiryId: input.inquiryId,
+    subject: input.subject,
+    body: input.body,
+    toEmail: input.toEmail,
+    fromEmail: input.fromEmail,
+    sentAt,
+  });
+  await updateInquiry(input.inquiryId, { status: "replied" });
+  return { id, sentAt };
+}
+
+export function defaultReplySubject(inquiry: {
+  type: InquiryType;
+  name: string;
+  payload: Record<string, unknown>;
+}) {
+  if (inquiry.type === "contact") {
+    const service = String(inquiry.payload.service || "").trim();
+    if (service && service !== "—") {
+      return `Re: tool2day — ${service}`;
+    }
+  }
+  return `Re: tool2day — ${inquiry.name}`;
+}
+
+export function defaultReplyBody(inquiry: {
+  name: string;
+  locale: string;
+}) {
+  if (inquiry.locale === "en") {
+    return [
+      `Hello ${inquiry.name},`,
+      "",
+      "Thank you for your message. Here is our reply:",
+      "",
+      "",
+      "Best regards,",
+      "tool2day",
+      "support@tool2day.com",
+    ].join("\n");
+  }
+  return [
+    `Hallo ${inquiry.name},`,
+    "",
+    "vielen Dank für deine Nachricht. Hier unsere Antwort:",
+    "",
+    "",
+    "Viele Grüße",
+    "tool2day",
+    "support@tool2day.com",
+  ].join("\n");
 }

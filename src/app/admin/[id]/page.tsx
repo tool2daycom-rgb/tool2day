@@ -4,13 +4,21 @@ import { notFound, redirect } from "next/navigation";
 import { updateInquiryAction } from "@/app/admin/actions";
 import { adminAr, statusLabel, typeLabel } from "@/content/admin-ar";
 import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
+import { AdminReplyForm } from "@/components/admin/AdminReplyForm";
 import { hasDatabaseUrl } from "@/db/client";
 import { getAdminSession } from "@/lib/auth";
-import { displayValue, getInquiry } from "@/lib/inquiries";
+import {
+  defaultReplyBody,
+  defaultReplySubject,
+  displayValue,
+  getInquiry,
+  listInquiryReplies,
+} from "@/lib/inquiries";
+import { mailConfigured } from "@/lib/mail";
 
 type Props = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; replied?: string }>;
 };
 
 function formatWhen(date: Date) {
@@ -27,6 +35,20 @@ function Field({ label, value }: { label: string; value: unknown }) {
       <dd>{displayValue(value)}</dd>
     </div>
   );
+}
+
+function customerMessageText(
+  type: "contact" | "project",
+  payload: Record<string, unknown>,
+) {
+  if (type === "contact") {
+    const service = displayValue(payload.service);
+    const message = displayValue(payload.message);
+    return [`${adminAr.service}: ${service}`, "", message].join("\n");
+  }
+  const details = displayValue(payload.details);
+  const types = displayValue(payload.projectTypes);
+  return [`${adminAr.projectTypes}: ${types}`, "", details].join("\n");
 }
 
 export default async function AdminInquiryPage({ params, searchParams }: Props) {
@@ -48,10 +70,8 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
   if (!inquiry) notFound();
   const sp = await searchParams;
   const payload = inquiry.payload || {};
-
-  const replyHref = `mailto:${encodeURIComponent(inquiry.email)}?subject=${encodeURIComponent(
-    `Re: tool2day — ${inquiry.name}`,
-  )}`;
+  const replies = await listInquiryReplies(inquiry.id);
+  const mailReady = mailConfigured();
 
   return (
     <main className="admin-main">
@@ -69,6 +89,7 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
       </header>
 
       {sp.saved ? <p className="admin-success">{adminAr.saved}</p> : null}
+      {sp.replied ? <p className="admin-success">{adminAr.replySent}</p> : null}
 
       <section className="admin-card">
         <div className="admin-list-tags">
@@ -80,17 +101,51 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
           </span>
         </div>
         <h2>{inquiry.name}</h2>
-        <p>
-          <a href={`mailto:${inquiry.email}`}>{inquiry.email}</a>
-        </p>
+        <p>{inquiry.email}</p>
         <p className="admin-muted">
           {adminAr.createdAt}: {formatWhen(inquiry.createdAt)}
         </p>
         <div className="admin-detail-actions">
-          <a className="btn btn-primary" href={replyHref}>
-            {adminAr.reply}
-          </a>
+          <AdminReplyForm
+            inquiryId={inquiry.id}
+            toEmail={inquiry.email}
+            defaultSubject={defaultReplySubject(inquiry)}
+            defaultBody={defaultReplyBody(inquiry)}
+            mailReady={mailReady}
+          />
         </div>
+      </section>
+
+      <section className="admin-card">
+        <h3>{adminAr.conversation}</h3>
+        <ol className="admin-thread">
+          <li className="admin-thread-item is-customer">
+            <div className="admin-thread-meta">
+              <strong>{adminAr.conversationCustomer}</strong>
+              <span>{formatWhen(inquiry.createdAt)}</span>
+            </div>
+            <p className="admin-thread-body">
+              {customerMessageText(inquiry.type, payload)}
+            </p>
+          </li>
+          {replies.map((reply) => (
+            <li key={reply.id} className="admin-thread-item is-admin">
+              <div className="admin-thread-meta">
+                <strong>{adminAr.conversationAdmin}</strong>
+                <span>{formatWhen(reply.sentAt)}</span>
+              </div>
+              <p className="admin-thread-subject">{reply.subject}</p>
+              <p className="admin-thread-body">{reply.body}</p>
+              <p className="admin-muted">
+                {adminAr.replyFrom}: {reply.fromEmail} · {adminAr.replyTo}:{" "}
+                {reply.toEmail}
+              </p>
+            </li>
+          ))}
+        </ol>
+        {replies.length === 0 ? (
+          <p className="admin-muted">{adminAr.conversationEmpty}</p>
+        ) : null}
       </section>
 
       <section className="admin-card">

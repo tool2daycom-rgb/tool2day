@@ -29,10 +29,18 @@ node scripts/hash-admin-password.mjs "your-strong-password"
 ```
 
 5. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, and a long random `SESSION_SECRET` (≥ 32 chars).
-6. Optional: set SMTP vars to email `support@tool2day.com` on each new inquiry. Inquiries are still saved if mail fails.
+6. Optional but recommended — Zoho SMTP for inquiry alerts and admin replies:
+   - `SMTP_HOST` = `smtp.zoho.eu` (or `smtp.zoho.com`)
+   - `SMTP_PORT` = `465` (SSL) or `587` (TLS)
+   - `SMTP_USER` = `support@tool2day.com`
+   - `SMTP_PASS` = Zoho **App Password** for that mailbox
+   - `MAIL_FROM` = `tool2day <support@tool2day.com>`
+   - `MAIL_TO` = `support@tool2day.com` (new-inquiry notifications)
 7. Redeploy. Open `/admin`, sign in, and confirm new form submissions appear.
 
-The table is created automatically on first successful request (`CREATE TABLE IF NOT EXISTS`). You can also run `scripts/schema.sql` manually.
+Customer replies from the admin detail page are sent only after you click **إرسال الرد**. From / Reply-To are `support@tool2day.com`. Successful replies are stored on the inquiry and the status becomes **تم الرد**. If SMTP is missing, the UI shows setup steps — never a fake success.
+
+The tables are created automatically on first successful request (`CREATE TABLE IF NOT EXISTS`). You can also run `scripts/schema.sql` manually.
 
 Without `DATABASE_URL`, forms return a clear error (no fake success). Without admin env vars, `/admin/login` shows a setup message.
 
