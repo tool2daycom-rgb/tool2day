@@ -54,33 +54,6 @@ export const en = {
       },
     ],
   },
-  work: {
-    eyebrow: "Examples",
-    title: "Design concepts",
-    lead:
-      "Placeholders for real work. Until then, these are design concepts — not completed client projects.",
-    conceptBadge: "Design concept",
-    items: [
-      {
-        title: "Local studio — portfolio site",
-        summary: "Calm one-pager structure for a creative studio with a clear path to contact.",
-        href: "/en/start",
-        tags: ["Website", "Concept"],
-      },
-      {
-        title: "Neighbour shop — booking overview",
-        summary: "Web-app concept for appointment overview and simple customer enquiries.",
-        href: "/en/start",
-        tags: ["Web app", "Concept"],
-      },
-      {
-        title: "Field help — service app",
-        summary: "Mobile-app concept for on-the-road work with a focus on clarity.",
-        href: "/en/start",
-        tags: ["Mobile", "Concept"],
-      },
-    ],
-  },
   why: {
     eyebrow: "Why tool2day",
     title: "Direct, clear, tailored",

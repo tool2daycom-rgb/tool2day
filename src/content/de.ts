@@ -22,18 +22,6 @@ export type Dictionary = {
     lead: string;
     items: Array<{ id: string; label: string; title: string; text: string }>;
   };
-  work: {
-    eyebrow: string;
-    title: string;
-    lead: string;
-    conceptBadge: string;
-    items: Array<{
-      title: string;
-      summary: string;
-      href: string;
-      tags: string[];
-    }>;
-  };
   why: {
     eyebrow: string;
     title: string;
@@ -131,33 +119,6 @@ export const de: Dictionary = {
         label: "Beratung",
         title: "Design & Beratung",
         text: "Gemeinsam klären wir Ziel, Inhalt und nächste Schritte — bevor gebaut wird, was du eigentlich nicht brauchst.",
-      },
-    ],
-  },
-  work: {
-    eyebrow: "Beispiele",
-    title: "Gestaltungsbeispiele",
-    lead:
-      "Platzhalter für echte Projekte. Bis dahin siehst du hier Designkonzepte — keine ausgeführten Kundenaufträge.",
-    conceptBadge: "Designkonzept",
-    items: [
-      {
-        title: "Lokalatelier — Studio-Website",
-        summary: "Ruhige One-Pager-Struktur für ein kreatives Studio mit klarer Kontaktführung.",
-        href: "/de/start",
-        tags: ["Website", "Konzept"],
-      },
-      {
-        title: "Nachbarladen — Buchungsübersicht",
-        summary: "Web-App-Konzept für Terminübersicht und einfache Kundenanfragen.",
-        href: "/de/start",
-        tags: ["Web-App", "Konzept"],
-      },
-      {
-        title: "Routenhilfe — Service-App",
-        summary: "Mobile-App-Konzept für den Außendienst mit Fokus auf Übersichtlichkeit.",
-        href: "/de/start",
-        tags: ["Mobile", "Konzept"],
       },
     ],
   },

@@ -1,9 +1,11 @@
 import Image from "next/image";
 import type { Dictionary, Locale } from "@/content";
 import { site } from "@/content";
+import { getWorkCopy } from "@/content/work";
 import { Header } from "./Header";
 import { ContactForm } from "./ContactForm";
 import { SiteFooter } from "./SiteFooter";
+import { WorkProjectCard } from "./WorkProjectCard";
 
 type Props = {
   locale: Locale;
@@ -11,6 +13,8 @@ type Props = {
 };
 
 export function HomePage({ locale, t }: Props) {
+  const work = getWorkCopy(locale);
+
   return (
     <>
       <Header locale={locale} t={t} />
@@ -78,29 +82,13 @@ export function HomePage({ locale, t }: Props) {
         <section id="work" className="section section-muted" aria-labelledby="work-title">
           <div className="shell">
             <header className="section-head">
-              <p className="eyebrow">{t.work.eyebrow}</p>
-              <h2 id="work-title">{t.work.title}</h2>
-              <p className="lead">{t.work.lead}</p>
+              <p className="eyebrow">{work.eyebrow}</p>
+              <h2 id="work-title">{work.title}</h2>
+              <p className="lead">{work.lead}</p>
             </header>
             <ul className="work-grid">
-              {t.work.items.map((item) => (
-                <li key={item.title} className="work-card">
-                  <div className="work-thumb" aria-hidden="true">
-                    <span className="thumb-shape" />
-                  </div>
-                  <div className="work-body">
-                    <span className="badge">{t.work.conceptBadge}</span>
-                    <h3>
-                      <a href={item.href}>{item.title}</a>
-                    </h3>
-                    <p>{item.summary}</p>
-                    <ul className="tag-list">
-                      {item.tags.map((tag) => (
-                        <li key={tag}>{tag}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </li>
+              {work.projects.map((project) => (
+                <WorkProjectCard key={project.id} locale={locale} project={project} />
               ))}
             </ul>
           </div>
