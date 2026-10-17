@@ -1,0 +1,15 @@
+---
+description: Always push to GitHub and deploy to Vercel after finishing work
+alwaysApply: true
+---
+
+# Auto-publish after finishing
+
+When a task that changes the site is complete:
+
+1. Commit relevant changes (if the user did not forbid commits).
+2. Push to `origin` (`main` on `tool2daycom-rgb/tool2day`).
+3. Deploy production on Vercel: `vercel --prod --yes --scope tool2day`.
+4. Briefly confirm the GitHub and live URLs.
+
+Do this automatically at the end of each completed change set — do not wait for the user to ask again.
