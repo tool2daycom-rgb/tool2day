@@ -10,7 +10,7 @@ export const site = {
   locales: ["de", "en"] as const,
 
   /** Replace with your real contact email before launch */
-  contactEmail: "hello@tool2day.com",
+  contactEmail: "support@tool2day.com",
 
   /** Optional social / chat links — leave empty string to hide */
   links: {
