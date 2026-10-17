@@ -338,10 +338,10 @@ a:hover {
   color: var(--ink);
 }
 
-.logo-icon {
+.logo-icon-img {
   width: 2.35rem;
   height: 2.35rem;
-  color: var(--lime);
+  border-radius: 0.65rem;
   flex-shrink: 0;
 }
 
