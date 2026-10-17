@@ -440,67 +440,17 @@ a:hover {
 
 .hero-panel {
   position: relative;
-  padding: 1.25rem;
-  border-radius: calc(var(--radius) + 0.35rem);
-  background: #050705;
+  border-radius: calc(var(--radius) + 0.5rem);
+  background: #fff;
   box-shadow: var(--shadow);
   overflow: hidden;
+  border: 1px solid var(--line);
 }
 
-.hero-panel::before {
-  content: "";
-  position: absolute;
-  inset: auto -20% -30% 20%;
-  height: 70%;
-  background: radial-gradient(circle, rgba(197, 242, 109, 0.35), transparent 60%);
-  pointer-events: none;
-}
-
-.orbit {
-  position: absolute;
-  inset: 12% 8% auto auto;
-  width: 4.5rem;
-  height: 4.5rem;
-  pointer-events: none;
-}
-
-.orbit span {
-  position: absolute;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--lime);
-  animation: pulse 2.8s ease-in-out infinite;
-}
-
-.orbit span:nth-child(1) {
-  top: 0;
-  left: 40%;
-}
-
-.orbit span:nth-child(2) {
-  right: 0;
-  top: 45%;
-  animation-delay: 0.4s;
-  background: #fff59a;
-}
-
-.orbit span:nth-child(3) {
-  bottom: 0;
-  left: 20%;
-  animation-delay: 0.8s;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.55;
-  }
-  50% {
-    transform: scale(1.35);
-    opacity: 1;
-  }
+.hero-image {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .reveal {
@@ -528,7 +478,6 @@ a:hover {
   }
 
   .hero-atmosphere,
-  .orbit span,
   .reveal {
     animation: none !important;
   }

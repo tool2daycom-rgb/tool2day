@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Dictionary, Locale } from "@/content";
 import { site } from "@/content";
 import { Header } from "./Header";
@@ -34,14 +35,16 @@ export function HomePage({ locale, t }: Props) {
                 </a>
               </div>
             </div>
-            <div className="hero-visual reveal delay-1" aria-hidden="true">
+            <div className="hero-visual reveal delay-1">
               <div className="hero-panel">
-                <Logo locale={locale} variant="full" className="hero-logo" />
-                <div className="orbit">
-                  <span />
-                  <span />
-                  <span />
-                </div>
+                <Image
+                  src="/hero-visual.png"
+                  alt=""
+                  width={1024}
+                  height={1024}
+                  className="hero-image"
+                  priority
+                />
               </div>
             </div>
           </div>
