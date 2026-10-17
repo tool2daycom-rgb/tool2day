@@ -2,16 +2,14 @@ import type { Locale } from "@/content";
 import { getStartFormCopy, type ProjectTypeId } from "@/content/start-form";
 import type { InquiryType } from "@/db/schema";
 
-function cleanName(name: string | null | undefined) {
-  const value = name?.trim() || "";
-  if (!value || value === "—") return "";
-  return value;
-}
-
-function cleanProjectType(value: string | null | undefined) {
+function cleanText(value: string | null | undefined) {
   const text = value?.trim() || "";
   if (!text || text === "—") return "";
   return text;
+}
+
+export function resolveServiceLabel(payload: Record<string, unknown>) {
+  return cleanText(String(payload.service || ""));
 }
 
 export function resolveProjectTypeLabel(input: {
@@ -23,7 +21,7 @@ export function resolveProjectTypeLabel(input: {
   const form = getStartFormCopy(locale);
 
   if (input.type === "contact") {
-    return cleanProjectType(String(input.payload.service || ""));
+    return resolveServiceLabel(input.payload);
   }
 
   const raw = input.payload.projectTypes;
@@ -34,21 +32,75 @@ export function resolveProjectTypeLabel(input: {
       : [];
 
   if (!ids.length) {
-    return cleanProjectType(String(input.payload.otherProjectNote || ""));
+    return cleanText(String(input.payload.otherProjectNote || ""));
   }
 
   const labels = ids.map((id) => form.projectTypes[id as ProjectTypeId] || id);
-  return cleanProjectType(labels.join(", "));
+  return cleanText(labels.join(", "));
 }
 
-export function buildReplyTemplate(input: {
+export function buildContactReplyTemplate(input: {
+  locale: string;
+  name?: string | null;
+  service?: string | null;
+}) {
+  const locale = input.locale === "en" ? "en" : "de";
+  const name = cleanText(input.name);
+  const service = cleanText(input.service);
+
+  if (locale === "en") {
+    const greeting = name ? `Hi ${name},` : "Hi,";
+    const inquiryLine = service
+      ? `Thank you for getting in touch. I’ve received your message about ${service} and will get back to you to discuss your request.`
+      : `Thank you for getting in touch. I’ve received your message and will get back to you to discuss your request.`;
+
+    return {
+      subject: "Re: Your message to Tool2day",
+      body: [
+        greeting,
+        "",
+        inquiryLine,
+        "",
+        "If you’d like to share any additional details, simply reply to this email.",
+        "",
+        "Best regards,",
+        "Wisam Dandash",
+        "Tool2day",
+        "support@tool2day.com",
+      ].join("\n"),
+    };
+  }
+
+  const greeting = name ? `Hallo ${name},` : "Hallo,";
+  const inquiryLine = service
+    ? `vielen Dank für Ihre Nachricht. Ich habe Ihre Anfrage zu ${service} erhalten und melde mich bei Ihnen, um Ihr Anliegen zu besprechen.`
+    : `vielen Dank für Ihre Nachricht. Ich habe Ihre Anfrage erhalten und melde mich bei Ihnen, um Ihr Anliegen zu besprechen.`;
+
+  return {
+    subject: "Re: Ihre Nachricht an Tool2day",
+    body: [
+      greeting,
+      "",
+      inquiryLine,
+      "",
+      "Falls Sie noch weitere Informationen ergänzen möchten, antworten Sie einfach auf diese E-Mail.",
+      "",
+      "Freundliche Grüße",
+      "Wisam Dandash",
+      "Tool2day",
+      "support@tool2day.com",
+    ].join("\n"),
+  };
+}
+
+export function buildProjectReplyTemplate(input: {
   locale: string;
   name?: string | null;
   projectType?: string | null;
 }) {
   const locale = input.locale === "en" ? "en" : "de";
-  const name = cleanName(input.name);
-  const projectType = cleanProjectType(input.projectType);
+  const name = cleanText(input.name);
+  const projectType = cleanText(input.projectType);
 
   if (locale === "en") {
     const greeting = name ? `Hi ${name},` : "Hi,";
@@ -93,4 +145,25 @@ export function buildReplyTemplate(input: {
       "support@tool2day.com",
     ].join("\n"),
   };
+}
+
+export function buildReplyTemplate(input: {
+  type: InquiryType;
+  locale: string;
+  name?: string | null;
+  projectType?: string | null;
+  service?: string | null;
+}) {
+  if (input.type === "contact") {
+    return buildContactReplyTemplate({
+      locale: input.locale,
+      name: input.name,
+      service: input.service ?? input.projectType,
+    });
+  }
+  return buildProjectReplyTemplate({
+    locale: input.locale,
+    name: input.name,
+    projectType: input.projectType,
+  });
 }

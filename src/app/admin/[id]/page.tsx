@@ -10,6 +10,7 @@ import { getAdminSession } from "@/lib/auth";
 import {
   buildReplyTemplate,
   resolveProjectTypeLabel,
+  resolveServiceLabel,
 } from "@/content/admin-reply-templates";
 import {
   displayValue,
@@ -79,10 +80,13 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
     type: inquiry.type,
     payload,
   });
+  const serviceLabel = resolveServiceLabel(payload);
   const draft = buildReplyTemplate({
+    type: inquiry.type,
     locale: inquiry.locale,
     name: inquiry.name,
     projectType: projectTypeLabel,
+    service: serviceLabel,
   });
 
   return (
@@ -120,10 +124,12 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
         <div className="admin-detail-actions">
           <AdminReplyForm
             inquiryId={inquiry.id}
+            inquiryType={inquiry.type}
             toEmail={inquiry.email}
             locale={inquiry.locale}
             customerName={inquiry.name}
             projectTypeLabel={projectTypeLabel}
+            serviceLabel={serviceLabel}
             defaultSubject={draft.subject}
             defaultBody={draft.body}
             mailReady={mailReady}

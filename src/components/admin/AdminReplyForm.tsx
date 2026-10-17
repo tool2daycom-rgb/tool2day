@@ -5,15 +5,21 @@ import {
   sendReplyAction,
   type SendReplyState,
 } from "@/app/admin/actions";
-import { buildReplyTemplate } from "@/content/admin-reply-templates";
+import {
+  buildContactReplyTemplate,
+  buildProjectReplyTemplate,
+} from "@/content/admin-reply-templates";
 import { adminAr } from "@/content/admin-ar";
+import type { InquiryType } from "@/db/schema";
 
 type Props = {
   inquiryId: string;
+  inquiryType: InquiryType;
   toEmail: string;
   locale: string;
   customerName: string;
   projectTypeLabel: string;
+  serviceLabel: string;
   defaultSubject: string;
   defaultBody: string;
   mailReady: boolean;
@@ -23,10 +29,12 @@ const initialState: SendReplyState = { ok: false };
 
 export function AdminReplyForm({
   inquiryId,
+  inquiryType,
   toEmail,
   locale,
   customerName,
   projectTypeLabel,
+  serviceLabel,
   defaultSubject,
   defaultBody,
   mailReady,
@@ -42,8 +50,18 @@ export function AdminReplyForm({
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [open]);
 
-  function applyTemplate() {
-    const draft = buildReplyTemplate({
+  function applyContactTemplate() {
+    const draft = buildContactReplyTemplate({
+      locale,
+      name: customerName,
+      service: serviceLabel,
+    });
+    setSubject(draft.subject);
+    setBody(draft.body);
+  }
+
+  function applyProjectTemplate() {
+    const draft = buildProjectReplyTemplate({
       locale,
       name: customerName,
       projectType: projectTypeLabel,
@@ -108,13 +126,23 @@ export function AdminReplyForm({
               <strong>support@tool2day.com</strong>
             </p>
             <div className="admin-reply-toolbar">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={applyTemplate}
-              >
-                {adminAr.replyUseTemplate}
-              </button>
+              {inquiryType === "contact" ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={applyContactTemplate}
+                >
+                  {adminAr.replyContactTemplate}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={applyProjectTemplate}
+                >
+                  {adminAr.replyUseTemplate}
+                </button>
+              )}
             </div>
             <label>
               <span>{adminAr.replySubject}</span>
