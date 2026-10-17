@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Script from "next/script";
 import { Figtree, Syne } from "next/font/google";
 import { site } from "@/content";
 import { CookieConsent } from "@/components/CookieConsent";
 import "./globals.css";
+
+const ADSENSE_CLIENT = "ca-pub-7400919002829882";
 
 const syne = Syne({
   variable: "--font-syne",
@@ -33,6 +36,9 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
     shortcut: "/favicon-48.png",
   },
+  other: {
+    "google-adsense-account": ADSENSE_CLIENT,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -43,6 +49,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-full">
+        <Script
+          id="adsense-loader"
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
         {children}
         <Suspense fallback={null}>
           <CookieConsent />
