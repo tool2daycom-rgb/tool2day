@@ -1290,6 +1290,25 @@ a:hover {
   align-items: center;
 }
 
+.admin-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.admin-btn-archive {
+  color: var(--forest);
+}
+
+.admin-btn-delete {
+  color: #a11;
+}
+
+.admin-btn-delete:hover {
+  border-color: rgba(170, 17, 17, 0.35);
+}
+
 .admin-list-main h2 {
   margin: 0.35rem 0 0.15rem;
   font-size: 1.1rem;

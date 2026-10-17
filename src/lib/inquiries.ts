@@ -276,6 +276,13 @@ export async function updateInquiry(
     .where(eq(inquiries.id, id));
 }
 
+export async function deleteInquiry(id: string) {
+  await ensureInquiryTable();
+  const db = getDb();
+  await db.delete(inquiryReplies).where(eq(inquiryReplies.inquiryId, id));
+  await db.delete(inquiries).where(eq(inquiries.id, id));
+}
+
 export async function countByStatus() {
   await ensureInquiryTable();
   const db = getDb();

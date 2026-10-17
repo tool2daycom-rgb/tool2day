@@ -5,11 +5,23 @@ import { redirect } from "next/navigation";
 import { inquiryStatuses, type InquiryStatus } from "@/db/schema";
 import { getAdminSession } from "@/lib/auth";
 import {
+  deleteInquiry,
   getInquiry,
   saveInquiryReply,
   updateInquiry,
 } from "@/lib/inquiries";
 import { sendCustomerReply } from "@/lib/mail";
+
+function revalidateInquiryPaths(id?: string) {
+  revalidatePath("/admin");
+  revalidatePath("/admin/inquiries");
+  if (id) revalidatePath(`/admin/${id}`);
+}
+
+function safeAdminPath(path: string, fallback = "/admin/inquiries") {
+  if (!path.startsWith("/admin")) return fallback;
+  return path;
+}
 
 export async function updateInquiryAction(formData: FormData) {
   const session = await getAdminSession();
@@ -22,14 +34,58 @@ export async function updateInquiryAction(formData: FormData) {
   const internalNote = String(formData.get("internalNote") || "");
 
   if (!id || !inquiryStatuses.includes(status)) {
-    redirect("/admin");
+    redirect("/admin/inquiries");
   }
 
   await updateInquiry(id, { status, internalNote });
-  revalidatePath("/admin");
-  revalidatePath("/admin/inquiries");
-  revalidatePath(`/admin/${id}`);
+  revalidateInquiryPaths(id);
   redirect(`/admin/${id}?saved=1`);
+}
+
+export async function archiveInquiryAction(formData: FormData) {
+  const session = await getAdminSession();
+  if (!session) {
+    redirect("/admin/login");
+  }
+
+  const id = String(formData.get("id") || "").trim();
+  const next = safeAdminPath(String(formData.get("next") || "/admin/inquiries"));
+  if (!id) redirect("/admin/inquiries");
+
+  await updateInquiry(id, { status: "archived" });
+  revalidateInquiryPaths(id);
+
+  const url = new URL(next, "https://tool2day.com");
+  url.searchParams.set("archived", "1");
+  redirect(`${url.pathname}?${url.searchParams.toString()}`);
+}
+
+export async function unarchiveInquiryAction(formData: FormData) {
+  const session = await getAdminSession();
+  if (!session) {
+    redirect("/admin/login");
+  }
+
+  const id = String(formData.get("id") || "").trim();
+  if (!id) redirect("/admin/inquiries");
+
+  await updateInquiry(id, { status: "in_progress" });
+  revalidateInquiryPaths(id);
+  redirect(`/admin/${id}?saved=1`);
+}
+
+export async function deleteInquiryAction(formData: FormData) {
+  const session = await getAdminSession();
+  if (!session) {
+    redirect("/admin/login");
+  }
+
+  const id = String(formData.get("id") || "").trim();
+  if (!id) redirect("/admin/inquiries");
+
+  await deleteInquiry(id);
+  revalidateInquiryPaths(id);
+  redirect("/admin/inquiries?deleted=1");
 }
 
 export type SendReplyState = {
@@ -77,8 +133,6 @@ export async function sendReplyAction(
     fromEmail: result.fromEmail,
   });
 
-  revalidatePath("/admin");
-  revalidatePath("/admin/inquiries");
-  revalidatePath(`/admin/${id}`);
+  revalidateInquiryPaths(id);
   redirect(`/admin/${id}?replied=1`);
 }

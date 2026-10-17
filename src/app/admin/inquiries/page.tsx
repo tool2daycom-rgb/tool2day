@@ -2,6 +2,8 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { adminAr, statusLabel, typeLabel } from "@/content/admin-ar";
+import { AdminInquiryFilters } from "@/components/admin/AdminInquiryFilters";
+import { AdminInquiryRowActions } from "@/components/admin/AdminInquiryRowActions";
 import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
 import { hasDatabaseUrl } from "@/db/client";
 import type { InquiryStatus, InquiryType } from "@/db/schema";
@@ -14,6 +16,8 @@ type Props = {
     status?: string;
     q?: string;
     period?: string;
+    archived?: string;
+    deleted?: string;
   }>;
 };
 
@@ -22,6 +26,21 @@ function formatWhen(date: Date) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function currentListHref(input: {
+  type: string;
+  status: string;
+  q: string;
+  period: string;
+}) {
+  const params = new URLSearchParams();
+  if (input.type !== "all") params.set("type", input.type);
+  if (input.status !== "all") params.set("status", input.status);
+  if (input.period === "week") params.set("period", "week");
+  if (input.q) params.set("q", input.q);
+  const query = params.toString();
+  return query ? `/admin/inquiries?${query}` : "/admin/inquiries";
 }
 
 export default async function AdminInquiriesPage({ searchParams }: Props) {
@@ -61,6 +80,7 @@ export default async function AdminInquiriesPage({ searchParams }: Props) {
       : "all";
   const period = params.period === "week" ? "week" : "all";
   const q = params.q?.trim() || "";
+  const listHref = currentListHref({ type, status, q, period });
 
   const rows = await listInquiries({ type, status, q, period });
 
@@ -79,34 +99,21 @@ export default async function AdminInquiriesPage({ searchParams }: Props) {
         <AdminLogoutButton />
       </header>
 
-      <form className="admin-filters" method="get">
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder={adminAr.search}
-          aria-label={adminAr.search}
-        />
-        <select name="type" defaultValue={type} aria-label={adminAr.allTypes}>
-          <option value="all">{adminAr.allTypes}</option>
-          <option value="contact">{adminAr.typeContact}</option>
-          <option value="project">{adminAr.typeProject}</option>
-        </select>
-        <select name="status" defaultValue={status} aria-label={adminAr.allStatuses}>
-          <option value="all">{adminAr.allStatuses}</option>
-          <option value="new">{adminAr.statusNew}</option>
-          <option value="in_progress">{adminAr.statusInProgress}</option>
-          <option value="replied">{adminAr.statusReplied}</option>
-          <option value="archived">{adminAr.statusArchived}</option>
-        </select>
-        {period === "week" ? <input type="hidden" name="period" value="week" /> : null}
-        <button type="submit" className="btn btn-primary">
-          {adminAr.searchBtn}
-        </button>
-      </form>
+      {params.archived ? <p className="admin-success">{adminAr.archivedDone}</p> : null}
+      {params.deleted ? <p className="admin-success">{adminAr.deletedDone}</p> : null}
+
+      <AdminInquiryFilters type={type} status={status} q={q} period={period} />
 
       {period === "week" ? (
         <p className="admin-filter-hint">{adminAr.cardThisWeek}</p>
+      ) : null}
+
+      {status !== "all" || type !== "all" || q || period === "week" ? (
+        <p className="admin-filter-hint">
+          النتائج: {rows.length}
+          {status !== "all" ? ` · ${statusLabel(status)}` : ""}
+          {type !== "all" ? ` · ${typeLabel(type)}` : ""}
+        </p>
       ) : null}
 
       {rows.length === 0 ? (
@@ -128,9 +135,11 @@ export default async function AdminInquiriesPage({ searchParams }: Props) {
                 <p>{row.email}</p>
                 <p className="admin-muted">{formatWhen(row.createdAt)}</p>
               </div>
-              <Link className="btn btn-ghost" href={`/admin/${row.id}`}>
-                {adminAr.open}
-              </Link>
+              <AdminInquiryRowActions
+                id={row.id}
+                status={row.status}
+                listHref={listHref}
+              />
             </li>
           ))}
         </ul>

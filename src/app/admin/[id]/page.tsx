@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { updateInquiryAction } from "@/app/admin/actions";
 import { adminAr, statusLabel, typeLabel } from "@/content/admin-ar";
+import { AdminInquiryRowActions } from "@/components/admin/AdminInquiryRowActions";
 import { AdminLogoutButton } from "@/components/admin/AdminLogoutButton";
 import { AdminReplyForm } from "@/components/admin/AdminReplyForm";
 import { hasDatabaseUrl } from "@/db/client";
@@ -232,6 +233,14 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
             {adminAr.save}
           </button>
         </form>
+
+        <AdminInquiryRowActions
+          id={inquiry.id}
+          status={inquiry.status}
+          listHref="/admin/inquiries"
+          showOpen={false}
+          showUnarchive
+        />
       </section>
     </main>
   );
