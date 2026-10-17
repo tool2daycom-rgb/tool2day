@@ -113,8 +113,12 @@ export async function createInquiry(
         fields: [{ label: "الخدمة المطلوبة", value: input.service }],
         messagePreview: input.message,
       });
-    } catch {
+    } catch (error) {
       // Inquiry stays saved even if notification fails.
+      console.error("[inquiries] contact notification failed", {
+        id,
+        message: error instanceof Error ? error.message : "unknown",
+      });
     }
 
     return { id };
@@ -158,8 +162,12 @@ export async function createInquiry(
       ],
       messagePreview: input.details,
     });
-  } catch {
+  } catch (error) {
     // Inquiry stays saved even if notification fails.
+    console.error("[inquiries] project notification failed", {
+      id,
+      message: error instanceof Error ? error.message : "unknown",
+    });
   }
 
   return { id };

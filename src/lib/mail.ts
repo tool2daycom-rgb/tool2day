@@ -34,6 +34,18 @@ function createTransporter() {
   });
 }
 
+function notificationRecipients() {
+  const raw = process.env.MAIL_TO?.trim() || SUPPORT_EMAIL;
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 export async function sendInquiryNotification(input: {
   type: "contact" | "project";
   name: string;
@@ -44,11 +56,12 @@ export async function sendInquiryNotification(input: {
   messagePreview?: string;
 }) {
   if (!mailConfigured()) {
+    console.error("[mail] inquiry notification skipped: smtp_not_configured");
     return { sent: false as const, reason: "smtp_not_configured" as const };
   }
 
   const from = supportFromAddress();
-  const to = process.env.MAIL_TO?.trim() || SUPPORT_EMAIL;
+  const to = notificationRecipients();
   const transporter = createTransporter();
   const site = process.env.NEXT_PUBLIC_SITE_URL || "https://tool2day.com";
   const adminUrl = `${site}/admin/${input.id}`;
@@ -86,16 +99,29 @@ export async function sendInquiryNotification(input: {
     adminUrl,
   });
 
-  await transporter.sendMail({
-    from,
-    to,
-    replyTo: input.email,
-    subject,
-    text,
-    html,
-  });
-
-  return { sent: true as const };
+  try {
+    const info = await transporter.sendMail({
+      from,
+      to,
+      replyTo: input.email,
+      subject,
+      text,
+      html,
+    });
+    console.info("[mail] inquiry notification sent", {
+      id: input.id,
+      toCount: to.length,
+      messageId: info.messageId,
+    });
+    return { sent: true as const };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown_error";
+    console.error("[mail] inquiry notification failed", {
+      id: input.id,
+      message,
+    });
+    throw error;
+  }
 }
 
 export async function sendCustomerReply(input: {
