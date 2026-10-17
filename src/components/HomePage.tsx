@@ -2,8 +2,8 @@ import Image from "next/image";
 import type { Dictionary, Locale } from "@/content";
 import { site } from "@/content";
 import { Header } from "./Header";
-import { Logo } from "./Logo";
 import { ContactForm } from "./ContactForm";
+import { SiteFooter } from "./SiteFooter";
 
 type Props = {
   locale: Locale;
@@ -11,8 +11,6 @@ type Props = {
 };
 
 export function HomePage({ locale, t }: Props) {
-  const year = 2026;
-
   return (
     <>
       <Header locale={locale} t={t} />
@@ -63,7 +61,11 @@ export function HomePage({ locale, t }: Props) {
             </header>
             <ul className="service-grid">
               {t.services.items.map((item, index) => (
-                <li key={item.id} className={`service-card ${index === 0 ? "is-featured" : ""}`}>
+                <li
+                  key={item.id}
+                  id={item.id}
+                  className={`service-card ${index === 0 ? "is-featured" : ""}`}
+                >
                   <p className="card-label">{item.label}</p>
                   <h3>{item.title}</h3>
                   <p>{item.text}</p>
@@ -184,48 +186,7 @@ export function HomePage({ locale, t }: Props) {
         </section>
       </main>
 
-      <footer className="site-footer">
-        <div className="shell footer-grid">
-          <div>
-            <Logo locale={locale} />
-            <p>{t.footer.blurb}</p>
-          </div>
-          <div>
-            <h2>{t.footer.navTitle}</h2>
-            <ul>
-              <li>
-                <a href="#services">{t.nav.services}</a>
-              </li>
-              <li>
-                <a href="#work">{t.nav.work}</a>
-              </li>
-              <li>
-                <a href="#contact">{t.nav.contact}</a>
-              </li>
-            </ul>
-          </div>
-          <div>
-            <h2>{t.footer.legalTitle}</h2>
-            <ul>
-              <li>
-                <a href={site.legal.imprint}>{t.footer.imprint}</a>
-              </li>
-              <li>
-                <a href={site.legal.privacy}>{t.footer.privacy}</a>
-              </li>
-            </ul>
-            <p className="legal-hint">{t.footer.legalHint}</p>
-          </div>
-        </div>
-        <div className="shell footer-bottom">
-          <p>
-            © {year} {t.footer.rights}
-          </p>
-          <a className="btn btn-primary btn-compact" href={`/${locale}/start`}>
-            {t.nav.cta}
-          </a>
-        </div>
-      </footer>
+      <SiteFooter locale={locale} t={t} />
     </>
   );
 }

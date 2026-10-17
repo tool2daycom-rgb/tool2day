@@ -63,12 +63,19 @@ export type Dictionary = {
   };
   footer: {
     blurb: string;
-    navTitle: string;
-    legalTitle: string;
+    servicesTitle: string;
+    companyTitle: string;
+    websites: string;
+    webapps: string;
+    mobile: string;
+    hosting: string;
+    about: string;
+    projects: string;
+    contact: string;
     imprint: string;
     privacy: string;
-    legalHint: string;
     rights: string;
+    whatsappAria: string;
   };
 };
 
@@ -227,12 +234,19 @@ export const de: Dictionary = {
   },
   footer: {
     blurb:
-      "tool2day — unabhängiges Studio für Websites und Apps. Persönlich, klar, praxisnah.",
-    navTitle: "Navigation",
-    legalTitle: "Rechtliches",
+      "Wir gestalten und entwickeln Websites, Apps und digitale Lösungen für kleine Unternehmen.",
+    servicesTitle: "Leistungen",
+    companyTitle: "Unternehmen",
+    websites: "Websites",
+    webapps: "Web-Apps",
+    mobile: "Mobile Apps",
+    hosting: "Hosting",
+    about: "Über uns",
+    projects: "Projekte",
+    contact: "Kontakt",
     imprint: "Impressum",
     privacy: "Datenschutz",
-    legalHint: "Links vor dem Launch in Deutschland ergänzen.",
-    rights: "tool2day",
+    rights: "Tool2day. Alle Rechte vorbehalten.",
+    whatsappAria: "WhatsApp öffnen",
   },
 };
