@@ -95,53 +95,57 @@ export function AdminReplyForm({
               </ul>
               <p>{adminAr.mailSetupAfter}</p>
             </div>
-          ) : (
-            <form action={action} className="admin-edit-form">
-              <input type="hidden" name="id" value={inquiryId} />
-              <p className="admin-reply-meta">
-                <span>{adminAr.replyTo}</span>
-                <strong>{toEmail}</strong>
-              </p>
-              <p className="admin-reply-meta">
-                <span>{adminAr.replyFrom}</span>
-                <strong>support@tool2day.com</strong>
-              </p>
-              <div className="admin-reply-toolbar">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={applyTemplate}
-                >
-                  {adminAr.replyUseTemplate}
-                </button>
-              </div>
-              <label>
-                <span>{adminAr.replySubject}</span>
-                <input
-                  name="subject"
-                  required
-                  maxLength={200}
-                  value={subject}
-                  onChange={(event) => setSubject(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>{adminAr.replyBody}</span>
-                <textarea
-                  name="body"
-                  required
-                  rows={14}
-                  maxLength={20000}
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                />
-              </label>
-              {state.error ? <p className="admin-error">{state.error}</p> : null}
-              <button type="submit" className="btn btn-primary" disabled={pending}>
-                {pending ? adminAr.replySending : adminAr.replySend}
+          ) : null}
+
+          <form action={action} className="admin-edit-form">
+            <input type="hidden" name="id" value={inquiryId} />
+            <p className="admin-reply-meta">
+              <span>{adminAr.replyTo}</span>
+              <strong>{toEmail}</strong>
+            </p>
+            <p className="admin-reply-meta">
+              <span>{adminAr.replyFrom}</span>
+              <strong>support@tool2day.com</strong>
+            </p>
+            <div className="admin-reply-toolbar">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={applyTemplate}
+              >
+                {adminAr.replyUseTemplate}
               </button>
-            </form>
-          )}
+            </div>
+            <label>
+              <span>{adminAr.replySubject}</span>
+              <input
+                name="subject"
+                required
+                maxLength={200}
+                value={subject}
+                onChange={(event) => setSubject(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>{adminAr.replyBody}</span>
+              <textarea
+                name="body"
+                required
+                rows={14}
+                maxLength={20000}
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+              />
+            </label>
+            {state.error ? <p className="admin-error">{state.error}</p> : null}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={pending || !mailReady}
+            >
+              {pending ? adminAr.replySending : adminAr.replySend}
+            </button>
+          </form>
         </div>
       ) : null}
     </div>
