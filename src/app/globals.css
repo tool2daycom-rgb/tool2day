@@ -1403,10 +1403,111 @@ a:hover {
   margin-top: 0.85rem;
 }
 
+.admin-dash-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+.admin-dash-card {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  min-height: 9.5rem;
+  padding: 1.25rem 1.2rem 1.1rem;
+  border-radius: 1.15rem;
+  background: #fff;
+  border: 1px solid rgba(21, 32, 24, 0.06);
+  box-shadow: 0 10px 28px rgba(21, 32, 24, 0.06);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.admin-dash-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px rgba(21, 32, 24, 0.1);
+  border-color: rgba(21, 32, 24, 0.12);
+}
+
+.admin-dash-card:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 3px;
+}
+
+.admin-dash-card-title {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.admin-dash-card-count {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 2.45rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.admin-dash-card-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 0.15rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(197, 242, 109, 0.38);
+  color: var(--forest);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.admin-dash-card-link {
+  margin-top: auto;
+  padding-top: 0.85rem;
+  color: var(--forest);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.admin-filter-hint {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+@media (min-width: 560px) {
+  .admin-dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (min-width: 720px) {
   .admin-filters {
     grid-template-columns: 1.4fr 0.8fr 0.8fr auto;
     align-items: center;
+  }
+
+  .admin-dash-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .admin-main {
+    width: min(1080px, calc(100% - 2rem));
+  }
+
+  .admin-dash-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

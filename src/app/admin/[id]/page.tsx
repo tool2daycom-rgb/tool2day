@@ -61,7 +61,7 @@ export default async function AdminInquiryPage({ params, searchParams }: Props) 
           <h1>{adminAr.detailsTitle}</h1>
         </div>
         <div className="admin-top-actions">
-          <Link href="/admin" className="admin-link-btn">
+          <Link href="/admin/inquiries" className="admin-link-btn">
             {adminAr.back}
           </Link>
           <AdminLogoutButton />

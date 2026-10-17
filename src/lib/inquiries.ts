@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { ensureInquiryTable, getDb, hasDatabaseUrl } from "@/db/client";
 import {
@@ -166,10 +166,20 @@ export async function createInquiry(
   return { id };
 }
 
+function startOfCurrentWeekUtc(now = new Date()) {
+  const day = now.getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + mondayOffset),
+  );
+  return start;
+}
+
 export async function listInquiries(filters: {
   type?: InquiryType | "all";
   status?: InquiryStatus | "all";
   q?: string;
+  period?: "week" | "all";
 }) {
   await ensureInquiryTable();
   const db = getDb();
@@ -180,6 +190,9 @@ export async function listInquiries(filters: {
   }
   if (filters.status && filters.status !== "all") {
     clauses.push(eq(inquiries.status, filters.status));
+  }
+  if (filters.period === "week") {
+    clauses.push(gte(inquiries.createdAt, startOfCurrentWeekUtc()));
   }
   if (filters.q?.trim()) {
     const q = `%${filters.q.trim()}%`;
@@ -193,6 +206,44 @@ export async function listInquiries(filters: {
     .where(where)
     .orderBy(desc(inquiries.createdAt))
     .limit(200);
+}
+
+export type InquiryDashboardStats = {
+  total: number;
+  newProjects: number;
+  newContacts: number;
+  inProgress: number;
+  replied: number;
+  archived: number;
+  thisWeek: number;
+};
+
+export async function getInquiryDashboardStats(): Promise<InquiryDashboardStats> {
+  await ensureInquiryTable();
+  const db = getDb();
+  const weekStart = startOfCurrentWeekUtc();
+
+  const [row] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      newProjects: sql<number>`count(*) filter (where type = 'project' and status = 'new')::int`,
+      newContacts: sql<number>`count(*) filter (where type = 'contact' and status = 'new')::int`,
+      inProgress: sql<number>`count(*) filter (where status = 'in_progress')::int`,
+      replied: sql<number>`count(*) filter (where status = 'replied')::int`,
+      archived: sql<number>`count(*) filter (where status = 'archived')::int`,
+      thisWeek: sql<number>`count(*) filter (where created_at >= ${weekStart})::int`,
+    })
+    .from(inquiries);
+
+  return {
+    total: row?.total ?? 0,
+    newProjects: row?.newProjects ?? 0,
+    newContacts: row?.newContacts ?? 0,
+    inProgress: row?.inProgress ?? 0,
+    replied: row?.replied ?? 0,
+    archived: row?.archived ?? 0,
+    thisWeek: row?.thisWeek ?? 0,
+  };
 }
 
 export async function getInquiry(id: string) {
