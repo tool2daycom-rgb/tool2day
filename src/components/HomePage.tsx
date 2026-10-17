@@ -6,6 +6,7 @@ import { Header } from "./Header";
 import { ContactForm } from "./ContactForm";
 import { SiteFooter } from "./SiteFooter";
 import { WorkProjectCard } from "./WorkProjectCard";
+import { AboutSection } from "./AboutSection";
 
 type Props = {
   locale: Locale;
@@ -94,32 +95,7 @@ export function HomePage({ locale, t }: Props) {
           </div>
         </section>
 
-        <section id="why" className="section about-section" aria-labelledby="why-title">
-          <div className="shell about-layout">
-            <div className="about-portrait">
-              <Image
-                src="/about-portrait.jpg"
-                alt={t.why.imageAlt}
-                width={571}
-                height={1024}
-                className="about-portrait-image"
-                sizes="(max-width: 720px) 72vw, 280px"
-              />
-            </div>
-            <div className="about-copy">
-              <p className="eyebrow">{t.why.eyebrow}</p>
-              <h2 id="why-title">{t.why.title}</h2>
-              {t.why.body.map((paragraph) => (
-                <p key={paragraph.slice(0, 32)} className="about-text">
-                  {paragraph}
-                </p>
-              ))}
-              <a className="btn btn-primary about-cta" href={`/${locale}/start`}>
-                {t.why.cta}
-              </a>
-            </div>
-          </div>
-        </section>
+        <AboutSection locale={locale} t={t.why} />
 
         <section id="process" className="section section-process" aria-labelledby="process-title">
           <div className="shell">
