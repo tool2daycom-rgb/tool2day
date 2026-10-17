@@ -183,7 +183,7 @@ export function HomePage({ locale, t }: Props) {
       <footer className="site-footer">
         <div className="shell footer-grid">
           <div>
-            <Logo locale={locale} variant="mark" />
+            <Logo locale={locale} />
             <p>{t.footer.blurb}</p>
           </div>
           <div>

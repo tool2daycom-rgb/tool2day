@@ -39,7 +39,7 @@ export function Header({ locale, t }: Props) {
   return (
     <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
       <div className="shell header-inner">
-        <Logo locale={locale} variant="mark" />
+        <Logo locale={locale} />
 
         <nav className="nav-desktop" aria-label="Primary">
           {links.map((link) => (
