@@ -26,6 +26,7 @@ import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { Logo } from "@/components/Logo";
 import { LiveSitePreview } from "./LiveSitePreview";
 import { LiveWebappPreview } from "./LiveWebappPreview";
+import { LiveMobilePreview } from "./LiveMobilePreview";
 import {
   clearFormState,
   initialFormState,
@@ -37,6 +38,7 @@ import {
 } from "./formState";
 import { getPreviewCopy } from "@/content/preview-i18n";
 import { getWebappPreviewCopy } from "@/content/webapp-preview-i18n";
+import { getMobilePreviewCopy } from "@/content/mobile-preview-i18n";
 
 const TOTAL_STEPS = 5;
 
@@ -52,17 +54,25 @@ export function StartProjectForm({ locale }: Props) {
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [mobilePane, setMobilePane] = useState<"options" | "preview">("options");
-  const [previewKind, setPreviewKind] = useState<"site" | "app">("site");
+  const [previewKind, setPreviewKind] = useState<"site" | "app" | "mobile">("site");
   const previewCopy = getPreviewCopy(locale);
   const webappPreviewCopy = getWebappPreviewCopy(locale);
+  const mobilePreviewCopy = getMobilePreviewCopy(locale);
   const showWebsitePreview = showsWebsiteFeatures(state.projectTypes);
   const showWebappPreview = showsWebappFeatures(state.projectTypes);
-  const showLivePanel = showWebsitePreview || showWebappPreview;
+  const showMobilePreview = showsMobileFeatures(state.projectTypes);
+  const showLivePanel = showWebsitePreview || showWebappPreview || showMobilePreview;
+  const previewKindCount =
+    Number(showWebsitePreview) + Number(showWebappPreview) + Number(showMobilePreview);
 
   useEffect(() => {
-    if (showWebappPreview && !showWebsitePreview) setPreviewKind("app");
-    if (showWebsitePreview && !showWebappPreview) setPreviewKind("site");
-  }, [showWebsitePreview, showWebappPreview]);
+    if (previewKind === "site" && showWebsitePreview) return;
+    if (previewKind === "app" && showWebappPreview) return;
+    if (previewKind === "mobile" && showMobilePreview) return;
+    if (showWebsitePreview) setPreviewKind("site");
+    else if (showWebappPreview) setPreviewKind("app");
+    else if (showMobilePreview) setPreviewKind("mobile");
+  }, [showWebsitePreview, showWebappPreview, showMobilePreview, previewKind]);
 
   useEffect(() => {
     setState(loadFormState());
@@ -395,31 +405,66 @@ export function StartProjectForm({ locale }: Props) {
                         }
                       />
                     ) : null}
+
+                    {showMobilePreview ? (
+                      <FeatureGroup
+                        title={t.steps[2].mobileTitle}
+                        features={MOBILE_FEATURES}
+                        labels={t.mobileFeatures}
+                        selected={state.mobileFeatures}
+                        sizeLabel={sizeLabel}
+                        viewExampleLabel={mobilePreviewCopy.viewExample}
+                        demoOnlyLabel={mobilePreviewCopy.demoOnly}
+                        demoBadge={mobilePreviewCopy.demoBadge}
+                        onToggle={(id) =>
+                          update("mobileFeatures", toggleInList(state.mobileFeatures, id))
+                        }
+                      />
+                    ) : null}
                   </div>
                   <aside
                     className={`step2-preview ${mobilePane === "preview" ? "is-mobile-active" : ""}`}
                     aria-label={previewCopy.tabPreview}
                   >
-                    {showWebsitePreview && showWebappPreview ? (
-                      <div className="preview-kind-toggle" role="tablist" aria-label="Preview type">
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={previewKind === "site"}
-                          className={previewKind === "site" ? "is-active" : undefined}
-                          onClick={() => setPreviewKind("site")}
-                        >
-                          {webappPreviewCopy.kindWebsite}
-                        </button>
-                        <button
-                          type="button"
-                          role="tab"
-                          aria-selected={previewKind === "app"}
-                          className={previewKind === "app" ? "is-active" : undefined}
-                          onClick={() => setPreviewKind("app")}
-                        >
-                          {webappPreviewCopy.kindApp}
-                        </button>
+                    {previewKindCount > 1 ? (
+                      <div
+                        className={`preview-kind-toggle ${previewKindCount === 3 ? "is-triple" : ""}`}
+                        role="tablist"
+                        aria-label="Preview type"
+                      >
+                        {showWebsitePreview ? (
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={previewKind === "site"}
+                            className={previewKind === "site" ? "is-active" : undefined}
+                            onClick={() => setPreviewKind("site")}
+                          >
+                            {webappPreviewCopy.kindWebsite}
+                          </button>
+                        ) : null}
+                        {showWebappPreview ? (
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={previewKind === "app"}
+                            className={previewKind === "app" ? "is-active" : undefined}
+                            onClick={() => setPreviewKind("app")}
+                          >
+                            {webappPreviewCopy.kindApp}
+                          </button>
+                        ) : null}
+                        {showMobilePreview ? (
+                          <button
+                            type="button"
+                            role="tab"
+                            aria-selected={previewKind === "mobile"}
+                            className={previewKind === "mobile" ? "is-active" : undefined}
+                            onClick={() => setPreviewKind("mobile")}
+                          >
+                            {mobilePreviewCopy.kindMobile}
+                          </button>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -431,30 +476,24 @@ export function StartProjectForm({ locale }: Props) {
                       />
                     ) : null}
 
-                    {(previewKind === "app" || (!showWebsitePreview && showWebappPreview)) &&
-                    showWebappPreview ? (
+                    {previewKind === "app" && showWebappPreview ? (
                       <LiveWebappPreview
                         locale={locale}
                         selected={state.webappFeatures}
                         featureLabels={t.webappFeatures}
                       />
                     ) : null}
+
+                    {previewKind === "mobile" && showMobilePreview ? (
+                      <LiveMobilePreview
+                        locale={locale}
+                        selected={state.mobileFeatures}
+                        featureLabels={t.mobileFeatures}
+                      />
+                    ) : null}
                   </aside>
                 </div>
               </>
-            ) : null}
-
-            {showsMobileFeatures(state.projectTypes) ? (
-              <FeatureGroup
-                title={t.steps[2].mobileTitle}
-                features={MOBILE_FEATURES}
-                labels={t.mobileFeatures}
-                selected={state.mobileFeatures}
-                sizeLabel={sizeLabel}
-                onToggle={(id) =>
-                  update("mobileFeatures", toggleInList(state.mobileFeatures, id))
-                }
-              />
             ) : null}
 
             {showsHostingFeatures(state.projectTypes) ? (

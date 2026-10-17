@@ -2130,3 +2130,212 @@ a:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.preview-kind-toggle.is-triple {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Mobile phone preview */
+.mobile-frame-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0.75rem 1.25rem;
+}
+
+.phone-bezel {
+  width: min(100%, 20rem);
+  border-radius: 2rem;
+  background: #0d1510;
+  padding: 0.7rem 0.55rem 0.85rem;
+  box-shadow: 0 18px 40px rgba(13, 21, 16, 0.28);
+  position: relative;
+}
+
+.phone-notch {
+  width: 7rem;
+  height: 1.05rem;
+  margin: 0 auto 0.55rem;
+  border-radius: 999px;
+  background: #050805;
+}
+
+.phone-screen {
+  background: #f4f7f2;
+  border-radius: 1.35rem;
+  min-height: 28rem;
+  max-height: min(62vh, 560px);
+  overflow: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-toast {
+  position: sticky;
+  top: 0.45rem;
+  z-index: 2;
+  margin: 0.45rem 0.55rem 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 20px rgba(21, 32, 24, 0.12);
+  display: grid;
+  gap: 0.15rem;
+}
+
+.phone-toast strong {
+  font-size: 0.82rem;
+}
+
+.phone-toast span {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.phone-toast em {
+  font-style: normal;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.phone-offline-bar {
+  margin: 0.4rem 0.55rem 0;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: #1a2b1f;
+  color: #c5f26d;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.phone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem 0.45rem;
+}
+
+.phone-chip {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(197, 242, 109, 0.35);
+  color: var(--forest);
+}
+
+.phone-body {
+  padding: 0.35rem 0.7rem 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+  flex: 1;
+}
+
+.phone-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+}
+
+.phone-card h3,
+.phone-card h4 {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}
+
+.phone-camera {
+  height: 7.5rem;
+  border-radius: 0.85rem;
+  margin: 0.45rem 0 0.65rem;
+  background: radial-gradient(circle at 50% 45%, #2a3a30, #0d1510 70%);
+  display: grid;
+  place-items: center;
+}
+
+.phone-lens {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  border: 3px solid rgba(197, 242, 109, 0.55);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.phone-map {
+  height: 7rem;
+  margin: 0.45rem 0;
+}
+
+.phone-plan {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.45rem 0 0.65rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.75rem;
+  background: rgba(197, 242, 109, 0.22);
+  border: 1px dashed #1a2b1f;
+  font-size: 0.85rem;
+}
+
+.phone-feed {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.phone-feed li {
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.65rem;
+  background: #f7faf5;
+  border: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+
+.phone-stores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin: 0.55rem 0;
+}
+
+.phone-stores span {
+  text-align: center;
+  padding: 0.65rem 0.4rem;
+  border-radius: 0.75rem;
+  background: #1a2b1f;
+  color: #c5f26d;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.phone-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  margin-top: auto;
+  padding: 0.45rem 0.55rem 0.65rem;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.phone-tabs span {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--muted);
+  padding: 0.35rem 0.2rem;
+  border-radius: 0.55rem;
+}
+
+.phone-tabs span.is-active {
+  background: rgba(197, 242, 109, 0.35);
+  color: var(--forest);
+}
