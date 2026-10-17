@@ -189,6 +189,8 @@ type FormCopy = {
   successTitle: string;
   successBody: string;
   successAgain: string;
+  submitting: string;
+  submitError: string;
   steps: {
     1: { title: string; question: string };
     2: {
@@ -267,10 +269,13 @@ const de: FormCopy = {
     contactMethod: "Bitte wähle eine bevorzugte Kontaktart.",
     privacy: "Bitte bestätige die Datenschutzerklärung.",
   },
-  successTitle: "Danke — deine Anfrage ist vorbereitet.",
+  successTitle: "Danke — deine Anfrage ist eingegangen.",
   successBody:
-    "Dein E-Mail-Programm sollte sich mit den Details an support@tool2day.com geöffnet haben. Wenn nicht, schreib uns gerne direkt.",
+    "Wir haben deine Angaben gespeichert und melden uns zeitnah. Bei Bedarf erreichst du uns unter support@tool2day.com.",
   successAgain: "Weitere Anfrage starten",
+  submitting: "Wird gesendet…",
+  submitError:
+    "Die Anfrage konnte nicht gespeichert werden. Bitte versuche es erneut oder schreib an support@tool2day.com.",
   steps: {
     1: {
       title: "Projektart",
@@ -587,10 +592,13 @@ const en: FormCopy = {
     contactMethod: "Please choose a preferred contact method.",
     privacy: "Please confirm the privacy policy.",
   },
-  successTitle: "Thanks — your enquiry is ready.",
+  successTitle: "Thanks — your enquiry was received.",
   successBody:
-    "Your email app should open with the details for support@tool2day.com. If it doesn’t, feel free to write us directly.",
+    "We saved your details and will get back to you soon. You can also reach us at support@tool2day.com.",
   successAgain: "Start another enquiry",
+  submitting: "Sending…",
+  submitError:
+    "Your enquiry could not be saved. Please try again or email support@tool2day.com.",
   steps: {
     1: {
       title: "Project type",

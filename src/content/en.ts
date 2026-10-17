@@ -94,9 +94,8 @@ export const en = {
   contact: {
     eyebrow: "Contact",
     title: "Tell us briefly about your idea",
-    lead:
-      "Send a message — replace the placeholders below with your real contact details before launch.",
-    note: "The form opens your email app with a prepared message. There is no server-side sending yet.",
+    lead: "Send a short message — we will reply with the next steps.",
+    note: "Your enquiry is stored securely. We will get back to you by email.",
     fields: {
       name: "Name",
       email: "Email",
@@ -110,7 +109,14 @@ export const en = {
         "Not sure yet",
       ],
     },
-    submit: "Prepare message",
+    submit: "Send message",
+    submitting: "Sending…",
+    successMessage: "Thanks — your message was saved. We will reply soon.",
+    errorMessage:
+      "Your message could not be sent. Please try again or email support@tool2day.com.",
+    privacyBefore: "I have read the ",
+    privacyLink: "privacy policy",
+    privacyAfter: " and agree to the processing of my details.",
     emailLabel: "Email",
   },
   footer: {

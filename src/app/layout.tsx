@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Figtree, Syne } from "next/font/google";
 import { site } from "@/content";
 import { CookieConsent } from "@/components/CookieConsent";
@@ -43,7 +44,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full">
         {children}
-        <CookieConsent />
+        <Suspense fallback={null}>
+          <CookieConsent />
+        </Suspense>
       </body>
     </html>
   );

@@ -1096,6 +1096,268 @@ a:hover {
   color: var(--lime);
 }
 
+.form-status.is-error {
+  color: #ffb4b4;
+}
+
+.form-status.is-success {
+  color: var(--lime);
+}
+
+.contact-privacy {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  font-size: 0.86rem;
+  color: rgba(244, 247, 242, 0.78);
+  line-height: 1.45;
+}
+
+.contact-privacy input {
+  margin-top: 0.2rem;
+}
+
+.contact-privacy a {
+  color: var(--lime);
+}
+
+.field.honeypot {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* Admin (Arabic RTL) */
+.admin-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(700px 320px at 90% 0%, rgba(197, 242, 109, 0.14), transparent 60%),
+    #f4f7f2;
+  color: var(--ink);
+}
+
+.admin-main {
+  width: min(960px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 1.5rem 0 3rem;
+}
+
+.admin-main-center {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.admin-login-wrap {
+  width: min(420px, 100%);
+}
+
+.admin-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.admin-lead,
+.admin-muted,
+.admin-empty {
+  color: var(--muted);
+}
+
+.admin-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.admin-top h1,
+.admin-login-wrap h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+}
+
+.admin-top-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.admin-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.1rem 1.15rem;
+}
+
+.admin-warning {
+  background: #fff8e8;
+  border-color: #e6d3a0;
+}
+
+.admin-filters {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.admin-filters input,
+.admin-filters select,
+.admin-edit-form input,
+.admin-edit-form select,
+.admin-edit-form textarea,
+.admin-login-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  background: #fff;
+}
+
+.admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-list-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-list-main h2 {
+  margin: 0.35rem 0 0.15rem;
+  font-size: 1.1rem;
+}
+
+.admin-list-main p {
+  margin: 0;
+}
+
+.admin-list-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-pill {
+  display: inline-flex;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(21, 32, 24, 0.08);
+}
+
+.admin-pill.type-contact {
+  background: rgba(197, 242, 109, 0.35);
+}
+
+.admin-pill.type-project {
+  background: rgba(26, 43, 31, 0.12);
+}
+
+.admin-pill.status-new {
+  background: #dff5ff;
+}
+
+.admin-pill.status-in_progress {
+  background: #fff1c9;
+}
+
+.admin-pill.status-replied {
+  background: #d9f5d6;
+}
+
+.admin-pill.status-archived {
+  background: #ececec;
+}
+
+.admin-link-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--forest);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.admin-login-form,
+.admin-edit-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-login-form label,
+.admin-edit-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 650;
+}
+
+.admin-error {
+  margin: 0;
+  color: #a11;
+}
+
+.admin-success {
+  margin: 0 0 0.85rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  background: #e7f6df;
+  color: var(--forest);
+  font-weight: 650;
+}
+
+.admin-dl {
+  margin: 0.75rem 0 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-field dt {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.admin-field dd {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.admin-detail-actions {
+  margin-top: 1rem;
+}
+
+.admin-main .admin-card + .admin-card {
+  margin-top: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .admin-filters {
+    grid-template-columns: 1.4fr 0.8fr 0.8fr auto;
+    align-items: center;
+  }
+}
+
 /* Legal pages */
 .legal-page {
   max-width: 44rem;

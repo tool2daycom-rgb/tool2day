@@ -113,29 +113,30 @@ export default function DatenschutzPage() {
         <p>
           Bei Nutzung des Kontaktformulars oder des Formulars für
           Projektanfragen werden die von Ihnen eingegebenen Daten verarbeitet,
-          um Ihre Anfrage zu bearbeiten.
+          um Ihre Anfrage zu bearbeiten. Die Übermittlung erfolgt über eine
+          gesicherte Verbindung an unsere Server.
         </p>
         <p>
-          Über das Kontaktformular sind das Ihr Name, Ihre E-Mail-Adresse,
-          optional die gewünschte Leistung sowie Ihre Nachricht. Über das
-          Formular für Projektanfragen zusätzlich Angaben wie
-          Unternehmensname, bevorzugter Kontaktweg sowie Art, Zeitrahmen und
-          Budgetrahmen des Projekts. Pflichtangaben sind mindestens Ihr Name,
-          Ihre E-Mail-Adresse und die für die Bearbeitung erforderlichen
-          Angaben zum Vorhaben. Alle übrigen Angaben sind freiwillig.
+          Über das Kontaktformular sind das Ihr Name, Ihre E-Mail-Adresse, die
+          gewünschte Leistung sowie Ihre Nachricht. Über das Formular für
+          Projektanfragen zusätzlich Angaben wie Unternehmensname, Telefon,
+          bevorzugter Kontaktweg sowie Art, Ziele, Funktionen, Zeitrahmen und
+          weitere Projektdetails. Pflichtangaben sind mindestens Ihr Name, Ihre
+          E-Mail-Adresse, die Zustimmung zur Datenschutzerklärung und die für
+          die Bearbeitung erforderlichen Angaben zum Vorhaben. Alle übrigen
+          Angaben sind freiwillig.
         </p>
         <p>
-          Die Formulare öffnen derzeit einen E-Mail-Entwurf über Ihr lokales
-          E-Mail-Programm (mailto). Die Daten werden erst übermittelt, wenn Sie
-          die Nachricht in Ihrem E-Mail-Programm absenden. Eine Speicherung in
-          einer eigenen Anfrage-Datenbank auf unserem Server findet derzeit
-          nicht statt.
+          Die Anfragen werden in einer Datenbank gespeichert und in einem
+          geschützten Administrationsbereich bearbeitet. Zusätzlich kann eine
+          Benachrichtigung an support@tool2day.com versendet werden. Eine
+          Weitergabe an Dritte zu Werbezwecken findet nicht statt.
         </p>
         <p>
           Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO, soweit die
           Verarbeitung der Durchführung vorvertraglicher Maßnahmen dient, im
-          Übrigen Art. 6 Abs. 1 lit. f DSGVO. Eine Weitergabe an Dritte zu
-          Werbezwecken findet nicht statt.
+          Übrigen Art. 6 Abs. 1 lit. a DSGVO (Einwilligung) und Art. 6 Abs. 1
+          lit. f DSGVO.
         </p>
         <p>
           Wir löschen Ihre Anfrage 6 Monate nach abgeschlossener Bearbeitung,
@@ -147,13 +148,21 @@ export default function DatenschutzPage() {
       </section>
 
       <section>
-        <h2>6. Spam-Schutz und Missbrauchsabwehr</h2>
+        <h2>5a. Spam-Schutz bei Formularen</h2>
         <p>
-          Derzeit speichern wir für Formulare keine IP-Adressen zu
-          Rate-Limiting-Zwecken auf unseren eigenen Servern. Technische
-          Maßnahmen des Hosting-Anbieters zum Schutz vor Missbrauch und
-          Angriffen bleiben davon unberührt. Rechtsgrundlage für solche
-          Sicherheitsmaßnahmen ist Art. 6 Abs. 1 lit. f DSGVO.
+          Zum Schutz vor automatisierten Anfragen begrenzen wir die Anzahl der
+          Absendevorgänge pro Absender, prüfen die Zeitspanne zwischen Laden und
+          Absenden und setzen ein unsichtbares Honeypot-Feld ein. Rechtsgrundlage
+          ist Art. 6 Abs. 1 lit. f DSGVO.
+        </p>
+      </section>
+
+      <section>
+        <h2>6. Technische Missbrauchsabwehr</h2>
+        <p>
+          Zusätzlich zu den Formularprüfungen kann der Hosting-Anbieter
+          Verbindungsdaten zur Abwehr von Angriffen verarbeiten.
+          Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.
         </p>
       </section>
 

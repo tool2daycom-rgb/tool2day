@@ -48,6 +48,12 @@ export type Dictionary = {
       serviceOptions: string[];
     };
     submit: string;
+    submitting: string;
+    successMessage: string;
+    errorMessage: string;
+    privacyBefore: string;
+    privacyLink: string;
+    privacyAfter: string;
     emailLabel: string;
   };
   footer: {
@@ -163,9 +169,8 @@ export const de: Dictionary = {
   contact: {
     eyebrow: "Kontakt",
     title: "Erzähl kurz von deinem Vorhaben",
-    lead:
-      "Schick eine Nachricht — die Angaben unten kannst du später durch deine echten Kontaktdaten ersetzen.",
-    note: "Das Formular öffnet deine E-Mail-App mit einer vorbereiteten Nachricht. Es gibt derzeit keinen Serverversand.",
+    lead: "Schick eine kurze Nachricht — wir melden uns mit den nächsten Schritten.",
+    note: "Deine Anfrage wird sicher gespeichert. Wir melden uns zeitnah per E-Mail.",
     fields: {
       name: "Name",
       email: "E-Mail",
@@ -179,7 +184,14 @@ export const de: Dictionary = {
         "Noch unklar",
       ],
     },
-    submit: "Nachricht vorbereiten",
+    submit: "Nachricht senden",
+    submitting: "Wird gesendet…",
+    successMessage: "Danke — deine Nachricht wurde gespeichert. Wir melden uns bald.",
+    errorMessage:
+      "Die Nachricht konnte nicht gesendet werden. Bitte versuche es erneut oder schreib an support@tool2day.com.",
+    privacyBefore: "Ich habe die ",
+    privacyLink: "Datenschutzerklärung",
+    privacyAfter: " gelesen und stimme der Verarbeitung meiner Angaben zu.",
     emailLabel: "E-Mail",
   },
   footer: {

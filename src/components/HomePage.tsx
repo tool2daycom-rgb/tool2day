@@ -154,7 +154,7 @@ export function HomePage({ locale, t }: Props) {
                 </ul>
               ) : null}
             </div>
-            <ContactForm t={t.contact} />
+            <ContactForm locale={locale} t={t.contact} />
           </div>
         </section>
       </main>

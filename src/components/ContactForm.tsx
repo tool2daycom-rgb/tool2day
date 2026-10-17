@@ -1,41 +1,81 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import type { Dictionary } from "@/content";
+import { FormEvent, useEffect, useState } from "react";
+import type { Dictionary, Locale } from "@/content";
 import { site } from "@/content";
 
 type Props = {
+  locale: Locale;
   t: Dictionary["contact"];
 };
 
-export function ContactForm({ t }: Props) {
-  const [status, setStatus] = useState<"idle" | "ready">("idle");
+export function ContactForm({ locale, t }: Props) {
+  const [status, setStatus] = useState<"idle" | "pending" | "success" | "error">(
+    "idle",
+  );
+  const [error, setError] = useState("");
+  const [startedAt, setStartedAt] = useState(0);
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    setStartedAt(Date.now());
+  }, []);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const name = String(data.get("name") || "").trim();
-    const email = String(data.get("email") || "").trim();
-    const service = String(data.get("service") || "").trim();
-    const message = String(data.get("message") || "").trim();
+    setStatus("pending");
+    setError("");
 
-    const subject = encodeURIComponent(`tool2day — ${service || "Enquiry"}`);
-    const body = encodeURIComponent(
-      [
-        `Name: ${name}`,
-        `Email: ${email}`,
-        `Service: ${service}`,
-        "",
-        message,
-      ].join("\n"),
-    );
+    const form = event.currentTarget;
+    const data = new FormData(form);
 
-    window.location.href = `mailto:${site.contactEmail}?subject=${subject}&body=${body}`;
-    setStatus("ready");
+    try {
+      const res = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "contact",
+          locale,
+          name: String(data.get("name") || "").trim(),
+          email: String(data.get("email") || "").trim(),
+          service: String(data.get("service") || "").trim(),
+          message: String(data.get("message") || "").trim(),
+          privacy: data.get("privacy") === "on",
+          website: String(data.get("website") || ""),
+          formStartedAt: startedAt || Date.now(),
+        }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+      };
+
+      if (!res.ok || !json.ok) {
+        setStatus("error");
+        setError(json.message || t.errorMessage);
+        return;
+      }
+
+      form.reset();
+      setStartedAt(Date.now());
+      setStatus("success");
+    } catch {
+      setStatus("error");
+      setError(t.errorMessage);
+    }
   }
 
   return (
     <form className="contact-form" onSubmit={onSubmit} noValidate={false}>
+      <div className="field honeypot" aria-hidden="true">
+        <label htmlFor="website">Website</label>
+        <input
+          id="website"
+          name="website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+        />
+      </div>
       <div className="field">
         <label htmlFor="name">{t.fields.name}</label>
         <input id="name" name="name" type="text" autoComplete="name" required />
@@ -61,13 +101,32 @@ export function ContactForm({ t }: Props) {
         <label htmlFor="message">{t.fields.message}</label>
         <textarea id="message" name="message" rows={5} required />
       </div>
+      <label className="contact-privacy">
+        <input type="checkbox" name="privacy" required />
+        <span>
+          {t.privacyBefore}
+          <a href={site.legal.privacy} target="_blank" rel="noopener noreferrer">
+            {t.privacyLink}
+          </a>
+          {t.privacyAfter}
+        </span>
+      </label>
       <p className="form-note">{t.note}</p>
-      <button type="submit" className="btn btn-primary btn-wide">
-        {t.submit}
+      <button
+        type="submit"
+        className="btn btn-primary btn-wide"
+        disabled={status === "pending"}
+      >
+        {status === "pending" ? t.submitting : t.submit}
       </button>
-      {status === "ready" ? (
-        <p className="form-status" role="status">
-          mailto:{site.contactEmail}
+      {status === "success" ? (
+        <p className="form-status is-success" role="status">
+          {t.successMessage}
+        </p>
+      ) : null}
+      {status === "error" ? (
+        <p className="form-status is-error" role="alert">
+          {error || t.errorMessage}
         </p>
       ) : null}
     </form>

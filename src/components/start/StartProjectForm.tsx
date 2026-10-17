@@ -53,6 +53,8 @@ export function StartProjectForm({ locale }: Props) {
   const [hydrated, setHydrated] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formStartedAt, setFormStartedAt] = useState(0);
   const [mobilePane, setMobilePane] = useState<"options" | "preview">("options");
   const [previewKind, setPreviewKind] = useState<"site" | "app" | "mobile">("site");
   const previewCopy = getPreviewCopy(locale);
@@ -76,6 +78,7 @@ export function StartProjectForm({ locale }: Props) {
 
   useEffect(() => {
     setState(loadFormState());
+    setFormStartedAt(Date.now());
     setHydrated(true);
   }, []);
 
@@ -140,79 +143,54 @@ export function StartProjectForm({ locale }: Props) {
     setStep((s) => Math.max(1, s - 1));
   }
 
-  function buildMailBody() {
-    const lines: string[] = [
-      `tool2day project enquiry (${locale})`,
-      "",
-      `== ${t.summary.types} ==`,
-      ...state.projectTypes.map((id) => `- ${t.projectTypes[id]}`),
-      state.otherProjectNote ? `Note: ${state.otherProjectNote}` : "",
-      "",
-      `== ${t.summary.goals} ==`,
-      ...(state.goals.length
-        ? state.goals.map((id) => `- ${t.goals[id].label}`)
-        : [`- ${t.summary.none}`]),
-      state.otherGoalNote ? `Note: ${state.otherGoalNote}` : "",
-      "",
-      `== ${t.summary.features} ==`,
-    ];
-
-    const pushFeatures = (
-      title: string,
-      ids: string[],
-      labels: Record<string, { label: string }>,
-    ) => {
-      if (!ids.length) return;
-      lines.push(title);
-      ids.forEach((id) => lines.push(`- ${labels[id]?.label ?? id}`));
-    };
-
-    pushFeatures(t.steps[2].websiteTitle, state.websiteFeatures, t.websiteFeatures);
-    pushFeatures(t.steps[2].webappTitle, state.webappFeatures, t.webappFeatures);
-    pushFeatures(t.steps[2].mobileTitle, state.mobileFeatures, t.mobileFeatures);
-    pushFeatures(t.steps[2].hostingTitle, state.hostingFeatures, t.hostingFeatures);
-    if (
-      !state.websiteFeatures.length &&
-      !state.webappFeatures.length &&
-      !state.mobileFeatures.length &&
-      !state.hostingFeatures.length
-    ) {
-      lines.push(`- ${t.summary.none}`);
-    }
-
-    lines.push(
-      "",
-      `== ${t.summary.timeline} ==`,
-      state.timeline ? t.timelines[state.timeline] : t.summary.none,
-      "",
-      `== ${t.summary.details} ==`,
-      state.details.trim() || t.summary.none,
-      "",
-      `== ${t.summary.contact} ==`,
-      `Name: ${state.name}`,
-      `Email: ${state.email}`,
-      `Phone: ${state.phone || t.summary.none}`,
-      `Company: ${state.company || t.summary.none}`,
-      `Preferred: ${state.contactMethod ? t.contactMethods[state.contactMethod] : t.summary.none}`,
-    );
-
-    return lines.filter((line, i, arr) => !(line === "" && arr[i - 1] === "")).join("\n");
-  }
-
-  function onSubmit() {
+  async function onSubmit() {
     const message = validateStep(5);
     if (message) {
       setError(message);
       return;
     }
 
-    const subject = encodeURIComponent(
-      `tool2day — ${locale === "de" ? "Projektanfrage" : "Project enquiry"} — ${state.name}`,
-    );
-    const body = encodeURIComponent(buildMailBody());
-    window.location.href = `mailto:${site.contactEmail}?subject=${subject}&body=${body}`;
-    clearFormState();
-    setSubmitted(true);
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch("/api/inquiries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "project",
+          locale,
+          name: state.name.trim(),
+          email: state.email.trim(),
+          phone: state.phone.trim(),
+          company: state.company.trim(),
+          contactMethod: state.contactMethod,
+          projectTypes: state.projectTypes,
+          otherProjectNote: state.otherProjectNote.trim(),
+          goals: state.goals,
+          otherGoalNote: state.otherGoalNote.trim(),
+          websiteFeatures: state.websiteFeatures,
+          webappFeatures: state.webappFeatures,
+          mobileFeatures: state.mobileFeatures,
+          hostingFeatures: state.hostingFeatures,
+          timeline: state.timeline,
+          details: state.details.trim(),
+          privacy: state.privacy,
+          website: "",
+          formStartedAt: formStartedAt || Date.now(),
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !json.ok) {
+        setError(json.message || t.submitError);
+        return;
+      }
+      clearFormState();
+      setSubmitted(true);
+    } catch {
+      setError(t.submitError);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const summaryBits = useMemo(() => {
@@ -700,8 +678,13 @@ export function StartProjectForm({ locale }: Props) {
               {t.continue}
             </button>
           ) : (
-            <button type="button" className="btn btn-primary" onClick={onSubmit}>
-              {t.submit}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={onSubmit}
+              disabled={submitting}
+            >
+              {submitting ? t.submitting : t.submit}
             </button>
           )}
         </div>
