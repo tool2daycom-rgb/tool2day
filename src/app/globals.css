@@ -2483,3 +2483,149 @@ a:hover {
   background: rgba(197, 242, 109, 0.35);
   color: var(--forest);
 }
+
+.feature-group.is-nested {
+  margin: 0;
+}
+
+.feature-group.is-nested .option-grid {
+  margin-bottom: 0;
+}
+
+.feature-accordion {
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: #fbfcf9;
+  margin-bottom: 0.65rem;
+  overflow: hidden;
+}
+
+.feature-accordion > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.feature-accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.feature-accordion > summary span {
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted);
+  background: rgba(21, 32, 24, 0.06);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.feature-accordion[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.feature-accordion .feature-group {
+  padding: 0.75rem;
+}
+
+.phone-header-actions {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.phone-profile {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.phone-chat {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.phone-chat .bubble {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.85rem;
+  font-size: 0.8rem;
+  max-width: 90%;
+}
+
+.phone-chat .bubble.in {
+  background: #eef3ea;
+  justify-self: start;
+}
+
+.phone-chat .bubble.out {
+  background: #1a2b1f;
+  color: #c5f26d;
+  justify-self: end;
+}
+
+.phone-search-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  margin-bottom: 0.4rem;
+  background: #f7faf5;
+}
+
+.phone-qr {
+  height: 7rem;
+  border-radius: 0.85rem;
+  border: 2px dashed rgba(26, 43, 31, 0.35);
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    repeating-linear-gradient(
+      45deg,
+      rgba(26, 43, 31, 0.08),
+      rgba(26, 43, 31, 0.08) 8px,
+      transparent 8px,
+      transparent 16px
+    );
+  position: relative;
+}
+
+.phone-qr::after {
+  content: "";
+  position: absolute;
+  inset: 1.4rem;
+  border: 2px solid #1a2b1f;
+  border-radius: 0.35rem;
+}
+
+.phone-progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.phone-progress span {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(21, 32, 24, 0.12);
+}
+
+.phone-progress span.is-on {
+  background: #7fbf1a;
+}
+
+.iphone-screen.is-a11y {
+  font-size: 1.05em;
+}
+
+.iphone-screen.is-a11y .phone-card h3,
+.iphone-screen.is-a11y .phone-card h4 {
+  font-size: 1.05rem;
+}

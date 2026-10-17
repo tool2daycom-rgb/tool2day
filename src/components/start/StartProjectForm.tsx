@@ -8,7 +8,7 @@ import {
   CONTACT_METHODS,
   GOALS,
   HOSTING_FEATURES,
-  MOBILE_FEATURES,
+  MOBILE_FEATURE_GROUPS,
   PROJECT_TYPES,
   TIMELINES,
   WEBSITE_FEATURES,
@@ -407,19 +407,50 @@ export function StartProjectForm({ locale }: Props) {
                     ) : null}
 
                     {showMobilePreview ? (
-                      <FeatureGroup
-                        title={t.steps[2].mobileTitle}
-                        features={MOBILE_FEATURES}
-                        labels={t.mobileFeatures}
-                        selected={state.mobileFeatures}
-                        sizeLabel={sizeLabel}
-                        viewExampleLabel={mobilePreviewCopy.viewExample}
-                        demoOnlyLabel={mobilePreviewCopy.demoOnly}
-                        demoBadge={mobilePreviewCopy.demoBadge}
-                        onToggle={(id) =>
-                          update("mobileFeatures", toggleInList(state.mobileFeatures, id))
-                        }
-                      />
+                      <div className="feature-group">
+                        <h3>{t.steps[2].mobileTitle}</h3>
+                        <p className="start-hint">{t.multiSelectHint}</p>
+                        {MOBILE_FEATURE_GROUPS.map((group) => (
+                          <details
+                            key={group.id}
+                            className="feature-accordion"
+                            open={
+                              group.features.some((f) =>
+                                state.mobileFeatures.includes(f.id),
+                              ) || group.id === "accounts"
+                            }
+                          >
+                            <summary>
+                              {t.mobileGroupTitles[group.id]}
+                              <span>
+                                {
+                                  group.features.filter((f) =>
+                                    state.mobileFeatures.includes(f.id),
+                                  ).length
+                                }
+                                /{group.features.length}
+                              </span>
+                            </summary>
+                            <FeatureGroup
+                              title=""
+                              hideTitle
+                              features={group.features}
+                              labels={t.mobileFeatures}
+                              selected={state.mobileFeatures}
+                              sizeLabel={sizeLabel}
+                              viewExampleLabel={mobilePreviewCopy.viewExample}
+                              demoOnlyLabel={mobilePreviewCopy.demoOnly}
+                              demoBadge={mobilePreviewCopy.demoBadge}
+                              onToggle={(id) =>
+                                update(
+                                  "mobileFeatures",
+                                  toggleInList(state.mobileFeatures, id),
+                                )
+                              }
+                            />
+                          </details>
+                        ))}
+                      </div>
                     ) : null}
                   </div>
                   <aside
@@ -747,6 +778,7 @@ function FeatureGroup({
   viewExampleLabel,
   demoOnlyLabel,
   demoBadge,
+  hideTitle = false,
 }: {
   title: string;
   features: { id: string; size: SizeHint }[];
@@ -757,19 +789,22 @@ function FeatureGroup({
   viewExampleLabel?: string;
   demoOnlyLabel?: string;
   demoBadge?: string;
+  hideTitle?: boolean;
 }) {
   return (
-    <div className="feature-group">
-      <h3>{title}</h3>
+    <div className={`feature-group ${hideTitle ? "is-nested" : ""}`}>
+      {!hideTitle && title ? <h3>{title}</h3> : null}
       <div className="option-grid features">
         {features.map((feature) => {
           const isOn = selected.includes(feature.id);
+          const meta = labels[feature.id];
+          if (!meta) return null;
           return (
             <div key={feature.id} className="feature-item">
               <OptionCard
                 selected={isOn}
-                label={labels[feature.id].label}
-                desc={labels[feature.id].desc}
+                label={meta.label}
+                desc={meta.desc}
                 badge={sizeLabel(feature.size)}
                 onToggle={() => onToggle(feature.id)}
               />

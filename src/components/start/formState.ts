@@ -4,6 +4,7 @@ import type {
   ProjectTypeId,
   TimelineId,
 } from "@/content/start-form";
+import { MOBILE_FEATURE_ALIASES } from "@/content/start-form";
 
 export type FormState = {
   projectTypes: ProjectTypeId[];
@@ -50,7 +51,15 @@ export function loadFormState(): FormState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return initialFormState;
-    return { ...initialFormState, ...JSON.parse(raw) };
+    const parsed = { ...initialFormState, ...JSON.parse(raw) } as FormState;
+    parsed.mobileFeatures = Array.from(
+      new Set(
+        (parsed.mobileFeatures || []).map(
+          (id) => MOBILE_FEATURE_ALIASES[id] ?? id,
+        ),
+      ),
+    );
+    return parsed;
   } catch {
     return initialFormState;
   }

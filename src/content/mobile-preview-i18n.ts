@@ -28,38 +28,78 @@ export type MobilePreviewCopy = {
   authTitle: string;
   authEmail: string;
   authPassword: string;
+  authSocial: string;
   authBtn: string;
   authNote: string;
   profileTitle: string;
+  profileName: string;
+  profileEdit: string;
+  chatTitle: string;
+  chatSample: string;
+  chatReply: string;
+  messagesTitle: string;
+  messagesItem: string;
+  reviewsTitle: string;
+  reviewsSample: string;
+  searchTitle: string;
+  searchPlaceholder: string;
+  searchResult: string;
+  favoritesTitle: string;
+  favoritesItem: string;
+  filesTitle: string;
+  filesItem: string;
+  filesBtn: string;
+  langTitle: string;
+  langDe: string;
+  langEn: string;
   pushTitle: string;
   pushBody: string;
   pushTime: string;
+  mapsTitle: string;
+  mapsLead: string;
+  trackingTitle: string;
+  trackingStatus: string;
+  qrTitle: string;
+  qrLead: string;
   cameraTitle: string;
   cameraLead: string;
   cameraBtn: string;
   cameraNote: string;
-  locationTitle: string;
-  locationLead: string;
-  locationStatus: string;
+  cartTitle: string;
+  cartItem: string;
+  cartTotal: string;
+  payTitle: string;
+  payLead: string;
+  payBtn: string;
+  payNote: string;
+  subTitle: string;
+  subPlan: string;
+  subPrice: string;
+  couponTitle: string;
+  couponCode: string;
+  orderTitle: string;
+  orderStep: string;
   offlineTitle: string;
   offlineLead: string;
   offlineBadge: string;
-  payTitle: string;
-  payLead: string;
-  payPlan: string;
-  payPrice: string;
-  payBtn: string;
-  payNote: string;
+  bioTitle: string;
+  bioLead: string;
+  bioBtn: string;
   apiTitle: string;
   apiLead: string;
   apiItem1: string;
   apiItem2: string;
   apiItem3: string;
-  storesTitle: string;
-  storesLead: string;
-  storeApple: string;
-  storeGoogle: string;
-  storesNote: string;
+  adminTitle: string;
+  adminUsers: string;
+  adminOrders: string;
+  analyticsTitle: string;
+  analyticsLead: string;
+  syncTitle: string;
+  syncLead: string;
+  a11yTitle: string;
+  a11yLead: string;
+  a11yLarge: string;
   examples: MobileExample[];
 };
 
@@ -67,9 +107,9 @@ const de: MobilePreviewCopy = {
   tabPreview: "Vorschau",
   tabExamples: "Beispiele",
   kindMobile: "Mobile App",
-  emptyHint: "Wähle Mobile-Funktionen — sie erscheinen hier im Handy-Rahmen.",
+  emptyHint: "Wähle Mobile-Funktionen — sie erscheinen hier im iPhone-Rahmen.",
   demoBadge: "Demo / Beispielvorschau",
-  examplesEmpty: "Wähle Mobile-Funktionen, um passende Hinweise zu den Beispielen zu sehen.",
+  examplesEmpty: "Wähle Funktionen, um passende Hinweise zu sehen.",
   examplesLead:
     "Beispieltypen für Mobile Apps. Keine Tool2day-Kundenprojekte. Ohne verlässlichen Link bleibt es eine Demo.",
   viewExample: "Beispiel ansehen",
@@ -77,45 +117,85 @@ const de: MobilePreviewCopy = {
   externalNote: "Externe Inspiration — kein Tool2day-Projekt.",
   appName: "PocketDesk",
   homeTitle: "Dein Tag auf einen Blick",
-  homeLead: "Allgemeine App-Startseite — Bausteine erscheinen, sobald du sie auswählst.",
+  homeLead: "Allgemeine App-Startseite — Bausteine erscheinen mit deiner Auswahl.",
   tabHome: "Start",
   tabExplore: "Entdecken",
   tabProfile: "Profil",
   authTitle: "Anmelden",
   authEmail: "E-Mail",
   authPassword: "Passwort",
+  authSocial: "Weiter mit Google / Apple (Demo)",
   authBtn: "Weiter",
   authNote: "Demo — keine echte Anmeldung.",
   profileTitle: "Mein Konto",
-  pushTitle: "Neue Nachricht",
+  profileName: "Demo Nutzer",
+  profileEdit: "Einstellungen",
+  chatTitle: "Chat",
+  chatSample: "Hallo! Wann ist der nächste Termin?",
+  chatReply: "Morgen um 10:00 — passt das?",
+  messagesTitle: "Nachrichten",
+  messagesItem: "Erinnerung: Unterlagen hochladen",
+  reviewsTitle: "Bewertungen",
+  reviewsSample: "★★★★☆ „Schnelle Rückmeldung, klarer Ablauf.“",
+  searchTitle: "Suche",
+  searchPlaceholder: "Suchen…",
+  searchResult: "3 Treffer in der Nähe",
+  favoritesTitle: "Favoriten",
+  favoritesItem: "Studio Holm · gespeichert",
+  filesTitle: "Dateien",
+  filesItem: "Angebot.pdf",
+  filesBtn: "Hochladen (Demo)",
+  langTitle: "Sprache",
+  langDe: "DE",
+  langEn: "EN",
+  pushTitle: "Neue Erinnerung",
   pushBody: "Dein Termin morgen um 10:00 ist bestätigt.",
   pushTime: "jetzt",
-  cameraTitle: "Foto aufnehmen",
-  cameraLead: "Kamera-Demo für Belege oder Profilbilder.",
+  mapsTitle: "Karte & Route",
+  mapsLead: "Demo-Karte mit Zielpunkt.",
+  trackingTitle: "Live-Tracking",
+  trackingStatus: "Unterwegs · Ankunft ~12 Min. (Demo)",
+  qrTitle: "QR scannen",
+  qrLead: "Rahmen zum Scannen — kein echter Kamerazugriff.",
+  cameraTitle: "Foto",
+  cameraLead: "Aufnahme oder Upload nur zur Demo.",
   cameraBtn: "Auswählen",
   cameraNote: "Kein Zugriff auf die echte Kamera.",
-  locationTitle: "Standort",
-  locationLead: "Karte mit Demo-Marker — kein echtes Tracking.",
-  locationStatus: "Standort (Demo): aktiv",
+  cartTitle: "Warenkorb",
+  cartItem: "Service-Paket · 1×",
+  cartTotal: "Summe 89 €",
+  payTitle: "Zahlung",
+  payLead: "Checkout-Schritte ohne Geldeinzug.",
+  payBtn: "Demo bezahlen",
+  payNote: "Keine echte Zahlung.",
+  subTitle: "Abo",
+  subPlan: "PocketDesk Pro",
+  subPrice: "9,90 € / Monat",
+  couponTitle: "Gutschein",
+  couponCode: "WILLKOMMEN10",
+  orderTitle: "Bestellstatus",
+  orderStep: "In Bearbeitung → Versand vorbereitet",
   offlineTitle: "Offline bereit",
-  offlineLead: "Zwischengespeicherte Inhalte bleiben verfügbar.",
+  offlineLead: "Inhalte bleiben lokal und synchronisieren später.",
   offlineBadge: "Offline-Modus",
-  payTitle: "Abo wählen",
-  payLead: "Kaufmaske nur zur Veranschaulichung.",
-  payPlan: "PocketDesk Pro",
-  payPrice: "9,90 € / Monat",
-  payBtn: "Demo-Kauf",
-  payNote: "Kein Geldeinzug.",
+  bioTitle: "Biometrie",
+  bioLead: "Face ID / Fingerabdruck nur als Demo-Hinweis.",
+  bioBtn: "Mit Biometrie freischalten",
   apiTitle: "Live-Daten",
-  apiLead: "Beispielinhalte, als kämen sie vom Server.",
+  apiLead: "Beispielinhalte wie von einem Server.",
   apiItem1: "Auftrag #204 — unterwegs",
   apiItem2: "Nachricht von Support",
   apiItem3: "Sync vor 2 Min.",
-  storesTitle: "Store-Veröffentlichung",
-  storesLead: "Hinweis auf mögliche Stores — nicht veröffentlicht.",
-  storeApple: "App Store",
-  storeGoogle: "Google Play",
-  storesNote: "Nur Demo-Badges, keine Live-Listings.",
+  adminTitle: "Admin",
+  adminUsers: "Nutzer: 128",
+  adminOrders: "Offene Aufträge: 19",
+  analyticsTitle: "Analysen",
+  analyticsLead: "Demo-Auswertung der letzten Woche.",
+  syncTitle: "Geräte-Sync",
+  syncLead: "Zuletzt synchronisiert · iPhone & iPad (Demo)",
+  a11yTitle: "Barrierefreiheit",
+  a11yLead: "Größere Schrift und Screenreader-Hinweise.",
+  a11yLarge: "Textgröße: groß",
   examples: [
     {
       id: "booking",
@@ -160,9 +240,9 @@ const en: MobilePreviewCopy = {
   tabPreview: "Preview",
   tabExamples: "Examples",
   kindMobile: "Mobile app",
-  emptyHint: "Select mobile features — they appear here inside the phone frame.",
+  emptyHint: "Select mobile features — they appear here inside the iPhone frame.",
   demoBadge: "Demo / Preview",
-  examplesEmpty: "Select mobile features to see related notes next to the examples.",
+  examplesEmpty: "Select features to see related notes.",
   examplesLead:
     "Example types for mobile apps. Not Tool2day client projects. Without a reliable link, cards stay demo-only.",
   viewExample: "View example",
@@ -170,45 +250,85 @@ const en: MobilePreviewCopy = {
   externalNote: "External inspiration — not a Tool2day project.",
   appName: "PocketDesk",
   homeTitle: "Your day at a glance",
-  homeLead: "A general app home — building blocks appear as you select them.",
+  homeLead: "A general app home — building blocks appear with your selection.",
   tabHome: "Home",
   tabExplore: "Explore",
   tabProfile: "Profile",
   authTitle: "Sign in",
   authEmail: "Email",
   authPassword: "Password",
+  authSocial: "Continue with Google / Apple (demo)",
   authBtn: "Continue",
   authNote: "Demo — no real sign-in.",
   profileTitle: "My account",
-  pushTitle: "New message",
+  profileName: "Demo User",
+  profileEdit: "Settings",
+  chatTitle: "Chat",
+  chatSample: "Hi! When is the next appointment?",
+  chatReply: "Tomorrow at 10:00 — does that work?",
+  messagesTitle: "Messages",
+  messagesItem: "Reminder: upload documents",
+  reviewsTitle: "Reviews",
+  reviewsSample: "★★★★☆ “Fast reply, clear process.”",
+  searchTitle: "Search",
+  searchPlaceholder: "Search…",
+  searchResult: "3 nearby results",
+  favoritesTitle: "Favorites",
+  favoritesItem: "Studio Holm · saved",
+  filesTitle: "Files",
+  filesItem: "Proposal.pdf",
+  filesBtn: "Upload (demo)",
+  langTitle: "Language",
+  langDe: "DE",
+  langEn: "EN",
+  pushTitle: "New reminder",
   pushBody: "Your appointment tomorrow at 10:00 is confirmed.",
   pushTime: "now",
-  cameraTitle: "Take a photo",
-  cameraLead: "Camera demo for receipts or profile photos.",
+  mapsTitle: "Map & directions",
+  mapsLead: "Demo map with a destination pin.",
+  trackingTitle: "Live tracking",
+  trackingStatus: "On the way · ETA ~12 min (demo)",
+  qrTitle: "Scan QR",
+  qrLead: "Scan frame — no real camera access.",
+  cameraTitle: "Photo",
+  cameraLead: "Capture or upload for demo only.",
   cameraBtn: "Choose",
   cameraNote: "No access to the real camera.",
-  locationTitle: "Location",
-  locationLead: "Map with a demo marker — no real tracking.",
-  locationStatus: "Location (demo): on",
+  cartTitle: "Cart",
+  cartItem: "Service pack · 1×",
+  cartTotal: "Total €89",
+  payTitle: "Payment",
+  payLead: "Checkout steps without collecting money.",
+  payBtn: "Demo pay",
+  payNote: "No real payment.",
+  subTitle: "Subscription",
+  subPlan: "PocketDesk Pro",
+  subPrice: "€9.90 / month",
+  couponTitle: "Coupon",
+  couponCode: "WELCOME10",
+  orderTitle: "Order status",
+  orderStep: "In progress → Ready to ship",
   offlineTitle: "Ready offline",
-  offlineLead: "Cached content stays available without a network.",
+  offlineLead: "Content stays local and syncs later.",
   offlineBadge: "Offline mode",
-  payTitle: "Choose a plan",
-  payLead: "Purchase screen for illustration only.",
-  payPlan: "PocketDesk Pro",
-  payPrice: "€9.90 / month",
-  payBtn: "Demo purchase",
-  payNote: "No money is collected.",
+  bioTitle: "Biometrics",
+  bioLead: "Face ID / fingerprint as a demo cue only.",
+  bioBtn: "Unlock with biometrics",
   apiTitle: "Live data",
-  apiLead: "Sample items as if they came from a server.",
+  apiLead: "Sample items as if from a server.",
   apiItem1: "Order #204 — on the way",
   apiItem2: "Message from support",
   apiItem3: "Synced 2 min ago",
-  storesTitle: "Store publishing",
-  storesLead: "A cue for possible stores — not published.",
-  storeApple: "App Store",
-  storeGoogle: "Google Play",
-  storesNote: "Demo badges only, no live listings.",
+  adminTitle: "Admin",
+  adminUsers: "Users: 128",
+  adminOrders: "Open orders: 19",
+  analyticsTitle: "Analytics",
+  analyticsLead: "Demo chart for the last week.",
+  syncTitle: "Device sync",
+  syncLead: "Last synced · iPhone & iPad (demo)",
+  a11yTitle: "Accessibility",
+  a11yLead: "Larger text and screen-reader cues.",
+  a11yLarge: "Text size: large",
   examples: [
     {
       id: "booking",

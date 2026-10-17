@@ -65,16 +65,78 @@ export const WEBAPP_FEATURES: FeatureDef[] = [
   { id: "reports", size: "medium" },
 ];
 
-export const MOBILE_FEATURES: FeatureDef[] = [
-  { id: "push", size: "medium" },
-  { id: "auth", size: "medium" },
-  { id: "camera", size: "medium" },
-  { id: "location", size: "medium" },
-  { id: "offline", size: "custom" },
-  { id: "iap", size: "custom" },
-  { id: "api", size: "medium" },
-  { id: "stores", size: "medium" },
+export const MOBILE_FEATURE_GROUPS: {
+  id: "accounts" | "browse" | "locationCam" | "commerce" | "advanced";
+  features: FeatureDef[];
+}[] = [
+  {
+    id: "accounts",
+    features: [
+      { id: "auth-login", size: "medium" },
+      { id: "profile", size: "medium" },
+      { id: "chat", size: "custom" },
+      { id: "in-app-messages", size: "medium" },
+      { id: "reviews", size: "medium" },
+    ],
+  },
+  {
+    id: "browse",
+    features: [
+      { id: "search-filters", size: "medium" },
+      { id: "favorites", size: "medium" },
+      { id: "file-transfer", size: "medium" },
+      { id: "multilang", size: "medium" },
+      { id: "in-app-notify", size: "medium" },
+    ],
+  },
+  {
+    id: "locationCam",
+    features: [
+      { id: "maps-directions", size: "medium" },
+      { id: "live-tracking", size: "custom" },
+      { id: "qr-scan", size: "medium" },
+      { id: "camera-upload", size: "medium" },
+    ],
+  },
+  {
+    id: "commerce",
+    features: [
+      { id: "cart-orders", size: "medium" },
+      { id: "payments", size: "custom" },
+      { id: "subscriptions", size: "custom" },
+      { id: "coupons", size: "medium" },
+      { id: "order-status", size: "medium" },
+    ],
+  },
+  {
+    id: "advanced",
+    features: [
+      { id: "offline-sync", size: "custom" },
+      { id: "biometrics", size: "medium" },
+      { id: "external-api", size: "custom" },
+      { id: "admin-dashboard", size: "custom" },
+      { id: "analytics", size: "medium" },
+      { id: "device-sync", size: "custom" },
+      { id: "a11y", size: "medium" },
+    ],
+  },
 ];
+
+/** Flat list for lookups / mail summary */
+export const MOBILE_FEATURES: FeatureDef[] = MOBILE_FEATURE_GROUPS.flatMap(
+  (group) => group.features,
+);
+
+/** Map legacy mobile feature ids saved in localStorage */
+export const MOBILE_FEATURE_ALIASES: Record<string, string> = {
+  auth: "auth-login",
+  push: "in-app-notify",
+  camera: "camera-upload",
+  location: "live-tracking",
+  offline: "offline-sync",
+  iap: "subscriptions",
+  api: "external-api",
+};
 
 export const HOSTING_FEATURES: FeatureDef[] = [
   { id: "migrate-site", size: "basic" },
@@ -156,6 +218,10 @@ type FormCopy = {
   websiteFeatures: Record<string, { label: string; desc: string }>;
   webappFeatures: Record<string, { label: string; desc: string }>;
   mobileFeatures: Record<string, { label: string; desc: string }>;
+  mobileGroupTitles: Record<
+    "accounts" | "browse" | "locationCam" | "commerce" | "advanced",
+    string
+  >;
   hostingFeatures: Record<string, { label: string; desc: string }>;
   timelines: Record<TimelineId, string>;
   contactMethods: Record<ContactMethodId, string>;
@@ -335,38 +401,117 @@ const de: FormCopy = {
     },
   },
   mobileFeatures: {
-    push: {
-      label: "Push-Benachrichtigungen",
-      desc: "Nutzerinnen und Nutzer gezielt erreichen.",
+    "auth-login": {
+      label: "Login mit E-Mail, Google oder Apple",
+      desc: "Flexible Anmeldung über gängige Anbieter.",
     },
-    auth: {
-      label: "Login und Benutzerkonten",
-      desc: "Persönliche Bereiche in der App.",
+    profile: {
+      label: "Profil und Kontoeinstellungen",
+      desc: "Persönliche Daten und Präferenzen verwalten.",
     },
-    camera: {
-      label: "Kamera oder Foto-Upload",
-      desc: "Gerätefunktionen für Bilder nutzen.",
+    chat: {
+      label: "Chat zwischen Nutzern und Team",
+      desc: "Direkte Unterhaltungen in der App.",
     },
-    location: {
-      label: "Standortfunktionen",
-      desc: "Features basierend auf dem Standort.",
+    "in-app-messages": {
+      label: "In-App-Nachrichten",
+      desc: "Mitteilungen und Inbox innerhalb der App.",
     },
-    offline: {
-      label: "Offline-Nutzung",
-      desc: "Teile der App ohne Netzverbindung nutzen.",
+    reviews: {
+      label: "Bewertungen und Reviews",
+      desc: "Feedback zu Leistungen oder Produkten sammeln.",
     },
-    iap: {
-      label: "In-App-Käufe oder Abos",
-      desc: "Käufe oder Abonnements in der App.",
+    "search-filters": {
+      label: "Suche und Filter",
+      desc: "Inhalte schnell finden und eingrenzen.",
     },
-    api: {
-      label: "Server- oder API-Anbindung",
-      desc: "App mit Backend und Daten verbinden.",
+    favorites: {
+      label: "Favoriten und gespeicherte Listen",
+      desc: "Wichtige Einträge merken und wiederfinden.",
     },
-    stores: {
-      label: "Veröffentlichung in App Stores",
-      desc: "Bereitstellung für iOS und Android.",
+    "file-transfer": {
+      label: "Dateien hoch- und herunterladen",
+      desc: "Dokumente und Medien in der App teilen.",
     },
+    multilang: {
+      label: "Mehrsprachigkeit",
+      desc: "App-Inhalte in mehreren Sprachen anbieten.",
+    },
+    "in-app-notify": {
+      label: "Benachrichtigungen und Erinnerungen",
+      desc: "Hinweise und Reminder innerhalb der App.",
+    },
+    "maps-directions": {
+      label: "Karten und Routen",
+      desc: "Standorte anzeigen und Wege vorschlagen.",
+    },
+    "live-tracking": {
+      label: "Live-Standort-Tracking",
+      desc: "Bewegung in Echtzeit visualisieren (Demo).",
+    },
+    "qr-scan": {
+      label: "QR- oder Barcode-Scan",
+      desc: "Codes scannen und Inhalte öffnen.",
+    },
+    "camera-upload": {
+      label: "Fotos aufnehmen oder hochladen",
+      desc: "Kamera und Galerie für Bildinhalte nutzen.",
+    },
+    "cart-orders": {
+      label: "Warenkorb und Bestellungen",
+      desc: "Einkauf und Aufträge mobil steuern.",
+    },
+    payments: {
+      label: "Online-Zahlung",
+      desc: "Bezahlvorgänge in der App abbilden (Demo).",
+    },
+    subscriptions: {
+      label: "Abos oder In-App-Käufe",
+      desc: "Pläne und Käufe ohne echten Geldeinzug zeigen.",
+    },
+    coupons: {
+      label: "Gutscheine und Angebote",
+      desc: "Rabatte und Aktionen einlösen.",
+    },
+    "order-status": {
+      label: "Bestellstatus verfolgen",
+      desc: "Fortschritt von Aufträgen sichtbar machen.",
+    },
+    "offline-sync": {
+      label: "Offline-Nutzung mit späterer Sync",
+      desc: "Inhalte offline nutzen und später abgleichen.",
+    },
+    biometrics: {
+      label: "Login mit Biometrie / Face ID",
+      desc: "Schneller Zugang per Geräteschutz (Demo).",
+    },
+    "external-api": {
+      label: "Anbindung an externe Dienste / API",
+      desc: "Daten aus anderen Systemen einbinden.",
+    },
+    "admin-dashboard": {
+      label: "Admin-Dashboard",
+      desc: "Verwaltungsübersicht für Betreiber.",
+    },
+    analytics: {
+      label: "Analysen und Reports",
+      desc: "Nutzung und Kennzahlen auswerten.",
+    },
+    "device-sync": {
+      label: "Sync zwischen Geräten",
+      desc: "Daten über mehrere Geräte hinweg abstimmen.",
+    },
+    a11y: {
+      label: "Barrierefreiheit",
+      desc: "Größere Schrift und Screenreader-Unterstützung.",
+    },
+  },
+  mobileGroupTitles: {
+    accounts: "Konten & Kommunikation",
+    browse: "Navigation & Inhalte",
+    locationCam: "Standort & Kamera",
+    commerce: "Bestellungen & Zahlungen",
+    advanced: "Erweiterte Funktionen",
   },
   hostingFeatures: {
     "migrate-site": {
@@ -576,38 +721,117 @@ const en: FormCopy = {
     },
   },
   mobileFeatures: {
-    push: {
-      label: "Push notifications",
-      desc: "Reach users with timely messages.",
+    "auth-login": {
+      label: "Sign-in with email, Google or Apple",
+      desc: "Flexible login through common providers.",
     },
-    auth: {
-      label: "Login and user accounts",
-      desc: "Personal spaces inside the app.",
+    profile: {
+      label: "Profile and account settings",
+      desc: "Manage personal details and preferences.",
     },
-    camera: {
-      label: "Camera or photo upload",
-      desc: "Use device camera features.",
+    chat: {
+      label: "Chat between users and your team",
+      desc: "Direct conversations inside the app.",
     },
-    location: {
-      label: "Location-based features",
-      desc: "Functions that use location.",
+    "in-app-messages": {
+      label: "In-app messages",
+      desc: "Inbox-style notes within the app.",
     },
-    offline: {
-      label: "Offline use",
-      desc: "Work with parts of the app without network.",
+    reviews: {
+      label: "Ratings and reviews",
+      desc: "Collect feedback on services or products.",
     },
-    iap: {
-      label: "In-app purchases or subscriptions",
-      desc: "Sell or subscribe inside the app.",
+    "search-filters": {
+      label: "Search and filters",
+      desc: "Find and narrow content quickly.",
     },
-    api: {
-      label: "Server or API connection",
-      desc: "Connect the app to a backend.",
+    favorites: {
+      label: "Favorites and saved lists",
+      desc: "Keep important items easy to reopen.",
     },
-    stores: {
-      label: "App store publishing",
-      desc: "Release for iOS and Android.",
+    "file-transfer": {
+      label: "Upload and download files",
+      desc: "Share documents and media in the app.",
     },
+    multilang: {
+      label: "Multiple languages",
+      desc: "Offer app content in more than one language.",
+    },
+    "in-app-notify": {
+      label: "Notifications and reminders",
+      desc: "Alerts and reminders inside the app.",
+    },
+    "maps-directions": {
+      label: "Maps and directions",
+      desc: "Show places and suggest routes.",
+    },
+    "live-tracking": {
+      label: "Live location tracking",
+      desc: "Visualise movement in real time (demo).",
+    },
+    "qr-scan": {
+      label: "QR or barcode scan",
+      desc: "Scan codes and open related content.",
+    },
+    "camera-upload": {
+      label: "Take or upload photos",
+      desc: "Use camera and gallery for images.",
+    },
+    "cart-orders": {
+      label: "Cart and order management",
+      desc: "Handle shopping and orders on mobile.",
+    },
+    payments: {
+      label: "Online payments",
+      desc: "Show checkout flows without taking money.",
+    },
+    subscriptions: {
+      label: "Subscriptions or in-app purchases",
+      desc: "Plans and purchases for illustration only.",
+    },
+    coupons: {
+      label: "Coupons and offers",
+      desc: "Apply discounts and promotions.",
+    },
+    "order-status": {
+      label: "Order status tracking",
+      desc: "Make order progress easy to follow.",
+    },
+    "offline-sync": {
+      label: "Offline use with later sync",
+      desc: "Keep working offline and sync afterwards.",
+    },
+    biometrics: {
+      label: "Biometric / Face ID login",
+      desc: "Faster access via device security (demo).",
+    },
+    "external-api": {
+      label: "External services / API connection",
+      desc: "Pull data from other systems.",
+    },
+    "admin-dashboard": {
+      label: "Admin dashboard",
+      desc: "Operator overview for managing the app.",
+    },
+    analytics: {
+      label: "Analytics and reports",
+      desc: "Review usage and key metrics.",
+    },
+    "device-sync": {
+      label: "Sync across devices",
+      desc: "Keep data aligned on multiple devices.",
+    },
+    a11y: {
+      label: "Accessibility",
+      desc: "Larger text and screen-reader support.",
+    },
+  },
+  mobileGroupTitles: {
+    accounts: "Accounts & communication",
+    browse: "Browse & content",
+    locationCam: "Location & camera",
+    commerce: "Orders & payments",
+    advanced: "Advanced features",
   },
   hostingFeatures: {
     "migrate-site": {
