@@ -94,21 +94,30 @@ export function HomePage({ locale, t }: Props) {
           </div>
         </section>
 
-        <section id="why" className="section" aria-labelledby="why-title">
-          <div className="shell why-layout">
-            <header className="section-head">
+        <section id="why" className="section about-section" aria-labelledby="why-title">
+          <div className="shell about-layout">
+            <div className="about-portrait">
+              <Image
+                src="/about-portrait.jpg"
+                alt={t.why.imageAlt}
+                width={571}
+                height={1024}
+                className="about-portrait-image"
+                sizes="(max-width: 720px) 72vw, 280px"
+              />
+            </div>
+            <div className="about-copy">
               <p className="eyebrow">{t.why.eyebrow}</p>
               <h2 id="why-title">{t.why.title}</h2>
-              <p className="lead">{t.why.lead}</p>
-            </header>
-            <ul className="why-grid">
-              {t.why.points.map((point) => (
-                <li key={point.title}>
-                  <h3>{point.title}</h3>
-                  <p>{point.text}</p>
-                </li>
+              {t.why.body.map((paragraph) => (
+                <p key={paragraph.slice(0, 32)} className="about-text">
+                  {paragraph}
+                </p>
               ))}
-            </ul>
+              <a className="btn btn-primary about-cta" href={`/${locale}/start`}>
+                {t.why.cta}
+              </a>
+            </div>
           </div>
         </section>
 

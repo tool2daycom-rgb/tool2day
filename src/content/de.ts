@@ -25,8 +25,9 @@ export type Dictionary = {
   why: {
     eyebrow: string;
     title: string;
-    lead: string;
-    points: Array<{ title: string; text: string }>;
+    body: [string, string];
+    cta: string;
+    imageAlt: string;
   };
   process: {
     eyebrow: string;
@@ -77,7 +78,7 @@ export const de: Dictionary = {
   nav: {
     services: "Leistungen",
     work: "Beispiele",
-    why: "Warum tool2day",
+    why: "Über uns",
     process: "Ablauf",
     contact: "Kontakt",
     cta: "Projekt starten",
@@ -123,27 +124,14 @@ export const de: Dictionary = {
     ],
   },
   why: {
-    eyebrow: "Warum tool2day",
-    title: "Direkt, klar, nach Bedarf",
-    lead: "tool2day ist als unabhängiges Studio aufgebaut — nah am Gespräch, ohne unnötige Umwege.",
-    points: [
-      {
-        title: "Direkter Kontakt",
-        text: "Du sprichst mit der Person, die plant und baut — kurze Wege, klare Antworten.",
-      },
-      {
-        title: "Klarer Umfang",
-        text: "Wir halten fest, was drin ist und was nicht. So bleibt die Zusammenarbeit übersichtlich.",
-      },
-      {
-        title: "Passgenaue Lösungen",
-        text: "Inhalt, Struktur und Funktionen folgen deinem Angebot — nicht einer Einheitsvorlage.",
-      },
-      {
-        title: "Einfacher Ablauf",
-        text: "Wenige Schritte von der ersten Idee bis zum Launch, optional mit späterer Betreuung.",
-      },
+    eyebrow: "Über uns",
+    title: "Digitale Lösungen, die zu Ihrem Unternehmen passen.",
+    body: [
+      "Tool2day ist ein unabhängiges Digitalstudio für Unternehmen, die eine Website oder App möchten, die zu ihren Anforderungen passt. Ich arbeite direkt mit Ihnen zusammen, halte den Ablauf verständlich und entwickle aus Ihrer Idee eine praktische digitale Lösung – ohne unnötige Komplexität.",
+      "Vom ersten Gespräch bis zum Start wissen Sie, was wir entwickeln und warum. Sie haben eine Idee? Lassen Sie uns darüber sprechen.",
     ],
+    cta: "Projekt besprechen",
+    imageAlt: "Portrait of the Tool2day founder",
   },
   process: {
     eyebrow: "Ablauf",

@@ -9,7 +9,7 @@ export const en = {
   nav: {
     services: "Services",
     work: "Examples",
-    why: "Why tool2day",
+    why: "About us",
     process: "Process",
     contact: "Contact",
     cta: "Start a Project",
@@ -55,27 +55,14 @@ export const en = {
     ],
   },
   why: {
-    eyebrow: "Why tool2day",
-    title: "Direct, clear, tailored",
-    lead: "tool2day is set up as an independent studio — close to the conversation, without unnecessary steps.",
-    points: [
-      {
-        title: "Direct contact",
-        text: "You talk with the person who plans and builds — short paths, clear answers.",
-      },
-      {
-        title: "Clear scope",
-        text: "We write down what is included and what is not, so collaboration stays readable.",
-      },
-      {
-        title: "Fit-for-purpose solutions",
-        text: "Content, structure and features follow your offer — not a one-size template.",
-      },
-      {
-        title: "Simple process",
-        text: "A few steps from first idea to launch, with optional support afterwards.",
-      },
+    eyebrow: "About us",
+    title: "Digital work, built around your business.",
+    body: [
+      "Tool2day is an independent digital studio for businesses that want a website or app shaped around their needs. I work directly with you, keep the process clear, and turn your ideas into a practical digital experience—without unnecessary complexity.",
+      "From the first conversation to launch, you’ll know what we’re building and why. Have an idea in mind? Let’s talk about it.",
     ],
+    cta: "Tell me about your project",
+    imageAlt: "Portrait of the Tool2day founder",
   },
   process: {
     eyebrow: "Process",
