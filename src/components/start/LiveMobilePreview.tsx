@@ -43,9 +43,23 @@ export function LiveMobilePreview({ locale, selected, featureLabels }: Props) {
 
       {tab === "preview" ? (
         <div className="live-frame mobile-frame-wrap" role="tabpanel">
-          <div className="phone-bezel" aria-label={p.appName}>
-            <div className="phone-notch" aria-hidden="true" />
-            <div className="phone-screen">
+          <div className="iphone-frame" aria-label={p.appName}>
+            <div className="iphone-side-btn iphone-silent" aria-hidden="true" />
+            <div className="iphone-side-btn iphone-vol-up" aria-hidden="true" />
+            <div className="iphone-side-btn iphone-vol-down" aria-hidden="true" />
+            <div className="iphone-side-btn iphone-power" aria-hidden="true" />
+
+            <div className="iphone-screen">
+              <div className="iphone-status" aria-hidden="true">
+                <span className="iphone-time">9:41</span>
+                <span className="iphone-island" />
+                <span className="iphone-status-icons">
+                  <span className="iphone-signal" />
+                  <span className="iphone-wifi" />
+                  <span className="iphone-battery" />
+                </span>
+              </div>
+
               {has("push") ? (
                 <div className="phone-toast reveal-block" role="status">
                   <strong>{p.pushTitle}</strong>
@@ -200,6 +214,8 @@ export function LiveMobilePreview({ locale, selected, featureLabels }: Props) {
                 <span>{p.tabExplore}</span>
                 <span>{p.tabProfile}</span>
               </nav>
+
+              <div className="iphone-home-indicator" aria-hidden="true" />
             </div>
           </div>
         </div>
