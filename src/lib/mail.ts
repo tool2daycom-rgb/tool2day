@@ -40,7 +40,8 @@ export async function sendInquiryNotification(input: {
   email: string;
   id: string;
   locale: string;
-  summaryLines: string[];
+  fields: Array<{ label: string; value: string }>;
+  messagePreview?: string;
 }) {
   if (!mailConfigured()) {
     return { sent: false as const, reason: "smtp_not_configured" as const };
@@ -51,28 +52,37 @@ export async function sendInquiryNotification(input: {
   const transporter = createTransporter();
   const site = process.env.NEXT_PUBLIC_SITE_URL || "https://tool2day.com";
   const adminUrl = `${site}/admin/${input.id}`;
+  const typeLabel = input.type === "contact" ? "تواصل (Contact)" : "استفسار مشروع";
+  const subject = `[tool2day] طلب جديد — ${typeLabel} — ${input.name}`;
 
-  const label = input.type === "contact" ? "Contact" : "Project inquiry";
-  const subject = `[tool2day] ${label} — ${input.name}`;
   const text = [
-    `New ${label}`,
-    `ID: ${input.id}`,
-    `Locale: ${input.locale}`,
-    `From: ${input.name} <${input.email}>`,
+    "وصل طلب جديد على tool2day",
+    `النوع: ${typeLabel}`,
+    `الاسم: ${input.name}`,
+    `البريد: ${input.email}`,
+    `اللغة: ${input.locale}`,
     "",
-    ...input.summaryLines,
+    ...input.fields.map((field) => `${field.label}: ${field.value}`),
     "",
-    `Open admin: ${adminUrl}`,
-  ].join("\n");
+    input.messagePreview ? `الرسالة:\n${input.messagePreview}` : "",
+    "",
+    `افتح الطلب: ${adminUrl}`,
+  ]
+    .filter((line) => line !== undefined)
+    .join("\n");
 
   const html = renderInquiryNotificationHtml({
-    title: `${label} — ${input.name}`,
-    summaryLines: [
-      `ID: ${input.id}`,
-      `Locale: ${input.locale}`,
-      `From: ${input.name} <${input.email}>`,
-      ...input.summaryLines,
+    typeLabel,
+    name: input.name,
+    email: input.email,
+    locale: input.locale,
+    fields: [
+      { label: "الاسم", value: input.name },
+      { label: "البريد", value: input.email },
+      { label: "لغة النموذج", value: input.locale },
+      ...input.fields,
     ],
+    messagePreview: input.messagePreview,
     adminUrl,
   });
 

@@ -110,11 +110,8 @@ export async function createInquiry(
         email: input.email,
         id,
         locale: input.locale,
-        summaryLines: [
-          `Service: ${input.service}`,
-          "",
-          input.message,
-        ],
+        fields: [{ label: "الخدمة المطلوبة", value: input.service }],
+        messagePreview: input.message,
       });
     } catch {
       // Inquiry stays saved even if notification fails.
@@ -152,13 +149,14 @@ export async function createInquiry(
       email: input.email,
       id,
       locale: input.locale,
-      summaryLines: [
-        `Types: ${displayValue(input.projectTypes)}`,
-        `Goals: ${displayValue(input.goals)}`,
-        `Timeline: ${displayValue(input.timeline)}`,
-        `Phone: ${displayValue(input.phone)}`,
-        `Company: ${displayValue(input.company)}`,
+      fields: [
+        { label: "نوع المشروع", value: displayValue(input.projectTypes) },
+        { label: "الأهداف", value: displayValue(input.goals) },
+        { label: "موعد الإطلاق", value: displayValue(input.timeline) },
+        { label: "الهاتف", value: displayValue(input.phone) },
+        { label: "الشركة", value: displayValue(input.company) },
       ],
+      messagePreview: input.details,
     });
   } catch {
     // Inquiry stays saved even if notification fails.
