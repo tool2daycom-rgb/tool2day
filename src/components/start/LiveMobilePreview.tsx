@@ -469,11 +469,13 @@ function HomeScreen({
       ) : null}
 
       {kind === "delivery" && (has("maps-directions") || has("live-tracking")) ? (
-        <button type="button" className="phone-hero-card" onClick={onMap}>
-          <div className="demo-map phone-map-mini" aria-hidden="true">
+        <button type="button" className="phone-map-card" onClick={onMap}>
+          <div className="demo-map phone-map-panel" aria-hidden="true">
             <span className="demo-pin" />
+            <span className="phone-map-route" />
+            <span className="phone-map-dot" />
           </div>
-          <div>
+          <div className="phone-map-meta">
             <strong>{app.items[0].title}</strong>
             <p>{has("live-tracking") ? p.trackStatus : app.items[0].meta}</p>
             {has("live-tracking") ? <em>{p.mapEta}</em> : null}
@@ -724,11 +726,17 @@ function MapScreen({ p, has }: { p: MobilePreviewCopy; has: (id: string) => bool
   return (
     <div className="phone-screen-stack">
       <DemoCue label={p.demoShort} note={p.mapNote} />
-      <div className="demo-map phone-map" aria-hidden="true">
-        <span className="demo-pin" />
+      <div className="phone-map-card is-full">
+        <div className="demo-map phone-map-panel is-tall" aria-hidden="true">
+          <span className="demo-pin" />
+          <span className="phone-map-route" />
+          <span className="phone-map-dot" />
+        </div>
+        <div className="phone-map-meta">
+          <strong>{has("live-tracking") ? p.trackStatus : p.mapTitle}</strong>
+          {has("live-tracking") ? <em>{p.mapEta}</em> : null}
+        </div>
       </div>
-      <strong>{has("live-tracking") ? p.trackStatus : p.mapTitle}</strong>
-      {has("live-tracking") ? <p className="demo-meta">{p.mapEta}</p> : null}
     </div>
   );
 }
