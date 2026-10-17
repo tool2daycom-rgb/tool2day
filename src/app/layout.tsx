@@ -48,13 +48,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${syne.variable} ${figtree.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <meta name="google-adsense-account" content={ADSENSE_CLIENT} />
+        <script
+          async
+          src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-full">
         <Script
           id="adsense-loader"
           async
           src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
           crossOrigin="anonymous"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
         />
         {children}
         <Suspense fallback={null}>
