@@ -17,17 +17,18 @@ type FooterLink = {
 export function SiteFooter({ locale, t }: Props) {
   const whatsapp = site.links.whatsapp.trim();
 
+  const home = `/${locale}`;
   const serviceLinks: FooterLink[] = [
-    { label: t.footer.websites, href: "#websites" },
-    { label: t.footer.webapps, href: "#webapps" },
-    { label: t.footer.mobile, href: "#mobile" },
+    { label: t.footer.websites, href: `${home}#websites` },
+    { label: t.footer.webapps, href: `${home}#webapps` },
+    { label: t.footer.mobile, href: `${home}/services/mobile` },
     { label: t.footer.hosting },
   ];
 
   const companyLinks: FooterLink[] = [
-    { label: t.footer.about, href: "#why" },
-    { label: t.footer.projects, href: "#work" },
-    { label: t.footer.contact, href: "#contact" },
+    { label: t.footer.about, href: `${home}#why` },
+    { label: t.footer.projects, href: `${home}#work` },
+    { label: t.footer.contact, href: `${home}#contact` },
   ];
 
   return (

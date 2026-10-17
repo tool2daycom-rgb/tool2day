@@ -65,17 +65,31 @@ export function HomePage({ locale, t }: Props) {
               <p className="lead">{t.services.lead}</p>
             </header>
             <ul className="service-grid">
-              {t.services.items.map((item, index) => (
-                <li
-                  key={item.id}
-                  id={item.id}
-                  className={`service-card ${index === 0 ? "is-featured" : ""}`}
-                >
-                  <p className="card-label">{item.label}</p>
-                  <h3>{item.title}</h3>
-                  <p>{item.text}</p>
-                </li>
-              ))}
+              {t.services.items.map((item, index) => {
+                const href =
+                  item.id === "mobile" ? `/${locale}/services/mobile` : undefined;
+                const className = `service-card ${index === 0 ? "is-featured" : ""} ${
+                  href ? "is-link" : ""
+                }`;
+
+                return (
+                  <li key={item.id} id={item.id} className={className}>
+                    {href ? (
+                      <a className="service-card-link" href={href}>
+                        <p className="card-label">{item.label}</p>
+                        <h3>{item.title}</h3>
+                        <p>{item.text}</p>
+                      </a>
+                    ) : (
+                      <>
+                        <p className="card-label">{item.label}</p>
+                        <h3>{item.title}</h3>
+                        <p>{item.text}</p>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>

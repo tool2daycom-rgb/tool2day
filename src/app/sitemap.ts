@@ -4,7 +4,12 @@ import { getWorkCopy } from "@/content/work";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const workIds = getWorkCopy("de").projects.map((project) => project.id);
-  const pages = ["", "/start", ...workIds.map((id) => `/work/${id}`)];
+  const pages = [
+    "",
+    "/start",
+    "/services/mobile",
+    ...workIds.map((id) => `/work/${id}`),
+  ];
 
   return pages.flatMap((path) =>
     site.locales.map((locale) => ({
