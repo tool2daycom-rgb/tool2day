@@ -4,15 +4,18 @@ import type { Locale } from "@/content";
 type Props = {
   locale: Locale;
   ariaLabel: string;
+  /** Path after locale, e.g. "/start" — keeps the same page when switching language */
+  pathSuffix?: string;
 };
 
-export function LanguageSwitch({ locale, ariaLabel }: Props) {
+export function LanguageSwitch({ locale, ariaLabel, pathSuffix = "" }: Props) {
   const other: Locale = locale === "de" ? "en" : "de";
+  const suffix = pathSuffix.startsWith("/") || pathSuffix === "" ? pathSuffix : `/${pathSuffix}`;
 
   return (
     <nav className="lang-switch" aria-label={ariaLabel}>
       <Link
-        href="/de"
+        href={`/de${suffix}`}
         className={locale === "de" ? "is-active" : undefined}
         hrefLang="de"
         lang="de"
@@ -23,7 +26,7 @@ export function LanguageSwitch({ locale, ariaLabel }: Props) {
         |
       </span>
       <Link
-        href="/en"
+        href={`/en${suffix}`}
         className={locale === "en" ? "is-active" : undefined}
         hrefLang="en"
         lang="en"

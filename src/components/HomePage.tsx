@@ -31,7 +31,7 @@ export function HomePage({ locale, t }: Props) {
               <h1 id="hero-title">{t.hero.title}</h1>
               <p className="lead">{t.hero.lead}</p>
               <div className="hero-actions">
-                <a className="btn btn-primary" href="#contact">
+                <a className="btn btn-primary" href={`/${locale}/start`}>
                   {t.hero.primaryCta}
                 </a>
                 <a className="btn btn-ghost" href="#services">
@@ -221,7 +221,7 @@ export function HomePage({ locale, t }: Props) {
           <p>
             © {year} {t.footer.rights}
           </p>
-          <a className="btn btn-primary btn-compact" href="#contact">
+          <a className="btn btn-primary btn-compact" href={`/${locale}/start`}>
             {t.nav.cta}
           </a>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Dictionary, Locale } from "@/content";
 import { Logo } from "./Logo";
@@ -51,9 +52,9 @@ export function Header({ locale, t }: Props) {
 
         <div className="header-actions">
           <LanguageSwitch locale={locale} ariaLabel={t.nav.langAria} />
-          <a className="btn btn-primary header-cta" href="#contact">
+          <Link className="btn btn-primary header-cta" href={`/${locale}/start`}>
             {t.nav.cta}
-          </a>
+          </Link>
           <button
             type="button"
             className="nav-toggle"
@@ -74,9 +75,9 @@ export function Header({ locale, t }: Props) {
               {link.label}
             </a>
           ))}
-          <a className="btn btn-primary" href="#contact" onClick={() => setOpen(false)}>
+          <Link className="btn btn-primary" href={`/${locale}/start`} onClick={() => setOpen(false)}>
             {t.nav.cta}
-          </a>
+          </Link>
         </nav>
       </div>
     </header>

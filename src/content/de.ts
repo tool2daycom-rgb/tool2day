@@ -84,7 +84,7 @@ export const de: Dictionary = {
     why: "Warum tool2day",
     process: "Ablauf",
     contact: "Kontakt",
-    cta: "Projekt anfragen",
+    cta: "Projekt starten",
     langAria: "Sprache wählen",
   },
   hero: {
@@ -92,7 +92,7 @@ export const de: Dictionary = {
     title: "Digitale Auftritte, die kleine Unternehmen verständlich und greifbar machen.",
     lead:
       "tool2day hilft dir, online klar aufzutreten und Kunden leichter zu erreichen — mit Websites und Apps, die zu deinem Angebot passen.",
-    primaryCta: "Projekt anfragen",
+    primaryCta: "Projekt starten",
     secondaryCta: "Leistungen ansehen",
   },
   services: {
@@ -136,19 +136,19 @@ export const de: Dictionary = {
       {
         title: "Lokalatelier — Studio-Website",
         summary: "Ruhige One-Pager-Struktur für ein kreatives Studio mit klarer Kontaktführung.",
-        href: "#contact",
+        href: "/de/start",
         tags: ["Website", "Konzept"],
       },
       {
         title: "Nachbarladen — Buchungsübersicht",
         summary: "Web-App-Konzept für Terminübersicht und einfache Kundenanfragen.",
-        href: "#contact",
+        href: "/de/start",
         tags: ["Web-App", "Konzept"],
       },
       {
         title: "Routenhilfe — Service-App",
         summary: "Mobile-App-Konzept für den Außendienst mit Fokus auf Übersichtlichkeit.",
-        href: "#contact",
+        href: "/de/start",
         tags: ["Mobile", "Konzept"],
       },
     ],

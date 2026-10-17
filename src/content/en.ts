@@ -12,7 +12,7 @@ export const en = {
     why: "Why tool2day",
     process: "Process",
     contact: "Contact",
-    cta: "Project enquiry",
+    cta: "Start a Project",
     langAria: "Choose language",
   },
   hero: {
@@ -20,7 +20,7 @@ export const en = {
     title: "Digital presence that helps small businesses look clear and reach customers.",
     lead:
       "tool2day helps you show up online with websites and apps that fit your offer — practical, personal, and easy to work with.",
-    primaryCta: "Project enquiry",
+    primaryCta: "Start a Project",
     secondaryCta: "View services",
   },
   services: {
@@ -64,19 +64,19 @@ export const en = {
       {
         title: "Local studio — portfolio site",
         summary: "Calm one-pager structure for a creative studio with a clear path to contact.",
-        href: "#contact",
+        href: "/en/start",
         tags: ["Website", "Concept"],
       },
       {
         title: "Neighbour shop — booking overview",
         summary: "Web-app concept for appointment overview and simple customer enquiries.",
-        href: "#contact",
+        href: "/en/start",
         tags: ["Web app", "Concept"],
       },
       {
         title: "Field help — service app",
         summary: "Mobile-app concept for on-the-road work with a focus on clarity.",
-        href: "#contact",
+        href: "/en/start",
         tags: ["Mobile", "Concept"],
       },
     ],
