@@ -21,9 +21,13 @@ export function HomePage({ locale, t }: Props) {
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-atmosphere" aria-hidden="true" />
           <div className="shell hero-grid">
-            <div className="hero-copy reveal">
-              <p className="eyebrow">{t.hero.eyebrow}</p>
-              <p className="hero-brand">tool2day</p>
+            <div className="hero-copy">
+              <div className="hero-lockup">
+                <p className="hero-brand">
+                  tool<span className="hero-brand-two">2</span>day
+                </p>
+                <p className="hero-tagline">{t.hero.eyebrow}</p>
+              </div>
               <h1 id="hero-title">{t.hero.title}</h1>
               <p className="lead">{t.hero.lead}</p>
               <div className="hero-actions">

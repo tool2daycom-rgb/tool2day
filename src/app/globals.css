@@ -37,7 +37,9 @@ body {
   font-family: var(--font-body);
   font-size: 1.05rem;
   line-height: 1.65;
-  text-rendering: optimizeLegibility;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 img {
@@ -339,13 +341,16 @@ a:hover {
 
 .logo-word {
   font-family: var(--font-display);
-  font-weight: 760;
-  font-size: 1.35rem;
+  font-weight: 800;
+  font-size: 1.4rem;
   letter-spacing: -0.04em;
+  color: #0b140e;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 
 .logo-two {
-  color: var(--lime-deep);
+  color: #7fbf1a;
 }
 
 /* Hero */
@@ -385,31 +390,44 @@ a:hover {
   align-items: center;
 }
 
-.hero-brand {
-  margin: 0 0 0.35rem;
-  font-family: var(--font-display);
-  font-size: clamp(2.4rem, 8vw, 4.4rem);
-  font-weight: 780;
-  letter-spacing: -0.05em;
-  line-height: 0.95;
-  color: var(--ink);
+.hero-lockup {
+  margin: 0 0 1.35rem;
+  max-width: max-content;
 }
 
-.hero-brand::after {
-  content: "";
-  display: block;
-  width: 4.5rem;
-  height: 0.35rem;
-  margin-top: 0.55rem;
-  border-radius: 999px;
-  background: var(--lime);
+.hero-brand {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.85rem, 9vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+  color: #0b140e;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+.hero-brand-two {
+  color: #7fbf1a;
+}
+
+.hero-tagline {
+  margin: 0.7rem 0 0;
+  padding-top: 0.65rem;
+  border-top: 1.5px solid rgba(11, 20, 14, 0.18);
+  font-size: clamp(0.72rem, 1.6vw, 0.82rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #2a3a30;
 }
 
 .hero h1 {
   font-size: clamp(1.55rem, 3.8vw, 2.35rem);
   max-width: 18ch;
-  color: var(--ink-soft);
+  color: var(--ink);
   font-weight: 650;
+  text-rendering: geometricPrecision;
 }
 
 .hero-actions {
@@ -445,11 +463,9 @@ a:hover {
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(14px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
