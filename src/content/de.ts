@@ -74,6 +74,7 @@ export type Dictionary = {
     contact: string;
     imprint: string;
     privacy: string;
+    cookies: string;
     rights: string;
     whatsappAria: string;
   };
@@ -246,6 +247,7 @@ export const de: Dictionary = {
     contact: "Kontakt",
     imprint: "Impressum",
     privacy: "Datenschutz",
+    cookies: "Cookie-Einstellungen",
     rights: "Tool2day. Alle Rechte vorbehalten.",
     whatsappAria: "WhatsApp öffnen",
   },

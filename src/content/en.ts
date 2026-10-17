@@ -167,6 +167,7 @@ export const en = {
     contact: "Contact",
     imprint: "Imprint",
     privacy: "Privacy",
+    cookies: "Cookie settings",
     rights: "Tool2day. All rights reserved.",
     whatsappAria: "Open WhatsApp",
   },

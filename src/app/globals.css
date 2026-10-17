@@ -943,8 +943,234 @@ a:hover {
   align-items: center;
 }
 
-.footer-legal a:hover {
+.footer-legal a:hover,
+.footer-cookie-btn:hover {
   color: var(--forest);
+}
+
+.footer-cookie-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: var(--muted);
+  text-decoration: none;
+  font: inherit;
+  font-size: 0.86rem;
+  min-height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.cookie-root {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 60;
+  padding: 1rem;
+  pointer-events: none;
+}
+
+.cookie-panel {
+  pointer-events: auto;
+  max-width: 34rem;
+  margin-left: auto;
+  margin-right: max(0.25rem, env(safe-area-inset-right));
+  margin-bottom: max(0.25rem, env(safe-area-inset-bottom));
+  padding: 1.15rem 1.2rem 1.1rem;
+  border-radius: 1.15rem;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(21, 32, 24, 0.1);
+  box-shadow: 0 18px 48px rgba(21, 32, 24, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.cookie-kicker {
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cookie-panel-head h2 {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+
+.cookie-panel-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.cookie-privacy {
+  margin-top: 0.55rem !important;
+}
+
+.cookie-privacy a {
+  color: var(--forest);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.cookie-categories {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.cookie-category {
+  padding: 0.75rem 0.8rem;
+  border-radius: 0.85rem;
+  background: #f4f7f2;
+  border: 1px solid rgba(21, 32, 24, 0.08);
+}
+
+.cookie-category-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.cookie-category strong {
+  font-size: 0.9rem;
+}
+
+.cookie-category p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.cookie-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(197, 242, 109, 0.45);
+  color: var(--forest);
+  white-space: nowrap;
+}
+
+.cookie-switch {
+  position: relative;
+  width: 2.55rem;
+  height: 1.45rem;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.cookie-switch input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cookie-switch span {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(21, 32, 24, 0.18);
+  transition: background 160ms ease;
+  position: relative;
+}
+
+.cookie-switch span::after {
+  content: "";
+  position: absolute;
+  top: 0.16rem;
+  left: 0.16rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(21, 32, 24, 0.2);
+  transition: transform 160ms ease;
+}
+
+.cookie-switch input:checked + span {
+  background: #1a2b1f;
+}
+
+.cookie-switch input:checked + span::after {
+  transform: translateX(1.1rem);
+  background: #c5f26d;
+}
+
+.cookie-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.cookie-btn {
+  appearance: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+  min-height: 2.45rem;
+  padding: 0 1rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cookie-btn-primary {
+  background: #1a2b1f;
+  color: #c5f26d;
+}
+
+.cookie-btn-ghost {
+  background: #eef3ea;
+  color: var(--ink);
+  border: 1px solid rgba(21, 32, 24, 0.1);
+}
+
+.cookie-btn-link {
+  background: transparent;
+  color: var(--muted);
+  padding-inline: 0.35rem;
+  min-height: auto;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+@media (max-width: 640px) {
+  .cookie-root {
+    padding: 0.75rem;
+  }
+
+  .cookie-panel {
+    max-width: none;
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+
+  .cookie-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cookie-btn-link {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
 }
 
 .whatsapp-fab {

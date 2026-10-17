@@ -2,6 +2,7 @@ import type { Dictionary, Locale } from "@/content";
 import { site } from "@/content";
 import { Logo } from "./Logo";
 import { FooterYear } from "./FooterYear";
+import { CookieSettingsButton } from "./CookieSettingsButton";
 
 type Props = {
   locale: Locale;
@@ -71,6 +72,9 @@ export function SiteFooter({ locale, t }: Props) {
             </li>
             <li>
               <a href={site.legal.privacy}>{t.footer.privacy}</a>
+            </li>
+            <li>
+              <CookieSettingsButton label={t.footer.cookies} />
             </li>
           </ul>
         </div>

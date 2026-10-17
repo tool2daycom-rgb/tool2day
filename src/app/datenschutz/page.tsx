@@ -66,21 +66,36 @@ export default function DatenschutzPage() {
       <section>
         <h2>3. Cookies und lokale Speicherung</h2>
         <p>
-          Diese Webseite setzt derzeit keine Tracking- oder Statistik-Cookies
-          und lädt kein externes Analyse-Tool. Ihre Sprachauswahl wird über die
-          Adresse der Seite abgebildet und nicht in einem Cookie gespeichert.
+          Diese Webseite verwendet technisch notwendige Cookies sowie optional
+          Statistik-Cookies. Notwendige Cookies sind für den Betrieb der Seite
+          erforderlich. Rechtsgrundlage ist § 25 Abs. 2 TDDDG in Verbindung mit
+          Art. 6 Abs. 1 lit. f DSGVO. Alle übrigen Cookies werden nur mit Ihrer
+          ausdrücklichen Einwilligung nach § 25 Abs. 1 TDDDG und Art. 6 Abs. 1
+          lit. a DSGVO gesetzt.
+        </p>
+        <p>
+          Notwendige Cookies: Wir setzen genau ein notwendiges Cookie. Es
+          speichert Ihre Cookie-Entscheidung (t2d_consent, Laufzeit ein Jahr,
+          SameSite=Lax), damit Sie nicht bei jedem Seitenaufruf erneut gefragt
+          werden. Ihre Sprachauswahl wird über die Adresse der Seite abgebildet
+          und nicht in einem Cookie gespeichert.
+        </p>
+        <p>
+          Statistik-Cookies: Derzeit laden wir kein Analyse-Tool. Wird die
+          Kategorie Statistik nicht aktiviert, werden weder Analyse-Skripte
+          geladen noch entsprechende Cookies gesetzt. Ihre Entscheidung wird
+          dennoch gespeichert, falls später eine Statistik-Funktion hinzukommt.
+        </p>
+        <p>
+          Ihre Einwilligung können Sie jederzeit mit Wirkung für die Zukunft
+          widerrufen, indem Sie im Footer „Cookie-Einstellungen“ öffnen oder das
+          Cookie t2d_consent in Ihrem Browser löschen.
         </p>
         <p>
           Im Formular „Projekt starten“ können Entwurfsangaben vorübergehend in
           Ihrem Browser (localStorage) gespeichert werden, damit Sie Ihre
           Eingaben nicht verlieren. Diese Daten verbleiben auf Ihrem Endgerät
           und werden nicht automatisch an unsere Server übertragen.
-          Rechtsgrundlage ist § 25 Abs. 2 TDDDG in Verbindung mit Art. 6 Abs. 1
-          lit. f DSGVO.
-        </p>
-        <p>
-          Sie können localStorage-Einträge jederzeit in den Einstellungen Ihres
-          Browsers löschen.
         </p>
       </section>
 

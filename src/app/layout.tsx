@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Figtree, Syne } from "next/font/google";
 import { site } from "@/content";
+import { CookieConsent } from "@/components/CookieConsent";
 import "./globals.css";
 
 const syne = Syne({
@@ -40,7 +41,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${syne.variable} ${figtree.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        {children}
+        <CookieConsent />
+      </body>
     </html>
   );
 }
