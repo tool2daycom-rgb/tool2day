@@ -1,4 +1,8 @@
 import nodemailer from "nodemailer";
+import {
+  renderCustomerReplyHtml,
+  renderInquiryNotificationHtml,
+} from "@/lib/email-template";
 
 const SUPPORT_EMAIL = "support@tool2day.com";
 
@@ -45,6 +49,8 @@ export async function sendInquiryNotification(input: {
   const from = supportFromAddress();
   const to = process.env.MAIL_TO?.trim() || SUPPORT_EMAIL;
   const transporter = createTransporter();
+  const site = process.env.NEXT_PUBLIC_SITE_URL || "https://tool2day.com";
+  const adminUrl = `${site}/admin/${input.id}`;
 
   const label = input.type === "contact" ? "Contact" : "Project inquiry";
   const subject = `[tool2day] ${label} — ${input.name}`;
@@ -56,8 +62,19 @@ export async function sendInquiryNotification(input: {
     "",
     ...input.summaryLines,
     "",
-    `Open admin: ${process.env.NEXT_PUBLIC_SITE_URL || "https://tool2day.com"}/admin/${input.id}`,
+    `Open admin: ${adminUrl}`,
   ].join("\n");
+
+  const html = renderInquiryNotificationHtml({
+    title: `${label} — ${input.name}`,
+    summaryLines: [
+      `ID: ${input.id}`,
+      `Locale: ${input.locale}`,
+      `From: ${input.name} <${input.email}>`,
+      ...input.summaryLines,
+    ],
+    adminUrl,
+  });
 
   await transporter.sendMail({
     from,
@@ -65,6 +82,7 @@ export async function sendInquiryNotification(input: {
     replyTo: input.email,
     subject,
     text,
+    html,
   });
 
   return { sent: true as const };
@@ -113,12 +131,14 @@ export async function sendCustomerReply(input: {
   try {
     const transporter = createTransporter();
     const from = supportFromAddress();
+    const html = renderCustomerReplyHtml({ subject, body });
     await transporter.sendMail({
       from,
       to,
       replyTo: SUPPORT_EMAIL,
       subject,
       text: body,
+      html,
     });
     return {
       ok: true as const,
